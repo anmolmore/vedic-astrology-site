@@ -1,0 +1,3229 @@
+  const SIGNS = ['Aries','Taurus','Gemini','Cancer','Leo','Virgo','Libra','Scorpio','Sagittarius','Capricorn','Aquarius','Pisces'];
+  const ABBR  = {Aries:'Ari',Taurus:'Tau',Gemini:'Gem',Cancer:'Can',Leo:'Leo',Virgo:'Vir',Libra:'Lib',Scorpio:'Sco',Sagittarius:'Sag',Capricorn:'Cap',Aquarius:'Aqu',Pisces:'Pis'};
+  const PLANET_DATA = [
+    {name:'Sun',     symbol:'☉'},
+    {name:'Moon',    symbol:'☾'},
+    {name:'Mars',    symbol:'♂'},
+    {name:'Mercury', symbol:'☿'},
+    {name:'Jupiter', symbol:'♃'},
+    {name:'Venus',   symbol:'♀'},
+    {name:'Saturn',  symbol:'♄'},
+    {name:'Rahu',    symbol:'☊'},
+    {name:'Ketu',    symbol:'☋'}
+  ];
+
+  // Classical dignity reference (own sign, mooltrikona range, exaltation peak, debilitation deepest point)
+  const DIGNITY = {
+    Sun:     {own:['Leo'],
+              moola:'Leo',       moolaRange:'1° – 20°',
+              exalt:'Aries',     exaltDeg:'10°',
+              debil:'Libra',     debilDeg:'10°'},
+    Moon:    {own:['Cancer'],
+              moola:'Taurus',    moolaRange:'4° – 30°',
+              exalt:'Taurus',    exaltDeg:'3°',
+              debil:'Scorpio',   debilDeg:'3°'},
+    Mars:    {own:['Aries','Scorpio'],
+              moola:'Aries',     moolaRange:'0° – 12°',
+              exalt:'Capricorn', exaltDeg:'28°',
+              debil:'Cancer',    debilDeg:'28°'},
+    Mercury: {own:['Gemini','Virgo'],
+              moola:'Virgo',     moolaRange:'16° – 20°',
+              exalt:'Virgo',     exaltDeg:'15°',
+              debil:'Pisces',    debilDeg:'15°'},
+    Jupiter: {own:['Sagittarius','Pisces'],
+              moola:'Sagittarius', moolaRange:'0° – 13°',
+              exalt:'Cancer',    exaltDeg:'5°',
+              debil:'Capricorn', debilDeg:'5°'},
+    Venus:   {own:['Taurus','Libra'],
+              moola:'Libra',     moolaRange:'0° – 15°',
+              exalt:'Pisces',    exaltDeg:'27°',
+              debil:'Virgo',     debilDeg:'27°'},
+    Saturn:  {own:['Capricorn','Aquarius'],
+              moola:'Aquarius',  moolaRange:'0° – 20°',
+              exalt:'Libra',     exaltDeg:'20°',
+              debil:'Aries',     debilDeg:'20°'},
+    // Rahu / Ketu have no classical own/exaltation/debilitation/mooltrikona in this table's tradition
+    Rahu:    {own:[], moola:null, exalt:null, debil:null},
+    Ketu:    {own:[], moola:null, exalt:null, debil:null}
+  };
+
+  const DIGNITY_LABEL = {own:'Own sign', exalt:'Exaltation', debil:'Debilitation', moola:'Mooltrikona'};
+
+  // Sign → ruling planet (classical), for hover info
+  const RULER_OF = {};
+  Object.entries(DIGNITY).forEach(([planet, d]) => { d.own.forEach(sign => { RULER_OF[sign] = planet; }); });
+  const PLANET_SYMBOL = Object.fromEntries(PLANET_DATA.map(p => [p.name, p.symbol]));
+
+  // Static definitions shown in the left info panel for non-sign icons
+  const INFO_CONTENT = {
+    ascendant: {
+      title: 'Lagna (Ascendant)',
+      desc: 'The zodiac sign rising on the eastern horizon at the moment of birth. It anchors House 1 and determines how all other houses fall across the chart. Rotating it here re-maps every sign to a new house.'
+    },
+    duality_yang: {
+      title: 'Yang ( + )',
+      desc: 'Active, outward, masculine polarity. Yang signs: Aries, Gemini, Leo, Libra, Sagittarius, Aquarius.'
+    },
+    duality_yin: {
+      title: 'Yin ( − )',
+      desc: 'Receptive, inward, feminine polarity. Yin signs: Taurus, Cancer, Virgo, Scorpio, Capricorn, Pisces.'
+    },
+    modality_cardinal: {
+      title: 'Cardinal ( ▲ )',
+      desc: 'Initiating energy — signs that begin each season: Aries, Cancer, Libra, Capricorn.'
+    },
+    modality_fixed: {
+      title: 'Fixed ( ■ )',
+      desc: 'Stabilizing energy — signs that sustain each season: Taurus, Leo, Scorpio, Aquarius.'
+    },
+    modality_mutable: {
+      title: 'Mutable ( ◐ )',
+      desc: 'Adaptive, transitional energy — signs that close out each season: Gemini, Virgo, Sagittarius, Pisces.'
+    },
+    element_fire: {
+      title: 'Fire ( 🜂 )',
+      desc: 'Passionate, spirited, dynamic. Fire signs: Aries, Leo, Sagittarius.'
+    },
+    element_earth: {
+      title: 'Earth ( 🜃 )',
+      desc: 'Grounded, practical, material. Earth signs: Taurus, Virgo, Capricorn.'
+    },
+    element_air: {
+      title: 'Air ( 🜁 )',
+      desc: 'Intellectual, social, communicative. Air signs: Gemini, Libra, Aquarius.'
+    },
+    element_water: {
+      title: 'Water ( 🜄 )',
+      desc: 'Emotional, intuitive, deep. Water signs: Cancer, Scorpio, Pisces.'
+    },
+    dignity_own: {
+      title: 'Own Sign (Svakshetra)',
+      desc: 'A planet placed in a sign it rules — one of its most comfortable, naturally strong placements.'
+    },
+    dignity_moola: {
+      title: 'Mooltrikona',
+      desc: 'A special degree band within a planet\'s own sign where its strength peaks even higher than an ordinary own-sign placement.'
+    },
+    dignity_exalt: {
+      title: 'Exaltation (Uccha)',
+      desc: 'The sign of a planet\'s maximum strength and most favorable expression, peaking at one specific degree.'
+    },
+    dignity_debil: {
+      title: 'Debilitation (Neecha)',
+      desc: 'The sign of a planet\'s weakest expression — always exactly opposite its exaltation sign.'
+    },
+    planet_sun: {
+      title: '☉ Sun',
+      desc: 'Soul, self-identity, vitality, father, authority. Rules Leo. The king of the chart — where it sits shows where you shine.'
+    },
+    planet_moon: {
+      title: '☾ Moon',
+      desc: 'Mind, emotions, mother, instinct. Rules Cancer. Moves fastest of all grahas — governs mood and inner comfort.'
+    },
+    planet_mars: {
+      title: '♂ Mars',
+      desc: 'Energy, courage, action, conflict, siblings. Rules Aries and Scorpio. The warrior — drive and assertiveness.'
+    },
+    planet_mercury: {
+      title: '☿ Mercury',
+      desc: 'Intellect, communication, commerce, analysis. Rules Gemini and Virgo. The messenger — how you think and speak.'
+    },
+    planet_jupiter: {
+      title: '♃ Jupiter',
+      desc: 'Wisdom, expansion, fortune, teachers, dharma. Rules Sagittarius and Pisces. The great benefic — growth and guidance.'
+    },
+    planet_venus: {
+      title: '♀ Venus',
+      desc: 'Love, beauty, relationships, luxury, art. Rules Taurus and Libra. The other benefic — attraction and pleasure.'
+    },
+    planet_saturn: {
+      title: '♄ Saturn',
+      desc: 'Discipline, delay, structure, karma, hard work. Rules Capricorn and Aquarius. The taskmaster — endurance and responsibility.'
+    },
+    planet_rahu: {
+      title: '☊ Rahu (North Node)',
+      desc: 'A lunar node, not a physical planet — shadow influence of obsession, ambition, and worldly desire. Intensifies whatever house/sign it occupies.'
+    },
+    planet_ketu: {
+      title: '☋ Ketu (South Node)',
+      desc: 'The other lunar node — shadow influence of detachment, spirituality, and past-life karma. Always exactly opposite Rahu.'
+    },
+    house_1: { title: 'House 1 — Tanu Bhava', desc: 'Self, physical body, personality, and how you present to the world. The house the Ascendant itself defines.' },
+    house_2: { title: 'House 2 — Dhana Bhava', desc: 'Wealth, family, speech, food, and accumulated values.' },
+    house_3: { title: 'House 3 — Sahaja Bhava', desc: 'Courage, effort, siblings, short journeys, and communication skills.' },
+    house_4: { title: 'House 4 — Sukha Bhava', desc: 'Home, mother, emotional comfort, property, and inner peace.' },
+    house_5: { title: 'House 5 — Putra Bhava', desc: 'Children, intelligence, creativity, romance, and past-life merit.' },
+    house_6: { title: 'House 6 — Ripu Bhava', desc: 'Health, disease, debt, conflict, service, and daily obstacles.' },
+    house_7: { title: 'House 7 — Yuvati Bhava', desc: 'Marriage, partnerships, business relationships, and the "other."' },
+    house_8: { title: 'House 8 — Ayur Bhava', desc: 'Transformation, longevity, hidden matters, inheritance, and sudden change.' },
+    house_9: { title: 'House 9 — Bhagya Bhava', desc: 'Fortune, dharma, higher learning, long journeys, and the father.' },
+    house_10: { title: 'House 10 — Karma Bhava', desc: 'Career, status, public reputation, and worldly action.' },
+    house_11: { title: 'House 11 — Labha Bhava', desc: 'Gains, income, hopes, aspirations, and social circles.' },
+    house_12: { title: 'House 12 — Vyaya Bhava', desc: 'Loss, isolation, expenditure, foreign lands, and spiritual release.' }
+  };
+
+  // Active dignity is only whichever sub-option is selected, and only while the main toggle is on
+  function getSelectedDignity(){
+    return toggleState.dignity ? filterState.dignity : '';
+  }
+
+  function dignityTooltip(planetName, mark){
+    const d = DIGNITY[planetName];
+    if(mark === 'own')   return `${DIGNITY_LABEL.own}`;
+    if(mark === 'exalt') return `${DIGNITY_LABEL.exalt}: peak at ${d.exaltDeg}`;
+    if(mark === 'debil') return `${DIGNITY_LABEL.debil}: deepest at ${d.debilDeg}`;
+    if(mark === 'moola') return `${DIGNITY_LABEL.moola}: ${d.moolaRange}`;
+    return '';
+  }
+
+  // A planet belongs to `sign` under the currently-selected dignity category
+  function planetBelongsToSign(planetName, sign){
+    const d = DIGNITY[planetName];
+    const selectedDignity = getSelectedDignity();
+    if(selectedDignity === 'own')   return d.own.includes(sign);
+    if(selectedDignity === 'exalt') return d.exalt === sign;
+    if(selectedDignity === 'debil') return d.debil === sign;
+    if(selectedDignity === 'moola') return d.moola === sign;
+    return false;
+  }
+
+  // Describes ALL dignity statuses a planet holds in a given sign (a planet can be both
+  // Own Sign and Mooltrikona at once, since the mooltrikona sign is always one of its own signs)
+  function fullDignityStatus(planetName, sign){
+    const d = DIGNITY[planetName];
+    const statuses = [];
+    if(d.own.includes(sign)) statuses.push(dignityTooltip(planetName, 'own'));
+    if(d.moola === sign)     statuses.push(dignityTooltip(planetName, 'moola'));
+    if(d.exalt === sign)     statuses.push(dignityTooltip(planetName, 'exalt'));
+    if(d.debil === sign)     statuses.push(dignityTooltip(planetName, 'debil'));
+    return statuses.length ? statuses.join('; ') : 'no special dignity in this sign';
+  }
+
+  // User's drag-and-drop planet placements: { PlanetName: SignName }
+  const userPlacements = {};
+
+  // Classical Parashari aspects: every planet aspects the 7th sign from itself (offset +6).
+  // Mars, Jupiter, and Saturn have additional special aspects.
+  const ASPECT_OFFSETS = {
+    default: [6],
+    Mars:    [3, 6, 7],
+    Jupiter: [4, 6, 8],
+    Saturn:  [2, 6, 9]
+  };
+
+  // Fixed pixel centers of each sign's cell in the South Indian chart (300x300 viewBox)
+  const SOUTH_CENTER = {
+    Pisces:[41,41], Aries:[114,41], Taurus:[186,41], Gemini:[258,41],
+    Aquarius:[41,114], Cancer:[258,114],
+    Capricorn:[41,186], Leo:[258,186],
+    Sagittarius:[41,258], Scorpio:[114,258], Libra:[186,258], Virgo:[258,258]
+  };
+  // Fixed pixel centers of each house (1-12) in the North Indian chart (300x300 viewBox)
+  const NORTH_HOUSE_CENTER = {
+    1:[150,77], 2:[77,28], 3:[28,77], 4:[77,150], 5:[28,223], 6:[77,272],
+    7:[150,223], 8:[223,272], 9:[272,223], 10:[223,150], 11:[272,77], 12:[223,28]
+  };
+
+  // Returns the list of planet names currently displayed in `sign` (user-placed takes priority, else dignity)
+  function planetNamesForSign(sign){
+    const placedHere = PLANET_DATA.filter(p => userPlacements[p.name] === sign);
+    if(placedHere.length) return placedHere.map(p => p.name);
+    const selectedDignity = getSelectedDignity();
+    if(!selectedDignity) return [];
+    return PLANET_DATA.filter(p => !userPlacements[p.name] && planetBelongsToSign(p.name, sign)).map(p => p.name);
+  }
+
+  // Builds SVG-safe markup: user-dragged planets take priority; otherwise falls back to dignity display
+  function planetsForSign(sign){
+    const placedHere = PLANET_DATA.filter(p => userPlacements[p.name] === sign);
+    if(placedHere.length){
+      return placedHere.map(p =>
+        `<tspan class="user-placed-txt">${p.symbol}<title>${p.name} — ${fullDignityStatus(p.name, sign)}</title></tspan>`
+      ).join('<tspan dx="3"></tspan>');
+    }
+    const selectedDignity = getSelectedDignity();
+    if(!selectedDignity) return '';
+    // Once a planet has been manually dragged anywhere, it no longer shows via the dignity system
+    const matches = PLANET_DATA.filter(p => !userPlacements[p.name] && planetBelongsToSign(p.name, sign));
+    return matches.map(p =>
+      `<tspan class="dignity-${selectedDignity}-txt">${p.symbol}<title>${p.name} — ${dignityTooltip(p.name, selectedDignity)}</title></tspan>`
+    ).join('<tspan dx="3"></tspan>');
+  }
+  const SIGN_INFO = {
+    Aries:      {modality:'Cardinal', duality:'Yang', element:'Fire'},
+    Taurus:     {modality:'Fixed',    duality:'Yin',  element:'Earth'},
+    Gemini:     {modality:'Mutable',  duality:'Yang', element:'Air'},
+    Cancer:     {modality:'Cardinal', duality:'Yin',  element:'Water'},
+    Leo:        {modality:'Fixed',    duality:'Yang', element:'Fire'},
+    Virgo:      {modality:'Mutable',  duality:'Yin',  element:'Earth'},
+    Libra:      {modality:'Cardinal', duality:'Yang', element:'Air'},
+    Scorpio:    {modality:'Fixed',    duality:'Yin',  element:'Water'},
+    Sagittarius:{modality:'Mutable',  duality:'Yang', element:'Fire'},
+    Capricorn:  {modality:'Cardinal', duality:'Yin',  element:'Earth'},
+    Aquarius:   {modality:'Fixed',    duality:'Yang', element:'Air'},
+    Pisces:     {modality:'Mutable',  duality:'Yin',  element:'Water'}
+  };
+  const GLYPH = {
+    modality: {Cardinal:'▲', Fixed:'■', Mutable:'◐'},
+    duality:  {Yang:'+', Yin:'−'},
+    element:  {Fire:'🜂', Earth:'🜃', Air:'🜁', Water:'🜄'}
+  };
+
+  // toggleState: on/off for each category. filterState: '' (show all) or a specific value to isolate.
+  const toggleState = {modality:false, duality:false, element:false, dignity:false};
+  const filterState  = {dignity:'own'};
+  // Duality, Modality, and Element all support choosing any combination (empty set = show all).
+  // aspectsFrom/aspectsTo track which planets are toggled on in the new Aspects From / Aspects To sections.
+  const multiFilter = {duality: new Set(), modality: new Set(), element: new Set(), aspectsFrom: new Set(), aspectsTo: new Set()};
+
+  function categoryGlyph(key, sign){
+    if(!toggleState[key]) return '';
+    const info = SIGN_INFO[sign];
+    const value = info[key];
+    const set = multiFilter[key];
+    if(set.size > 0 && !set.has(value)) return null; // not in the chosen combination
+    return GLYPH[key][value];
+  }
+
+  // Returns ordered string: Duality, Modality, Element (skips filtered-out / off categories)
+  function glyphString(sign){
+    const order = ['duality','modality','element'];
+    const parts = [];
+    for(const key of order){
+      const g = categoryGlyph(key, sign);
+      if(g) parts.push(g);
+    }
+    return parts.join(' ');
+  }
+
+  const northSlots = document.querySelectorAll('[data-slot]');
+  const northPlanets = document.querySelectorAll('[data-planets]');
+  const northAscMarks = document.querySelectorAll('[data-asc-mark]');
+  const northVertexGlyphs = document.querySelectorAll('[data-slot-glyph]');
+  const southHouseNums = document.querySelectorAll('svg [data-sign]');
+  const southAscCells = document.querySelectorAll('[data-asc-cell]');
+  const southTopLeftGlyphs = document.querySelectorAll('[data-sign-label]');
+  const southPlanetEls = document.querySelectorAll('[data-sign-planets]');
+  let currentAsc = 0;
+
+  function render(ascIndex){
+    currentAsc = ascIndex;
+
+    // North Indian: fixed house positions (slot 1..12), sign rotates with ascendant
+    northSlots.forEach(el => {
+      const slot = parseInt(el.dataset.slot, 10);
+      const sign = SIGNS[(ascIndex + slot - 1) % 12];
+      el.textContent = ABBR[sign];
+    });
+    northPlanets.forEach(el => {
+      const slot = parseInt(el.dataset.planets, 10);
+      const sign = SIGNS[(ascIndex + slot - 1) % 12];
+      el.innerHTML = planetsForSign(sign);
+    });
+    northAscMarks.forEach(el => {
+      const slot = parseInt(el.dataset.ascMark, 10);
+      el.textContent = slot === 1 ? 'ASC' : '';
+    });
+    // North Indian: glyphs at triangle intersection points (vertices) per house/slot
+    northVertexGlyphs.forEach(el => {
+      const slot = parseInt(el.dataset.slotGlyph, 10);
+      const sign = SIGNS[(ascIndex + slot - 1) % 12];
+      el.textContent = glyphString(sign);
+    });
+
+    // South Indian: fixed sign cells, house number rotates with ascendant
+    southHouseNums.forEach(el => {
+      const sign = el.dataset.sign;
+      const signIndex = SIGNS.indexOf(sign);
+      const house = ((signIndex - ascIndex + 12) % 12) + 1;
+      el.textContent = house;
+    });
+    southAscCells.forEach(el => {
+      el.textContent = el.dataset.ascCell === SIGNS[ascIndex] ? 'ASC' : '';
+    });
+    // South Indian: glyphs pinned to top-left of each fixed sign cell
+    southTopLeftGlyphs.forEach(el => {
+      const sign = el.dataset.signLabel;
+      el.textContent = glyphString(sign);
+    });
+    southPlanetEls.forEach(el => {
+      const sign = el.dataset.signPlanets;
+      el.innerHTML = planetsForSign(sign);
+    });
+
+    renderAspectArrows();
+  }
+
+  // Planetary Aspects: only usable once at least one planet has been manually placed.
+  // aspectsToggleBtn/aspectsLegend are null now that 'Show Aspect Arrows' is commented out —
+  // guarded below so the per-planet Aspects From/To controls keep working without it.
+  const toggleStateAspects = { on: false };
+  const aspectsToggleBtn = document.getElementById('aspectsToggle');
+  const aspectsLegend = document.getElementById('aspectsLegend');
+  const southAspectArrows = document.getElementById('southAspectArrows');
+  const northAspectArrows = document.getElementById('northAspectArrows');
+
+  function hasAnyPlacement(){
+    return Object.keys(userPlacements).length > 0;
+  }
+
+  function updateAspectsAvailability(){
+    const available = hasAnyPlacement();
+    if(aspectsToggleBtn) aspectsToggleBtn.disabled = !available;
+    if(!available){
+      toggleStateAspects.on = false;
+      if(aspectsToggleBtn){
+        aspectsToggleBtn.setAttribute('aria-pressed', 'false');
+        aspectsToggleBtn.classList.remove('active');
+      }
+      if(aspectsLegend) aspectsLegend.style.display = 'none';
+    }
+  }
+
+  function drawArrow(group, from, to, label){
+    const [x1,y1] = from, [x2,y2] = to;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    // slight curve so overlapping aspects from the same origin stay visually distinguishable
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    const dx = x2-x1, dy = y2-y1;
+    const curveOffset = 12;
+    const len = Math.hypot(dx,dy) || 1;
+    const cx = mx - (dy/len)*curveOffset;
+    const cy = my + (dx/len)*curveOffset;
+
+    // Pull both ends back along the curve's tangent direction so the arrow starts just clear
+    // of the source glyph and its arrowhead lands just short of the target glyph, instead of
+    // merging into either one.
+    const shorten = 14;
+    const startDx = cx-x1, startDy = cy-y1;
+    const startLen = Math.hypot(startDx,startDy) || 1;
+    const sx = x1 + (startDx/startLen)*shorten;
+    const sy = y1 + (startDy/startLen)*shorten;
+
+    const endDx = x2-cx, endDy = y2-cy;
+    const endLen = Math.hypot(endDx,endDy) || 1;
+    const ex = x2 - (endDx/endLen)*shorten;
+    const ey = y2 - (endDy/endLen)*shorten;
+
+    path.setAttribute('d', `M${sx},${sy} Q${cx},${cy} ${ex},${ey}`);
+    path.setAttribute('class', 'aspect-arrow-path');
+    group.appendChild(path);
+
+    const label_el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label_el.setAttribute('x', cx);
+    label_el.setAttribute('y', cy);
+    label_el.setAttribute('text-anchor', 'middle');
+    label_el.setAttribute('class', 'aspect-arrow-label');
+    label_el.textContent = label;
+    group.appendChild(label_el);
+  }
+
+  // Rahu and Ketu are always exactly opposite each other, so their shared default 7th-aspect
+  // offset would otherwise always point straight at one another. Classically they don't aspect
+  // each other this way, so that specific link is suppressed wherever aspects are computed.
+  function isRahuKetuMutualSign(planetName, targetSign){
+    if(planetName === 'Rahu') return targetSign === userPlacements['Ketu'];
+    if(planetName === 'Ketu') return targetSign === userPlacements['Rahu'];
+    return false;
+  }
+
+  function renderAspectArrows(){
+    if(!southAspectArrows || !northAspectArrows) return;
+    southAspectArrows.innerHTML = '';
+    northAspectArrows.innerHTML = '';
+
+    const drawnKeys = new Set(); // avoid drawing the exact same source->target arrow twice
+
+    function drawOne(sourceName, sourceSign, targetSign, symbol){
+      const dedupeKey = `${sourceName}->${targetSign}`;
+      if(drawnKeys.has(dedupeKey)) return;
+      drawnKeys.add(dedupeKey);
+      drawArrow(southAspectArrows, SOUTH_CENTER[sourceSign], SOUTH_CENTER[targetSign], symbol);
+      const sourceHouse = ((SIGNS.indexOf(sourceSign) - currentAsc + 12) % 12) + 1;
+      const targetHouse = ((SIGNS.indexOf(targetSign) - currentAsc + 12) % 12) + 1;
+      drawArrow(northAspectArrows, NORTH_HOUSE_CENTER[sourceHouse], NORTH_HOUSE_CENTER[targetHouse], symbol);
+    }
+
+    // Draws every aspect cast BY the given planet (used by the global toggle and "Aspects From")
+    function drawAspectsFrom(planetName){
+      const ownSign = userPlacements[planetName];
+      if(!ownSign) return;
+      const offsets = ASPECT_OFFSETS[planetName] || ASPECT_OFFSETS.default;
+      const ownIndex = SIGNS.indexOf(ownSign);
+      offsets.forEach(off => {
+        const targetSign = SIGNS[(ownIndex + off) % 12];
+        if(isRahuKetuMutualSign(planetName, targetSign)) return;
+        drawOne(planetName, ownSign, targetSign, PLANET_SYMBOL[planetName]);
+      });
+    }
+
+    if(toggleStateAspects.on){
+      PLANET_DATA.forEach(p => drawAspectsFrom(p.name));
+    }
+
+    multiFilter.aspectsFrom.forEach(planetName => drawAspectsFrom(planetName));
+
+    // "Aspects To": for each selected target planet, find every OTHER placed planet whose
+    // own aspect offsets land on the target's sign, and draw the arrow from that source planet.
+    multiFilter.aspectsTo.forEach(targetName => {
+      const targetSign = userPlacements[targetName];
+      if(!targetSign) return;
+      const targetIndex = SIGNS.indexOf(targetSign);
+      PLANET_DATA.forEach(source => {
+        if(source.name === targetName) return;
+        if(isRahuKetuMutualSign(source.name, targetSign)) return;
+        const sourceSign = userPlacements[source.name];
+        if(!sourceSign) return;
+        const offsets = ASPECT_OFFSETS[source.name] || ASPECT_OFFSETS.default;
+        const sourceIndex = SIGNS.indexOf(sourceSign);
+        offsets.forEach(off => {
+          if((sourceIndex + off) % 12 !== targetIndex) return;
+          drawOne(source.name, sourceSign, targetSign, source.symbol);
+        });
+      });
+    });
+
+    updateAspectsInfoPanel();
+  }
+
+
+  if(aspectsToggleBtn){
+    aspectsToggleBtn.addEventListener('click', () => {
+      if(aspectsToggleBtn.disabled) return;
+      toggleStateAspects.on = !toggleStateAspects.on;
+      aspectsToggleBtn.setAttribute('aria-pressed', String(toggleStateAspects.on));
+      aspectsToggleBtn.classList.toggle('active', toggleStateAspects.on);
+      if(aspectsLegend) aspectsLegend.style.display = toggleStateAspects.on ? 'flex' : 'none';
+      renderAspectArrows();
+    });
+  }
+
+  // Aspects From / Aspects To planet buttons: independent multi-select toggles per direction
+  document.querySelectorAll('.aspect-planet-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dir = btn.dataset.aspectDir; // 'from' or 'to'
+      const planet = btn.dataset.planet;
+      const key = dir === 'from' ? 'aspectsFrom' : 'aspectsTo';
+      const set = multiFilter[key];
+      if(set.has(planet)){
+        set.delete(planet);
+        btn.classList.remove('active');
+      } else {
+        set.add(planet);
+        btn.classList.add('active');
+      }
+      render(currentAsc);
+      addFlashcard(generateFlashcard({group:key, planet}));
+    });
+  });
+
+  // Main category toggle buttons (Duality / Modality / Element / Dignities)
+  document.querySelectorAll('.glyph-btn[data-toggle]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.toggle;
+      toggleState[key] = !toggleState[key];
+      btn.setAttribute('aria-pressed', String(toggleState[key]));
+      const subPanel = document.querySelector(`.sub-options[data-sub-for="${key}"]`);
+      if(subPanel) subPanel.classList.toggle('open', toggleState[key]);
+
+      // Turning on Dignities clears any manual drag-and-drop placements,
+      // so the algorithmic dignity display isn't blocked by earlier manual placements.
+      if(key === 'dignity' && toggleState.dignity){
+        Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+        refreshChipStates();
+        updateAspectsAvailability();
+      }
+
+      render(currentAsc);
+      // Re-measure once the sub-options open/close transition (200ms) has settled
+      setTimeout(syncPanelHeights, 220);
+      addFlashcard(generateFlashcard({group:key}));
+    });
+  });
+
+  // Dignities sub-options: single choice — click again to deselect
+  document.querySelectorAll('.sub-btn:not([data-multi])').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      const value = btn.dataset.value;
+      const wasActive = btn.classList.contains('active');
+      document.querySelectorAll(`.sub-btn[data-key="${key}"]:not([data-multi])`).forEach(b => b.classList.remove('active'));
+      if(wasActive){
+        filterState[key] = '';
+      } else {
+        filterState[key] = value;
+        btn.classList.add('active');
+      }
+      render(currentAsc);
+      addFlashcard(generateFlashcard({group:key, value}));
+    });
+  });
+
+  // Duality, Modality, and Element sub-options: multi-select — any combination can be chosen independently
+  document.querySelectorAll('.sub-btn[data-multi]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      const value = btn.dataset.value;
+      const set = multiFilter[key];
+      if(set.has(value)){
+        set.delete(value);
+        btn.classList.remove('active');
+      } else {
+        set.add(value);
+        btn.classList.add('active');
+      }
+      render(currentAsc);
+      addFlashcard(generateFlashcard({group:key, value}));
+    });
+  });
+
+  // Left info panel — hover-driven
+  const leftInfoPlaceholder = document.getElementById('leftInfoPlaceholder');
+  const leftInfoContent = document.getElementById('leftInfoContent');
+  const leftInfoTitle = document.getElementById('leftInfoTitle');
+  const leftInfoList = document.getElementById('leftInfoList');
+
+  function showLeftInfo(title, points){
+    leftInfoPlaceholder.hidden = true;
+    leftInfoContent.hidden = false;
+    leftInfoList.style.transform = '';
+    leftInfoList.style.opacity = '';
+    leftInfoList.classList.remove('flashcard-mode');
+    leftInfoTitle.textContent = title;
+    const bullets = Array.isArray(points) ? points : [points];
+    leftInfoList.innerHTML = bullets.filter(Boolean).map(b => `<li>${b}</li>`).join('');
+  }
+  // True while at least one planet is selected under Aspects From / Aspects To — while pinned,
+  // the Info Panel shows that dynamic summary instead of the default hover placeholder.
+  let aspectsInfoPinned = false;
+  // True only while the Journey Coordinates tab is active — the Info Panel shows the
+  // performance dashboard instead of anything else while this is true.
+  let journeyPinned = false;
+
+  function hideLeftInfo(){
+    if(flashcardsPinned){
+      renderCurrentFlashcard();
+      return;
+    }
+    if(journeyPinned){
+      renderJourneyDashboard();
+      return;
+    }
+    if(aspectsInfoPinned){
+      updateAspectsInfoPanel();
+      return;
+    }
+    leftInfoList.style.transform = '';
+    leftInfoList.style.opacity = '';
+    leftInfoList.classList.remove('flashcard-mode');
+    leftInfoPlaceholder.hidden = false;
+    leftInfoContent.hidden = true;
+  }
+
+  function ordinal(n){
+    const suffixes = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (suffixes[(v-20)%10] || suffixes[v] || suffixes[0]);
+  }
+
+  // Bullet lines describing every aspect cast BY `planet`, for the Info Panel summary
+  function aspectsFromDetails(planet){
+    const sign = userPlacements[planet];
+    const symbol = PLANET_SYMBOL[planet];
+    if(!sign) return [`<b>${symbol} ${planet}</b> hasn't been placed on a chart yet — drag it onto a sign or house first.`];
+    const offsets = ASPECT_OFFSETS[planet] || ASPECT_OFFSETS.default;
+    const ownIndex = SIGNS.indexOf(sign);
+    const lines = [];
+    offsets.forEach(off => {
+      const targetSign = SIGNS[(ownIndex + off) % 12];
+      if(isRahuKetuMutualSign(planet, targetSign)) return;
+      const house = ((SIGNS.indexOf(targetSign) - currentAsc + 12) % 12) + 1;
+      const occupants = PLANET_DATA.filter(p => p.name !== planet && userPlacements[p.name] === targetSign);
+      const occStr = occupants.length ? ` — ${occupants.map(p => `${p.symbol} ${p.name}`).join(', ')} placed there` : '';
+      lines.push(`<b>${symbol} ${planet}</b> (${sign}) aspects <b>${targetSign}</b> (House ${house}, ${ordinal(off+1)} aspect)${occStr}`);
+    });
+    if(!lines.length) return [`<b>${symbol} ${planet}</b> (${sign}) casts no aspects.`];
+    return lines;
+  }
+
+  // Bullet lines describing every aspect cast ONTO `planet` by other placed planets, for the Info Panel summary
+  function aspectsToDetails(planet){
+    const sign = userPlacements[planet];
+    const symbol = PLANET_SYMBOL[planet];
+    if(!sign) return [`<b>${symbol} ${planet}</b> hasn't been placed on a chart yet — drag it onto a sign or house first.`];
+    const targetIndex = SIGNS.indexOf(sign);
+    const sources = [];
+    PLANET_DATA.forEach(p => {
+      if(p.name === planet) return;
+      if(isRahuKetuMutualSign(p.name, sign)) return;
+      const sourceSign = userPlacements[p.name];
+      if(!sourceSign) return;
+      const offsets = ASPECT_OFFSETS[p.name] || ASPECT_OFFSETS.default;
+      const sourceIndex = SIGNS.indexOf(sourceSign);
+      offsets.forEach(off => {
+        if((sourceIndex + off) % 12 === targetIndex){
+          sources.push(`<b>${p.symbol} ${p.name}</b> (${sourceSign}) aspects <b>${symbol} ${planet}</b> (${ordinal(off+1)} aspect)`);
+        }
+      });
+    });
+    if(!sources.length) return [`No placed planet currently aspects <b>${symbol} ${planet}</b> in ${sign}.`];
+    return sources;
+  }
+
+  // Rebuilds the Info Panel with a live summary of every planet selected under Aspects From /
+  // Aspects To — planets not yet placed are listed first, every line is deduped, and the panel
+  // releases its pin (restoring the default placeholder) once nothing is selected.
+  function updateAspectsInfoPanel(){
+    if(flashcardsPinned || journeyPinned) return; // flashcards / journey dashboard take priority
+    const fromSet = multiFilter.aspectsFrom, toSet = multiFilter.aspectsTo;
+    aspectsInfoPinned = (fromSet.size > 0 || toSet.size > 0);
+    if(!aspectsInfoPinned){
+      leftInfoPlaceholder.hidden = false;
+      leftInfoContent.hidden = true;
+      return;
+    }
+
+    const seen = new Set();
+    const unplacedBullets = [];
+    const placedBullets = [];
+    function addUnique(target, text){
+      if(seen.has(text)) return;
+      seen.add(text);
+      target.push(text);
+    }
+
+    fromSet.forEach(planet => {
+      if(!userPlacements[planet]){
+        addUnique(unplacedBullets, `<b>${PLANET_SYMBOL[planet]} ${planet}</b> hasn't been placed on a chart yet — drag it onto a sign or house first.`);
+        return;
+      }
+      aspectsFromDetails(planet).forEach(line => addUnique(placedBullets, line));
+    });
+    toSet.forEach(planet => {
+      if(!userPlacements[planet]){
+        addUnique(unplacedBullets, `<b>${PLANET_SYMBOL[planet]} ${planet}</b> hasn't been placed on a chart yet — drag it onto a sign or house first.`);
+        return;
+      }
+      aspectsToDetails(planet).forEach(line => addUnique(placedBullets, line));
+    });
+
+    const bullets = [...unplacedBullets, ...placedBullets];
+    showLeftInfo('Aspect Details — Selected Planets', bullets);
+  }
+
+  // ----- Flashcards -----------------------------------------------------
+  // Every button clicked in Zodiac Layers / Planetary Layers generates one basic
+  // Vedic astrology flashcard, shown one at a time (with a hint, and a click-to-flip
+  // reveal) in the Info Panel — independent of whatever else is selected there.
+
+  const DUALITY_SIGNS  = {Yang:['Aries','Gemini','Leo','Libra','Sagittarius','Aquarius'], Yin:['Taurus','Cancer','Virgo','Scorpio','Capricorn','Pisces']};
+  const MODALITY_SIGNS = {Cardinal:['Aries','Cancer','Libra','Capricorn'], Fixed:['Taurus','Leo','Scorpio','Aquarius'], Mutable:['Gemini','Virgo','Sagittarius','Pisces']};
+  const ELEMENT_SIGNS  = {Fire:['Aries','Leo','Sagittarius'], Earth:['Taurus','Virgo','Capricorn'], Air:['Gemini','Libra','Aquarius'], Water:['Cancer','Scorpio','Pisces']};
+  const MODALITY_SANSKRIT = {Cardinal:'Chara', Fixed:'Sthira', Mutable:'Dwiswabhava'};
+
+  // Picks a random planet that actually has the requested dignity field defined
+  // (Rahu/Ketu have no classical own/moola/exalt/debil in this table's tradition)
+  function randomPlanetWithDignity(field){
+    const eligible = PLANET_DATA.filter(p => {
+      const d = DIGNITY[p.name];
+      if(!d) return false;
+      return field === 'own' ? !!(d.own && d.own.length) : !!d[field];
+    });
+    if(!eligible.length) return null;
+    return eligible[Math.floor(Math.random() * eligible.length)].name;
+  }
+
+  // Builds one {question, hint, answer} flashcard from a clicked control's context
+  function generateFlashcard(ctx){
+    const {group, value, planet} = ctx || {};
+
+    if(group === 'duality'){
+      if(value){
+        return {
+          question: `Which zodiac signs are ${value} (${value === 'Yang' ? 'masculine' : 'feminine'})?`,
+          hint: 'Duality alternates strictly sign by sign around the zodiac, starting with Aries as Yang.',
+          answer: DUALITY_SIGNS[value].join(', ')
+        };
+      }
+      return {
+        question: 'What does "Duality" (Yang/Yin) describe about a zodiac sign?',
+        hint: 'The twelve signs alternate this quality one by one, starting from Aries.',
+        answer: 'Whether a sign is Yang (masculine, active) or Yin (feminine, receptive) — they alternate Yang, Yin, Yang, Yin... all the way around the zodiac.'
+      };
+    }
+
+    if(group === 'modality'){
+      if(value){
+        return {
+          question: `Which four signs are ${value} (${MODALITY_SANSKRIT[value]})?`,
+          hint: value === 'Cardinal' ? 'These signs begin each season.' : value === 'Fixed' ? 'These signs fall in the middle of each season.' : 'These signs close out each season.',
+          answer: MODALITY_SIGNS[value].join(', ')
+        };
+      }
+      return {
+        question: 'What are the three "modalities" every zodiac sign has one of?',
+        hint: 'One begins a season, one sustains it, one adapts it into the next.',
+        answer: 'Cardinal (Chara), Fixed (Sthira), and Mutable (Dwiswabhava) — four signs each.'
+      };
+    }
+
+    if(group === 'element'){
+      if(value){
+        return {
+          question: `Which three signs belong to the ${value} element?`,
+          hint: 'Each element has exactly three signs, spaced four apart around the zodiac.',
+          answer: ELEMENT_SIGNS[value].join(', ')
+        };
+      }
+      return {
+        question: 'What are the four classical elements of the zodiac signs?',
+        hint: 'Each governs exactly three signs.',
+        answer: 'Fire, Earth, Air, and Water.'
+      };
+    }
+
+    if(group === 'dignity'){
+      if(value === 'own'){
+        const p = randomPlanetWithDignity('own') || 'Sun';
+        return {
+          question: `Which sign(s) does ${p} rule as its "Own Sign"?`,
+          hint: 'A planet feels strong and comfortable in a sign it rules.',
+          answer: `${p} rules ${DIGNITY[p].own.join(' and ')}.`
+        };
+      }
+      if(value === 'moola'){
+        const p = randomPlanetWithDignity('moola') || 'Sun';
+        const d = DIGNITY[p];
+        return {
+          question: `What is ${p}'s Mooltrikona sign, and over what degree range?`,
+          hint: "Mooltrikona is a special zone — even stronger than an ordinary own-sign placement.",
+          answer: `${p}'s Mooltrikona is ${d.moola}, over ${d.moolaRange}.`
+        };
+      }
+      if(value === 'exalt'){
+        const p = randomPlanetWithDignity('exalt') || 'Sun';
+        const d = DIGNITY[p];
+        return {
+          question: `In which sign is ${p} exalted, and at what exact degree?`,
+          hint: "Exaltation is a planet's single strongest possible placement.",
+          answer: `${p} is exalted in ${d.exalt}, at ${d.exaltDeg}.`
+        };
+      }
+      if(value === 'debil'){
+        const p = randomPlanetWithDignity('debil') || 'Sun';
+        const d = DIGNITY[p];
+        return {
+          question: `In which sign is ${p} debilitated (weakest)?`,
+          hint: "Debilitation always sits exactly opposite a planet's exaltation sign.",
+          answer: `${p} is debilitated in ${d.debil}, at ${d.debilDeg}.`
+        };
+      }
+      return {
+        question: 'What are the four classical "dignities" a planet can have in a sign?',
+        hint: 'They range from weakest to strongest.',
+        answer: 'Debilitation (weakest), Own Sign, Mooltrikona, and Exaltation (strongest).'
+      };
+    }
+
+    if(group === 'aspectsFrom' || group === 'aspectsTo'){
+      if(planet){
+        if(planet === 'Rahu' || planet === 'Ketu'){
+          return {
+            question: 'Do Rahu and Ketu cast a mutual 7th aspect on each other, like most opposite planets would?',
+            hint: 'They are always exactly opposite one another in the chart.',
+            answer: "No — even though Rahu and Ketu are always exactly 7 signs apart, classical tradition doesn't treat this as a mutual aspect between them."
+          };
+        }
+        const offsets = ASPECT_OFFSETS[planet] || ASPECT_OFFSETS.default;
+        if(offsets.length > 1){
+          const extra = offsets.filter(o => o !== 6).map(o => ordinal(o + 1)).join(' & ');
+          return {
+            question: `Besides the usual 7th, which special aspect(s) does ${planet} cast?`,
+            hint: `${planet} is one of only three planets (with Mars/Jupiter/Saturn) that has extra special aspects.`,
+            answer: `${planet} also aspects the ${extra} sign/house from itself, in addition to the 7th.`
+          };
+        }
+        return {
+          question: `Which aspect does ${planet} cast from wherever it's placed?`,
+          hint: 'Most planets only have one kind of aspect.',
+          answer: `${planet} casts only the standard 7th aspect.`
+        };
+      }
+      return {
+        question: 'What is the classical "7th aspect" that (almost) every planet casts?',
+        hint: 'Think of the sign or house directly opposite a planet.',
+        answer: 'Every planet fully aspects (drishti) the sign/house exactly opposite itself — the 7th from its own position.'
+      };
+    }
+
+    return null;
+  }
+
+  // Flashcard session state
+  const flashcards = [];
+  let currentFlashcardIndex = -1;
+  let flashcardFlipped = false;
+  // True only while the Flashcards tab is the active layer panel
+  let flashcardsTabActive = false;
+  // True while a flashcard (question, answer, or empty state) is the pinned content of the
+  // Info Panel — only ever true while flashcardsTabActive is true.
+  let flashcardsPinned = false;
+
+  function updateFlashcardsTabStatus(){
+    const countEl = document.getElementById('flashcardsCount');
+    if(countEl){
+      countEl.textContent = flashcards.length
+        ? `${flashcards.length} flashcard${flashcards.length === 1 ? '' : 's'} generated so far.`
+        : 'No flashcards yet.';
+    }
+  }
+
+  // Every button click in Zodiac Layers / Planetary Layers always adds to the flashcard
+  // queue, but it's only actually displayed in the Info Panel while the Flashcards tab is active —
+  // otherwise the Info Panel keeps showing its normal hover-info / aspects-summary content.
+  function addFlashcard(card){
+    if(!card) return;
+    flashcards.push(card);
+    currentFlashcardIndex = flashcards.length - 1;
+    flashcardFlipped = false;
+    updateFlashcardsTabStatus();
+    if(flashcardsTabActive){
+      flashcardsPinned = true;
+      renderCurrentFlashcard();
+    }
+  }
+
+  // Adds a whole set of questions at once (e.g. a course's) and starts on the FIRST
+  // card of that new set, rather than jumping to the last one added.
+  function addFlashcardBatch(cards){
+    if(!cards || !cards.length) return;
+    const startIndex = flashcards.length;
+    cards.forEach(card => { if(card) flashcards.push(card); });
+    currentFlashcardIndex = startIndex;
+    flashcardFlipped = false;
+    updateFlashcardsTabStatus();
+    if(flashcardsTabActive){
+      flashcardsPinned = true;
+      renderCurrentFlashcard();
+    }
+  }
+
+  // Renders the current flashcard (question, answer, or empty state) into the Info Panel.
+  // Only ever called while the Flashcards tab is active.
+  function renderCurrentFlashcard(){
+    leftInfoPlaceholder.hidden = true;
+    leftInfoContent.hidden = false;
+    leftInfoList.classList.add('flashcard-mode');
+
+    if(currentFlashcardIndex < 0 || !flashcards[currentFlashcardIndex]){
+      leftInfoTitle.textContent = 'Flashcards';
+      leftInfoList.innerHTML = `<li class="flashcard-empty">No flashcards yet — click a button in Zodiac Layers or Planetary Layers to generate one, then come back here.</li>`;
+      return;
+    }
+
+    const card = flashcards[currentFlashcardIndex];
+    leftInfoTitle.textContent = `Flashcard ${currentFlashcardIndex + 1} of ${flashcards.length}`;
+
+    if(!flashcardFlipped){
+      leftInfoList.innerHTML = `
+        <li class="flashcard-question" id="flashcardClickTarget">
+          <div class="flashcard-q-text">${card.question}</div>
+          ${card.hint ? `<div class="flashcard-hint">Hint: ${card.hint}</div>` : ''}
+          <div class="flashcard-tap-note">Tap to reveal the answer</div>
+        </li>
+        <li class="flashcard-controls">
+          <button type="button" class="flashcard-btn" id="flashcardNextBtn">Next</button>
+          <button type="button" class="flashcard-btn flashcard-btn-end" id="flashcardEndBtn">End</button>
+        </li>`;
+      const clickTarget = document.getElementById('flashcardClickTarget');
+      if(clickTarget) clickTarget.addEventListener('click', flipCurrentFlashcard);
+    } else {
+      leftInfoList.innerHTML = `
+        <li class="flashcard-answer">
+          <div class="flashcard-q-text">${card.question}</div>
+          <div class="flashcard-a-text"><b>Answer:</b> ${card.answer}</div>
+        </li>
+        <li class="flashcard-controls">
+          <button type="button" class="flashcard-btn" id="flashcardNextBtn">Next</button>
+          <button type="button" class="flashcard-btn flashcard-btn-end" id="flashcardEndBtn">End</button>
+        </li>`;
+    }
+
+    const nextBtn = document.getElementById('flashcardNextBtn');
+    if(nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); nextFlashcard(); });
+    const endBtn = document.getElementById('flashcardEndBtn');
+    if(endBtn) endBtn.addEventListener('click', (e) => { e.stopPropagation(); endFlashcards(); });
+  }
+
+  // Click-to-flip: rotates the card left-to-right to edge-on, swaps in the answer, then rotates back
+  function flipCurrentFlashcard(){
+    if(flashcardFlipped) return;
+    leftInfoList.style.transition = 'transform .26s ease, opacity .26s ease';
+    leftInfoList.style.transform = 'rotateY(-90deg)';
+    leftInfoList.style.opacity = '0.15';
+    setTimeout(() => {
+      flashcardFlipped = true;
+      renderCurrentFlashcard();
+      leftInfoList.style.transform = 'rotateY(0deg)';
+      leftInfoList.style.opacity = '1';
+
+      // Attribute this flip to the currently open course's completion progress, but only if
+      // the flipped card is actually one of that course's own questions (indices 0..N-1,
+      // since a course click always resets the flashcard queue to just its own questions —
+      // anything added afterward from Zodiac/Planetary Layers falls outside that range).
+      if(typeof currentCourseId !== 'undefined' && currentCourseId){
+        const openCourse = getCourseById(currentCourseId);
+        if(openCourse && currentFlashcardIndex < openCourse.questions.length){
+          const progress = ensureCourseProgress(currentCourseId);
+          progress.flashcardsFlipped[currentFlashcardIndex] = true;
+          checkCourseCompletion(currentCourseId);
+        }
+      }
+    }, 260);
+  }
+
+  // Next always shows another question (cycling back to the start once the queue is exhausted)
+  function nextFlashcard(){
+    if(!flashcards.length) return;
+    currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
+    flashcardFlipped = false;
+    renderCurrentFlashcard();
+  }
+
+  // End returns to the Zodiac Layers panel; the layer-toggle handler takes care of
+  // un-pinning flashcards and restoring the Info Panel's normal content.
+  function endFlashcards(){
+    const zodiacBtn = document.querySelector('.layers-toggle-btn[data-layer-view="zodiac"]');
+    if(zodiacBtn) zodiacBtn.click();
+  }
+
+  // Scans every currently active Zodiac/Planetary Layers selection (main toggles that are
+  // "on", plus whichever specific sub-values/planets are chosen under each) into flashcard contexts
+  function collectActiveFlashcardContexts(){
+    const contexts = [];
+    ['duality', 'modality', 'element'].forEach(key => {
+      if(!toggleState[key]) return;
+      if(multiFilter[key].size){
+        multiFilter[key].forEach(value => contexts.push({group:key, value}));
+      } else {
+        contexts.push({group:key});
+      }
+    });
+    if(toggleState.dignity){
+      contexts.push(filterState.dignity ? {group:'dignity', value:filterState.dignity} : {group:'dignity'});
+    }
+    ['aspectsFrom', 'aspectsTo'].forEach(key => {
+      if(!toggleState[key]) return;
+      if(multiFilter[key].size){
+        multiFilter[key].forEach(planet => contexts.push({group:key, planet}));
+      } else {
+        contexts.push({group:key});
+      }
+    });
+    return contexts;
+  }
+
+  // Clears every flashcard and regenerates a fresh set from whatever is currently
+  // toggled on in Zodiac Layers / Planetary Layers
+  function refreshFlashcards(){
+    flashcards.length = 0;
+    currentFlashcardIndex = -1;
+    flashcardFlipped = false;
+
+    collectActiveFlashcardContexts().forEach(ctx => {
+      const card = generateFlashcard(ctx);
+      if(card) flashcards.push(card);
+    });
+    if(flashcards.length) currentFlashcardIndex = 0;
+
+    updateFlashcardsTabStatus();
+    if(flashcardsTabActive){
+      flashcardsPinned = true;
+      renderCurrentFlashcard();
+    }
+  }
+
+  const flashcardsRefreshBtn = document.getElementById('flashcardsRefreshBtn');
+  if(flashcardsRefreshBtn){
+    flashcardsRefreshBtn.addEventListener('click', refreshFlashcards);
+  }
+  updateFlashcardsTabStatus();
+
+  // ----- Journey Coordinates (Performance) -----------------------------
+  // A five-card dashboard — Presence, Progress, Proficiency, Practice, Purpose — rendered
+  // into the Info Panel while the Journey Coordinates tab is active. Progress and Practice
+  // are computed from real, already-tracked state; the other three don't have tracking
+  // wired up yet, so they're shown as clearly-labeled examples rather than invented numbers.
+  // Friendly display names for the six layer categories, used to name whichever one
+  // hasn't been explored yet in an encouraging suggestion
+  const CATEGORY_LABELS = { duality:'Duality', modality:'Modality', element:'Element', dignity:'Dignities', aspectsFrom:'Aspects From', aspectsTo:'Aspects To' };
+
+  // Three encouraging, concrete next steps drawn from real session state
+  function generateJourneySuggestions(placedCount, exploredCount){
+    const suggestions = [];
+
+    const unexplored = Object.keys(CATEGORY_LABELS).find(k => !toggleState[k]);
+    if(unexplored){
+      suggestions.push(`Give <b>${CATEGORY_LABELS[unexplored]}</b> a try next — each layer you open reveals a new way of reading the chart.`);
+    } else {
+      suggestions.push(`You've opened every layer — wonderful range! Revisit the one that excited you most and go a little deeper.`);
+    }
+
+    if(placedCount < 9){
+      suggestions.push(`Place a few more planets — you're <b>${placedCount}/9</b> of the way to your first complete chart. Keep going, you're doing great!`);
+    } else {
+      suggestions.push(`Your chart is fully placed — lovely work! Try <b>Aspects From</b> and <b>Aspects To</b> to see how these planets talk to each other.`);
+    }
+
+    if(flashcards.length < 5){
+      suggestions.push(`Generate a few <b>Flashcards</b> — even a handful of quick recall questions builds real, lasting understanding.`);
+    } else {
+      suggestions.push(`You're building a great flashcard habit — keep reviewing them, a little repetition is what makes it truly stick.`);
+    }
+
+    return suggestions;
+  }
+
+  function renderJourneyDashboard(){
+    leftInfoPlaceholder.hidden = true;
+    leftInfoContent.hidden = false;
+    leftInfoList.style.transform = '';
+    leftInfoList.style.opacity = '';
+    leftInfoList.classList.remove('flashcard-mode');
+    leftInfoList.classList.add('journey-mode');
+    leftInfoTitle.textContent = 'Journey Coordinates';
+
+    const placedCount = Object.keys(userPlacements).length;
+    const exploredCount = ['duality','modality','element','dignity','aspectsFrom','aspectsTo'].filter(k => toggleState[k]).length;
+
+    const cards = [
+      { label:'Presence',    question:'Am I showing up?',     value:'—',                 note:'Session tracking not wired up yet.' },
+      { label:'Progress',    question:'Am I progressing?',    value:`${exploredCount} / 6`, note:'Layer categories explored this session.' },
+      { label:'Proficiency', question:'Am I understanding?',  value:'—',                 note:'Flashcard mastery tracking not wired up yet.' },
+      { label:'Practice',    question:'Am I applying?',       value:`${placedCount} / 9`,   note:'Planets currently placed on the chart.' },
+      { label:'Purpose',     question:'Am I transforming?',   value:'—',                 note:'Real-reading tracking not wired up yet.' }
+    ];
+
+    const suggestions = generateJourneySuggestions(placedCount, exploredCount);
+
+    leftInfoList.innerHTML = `
+      <li class="journey-grid">${cards.map(c => `
+        <div class="journey-card">
+          <p class="journey-card-label">${c.label}</p>
+          <p class="journey-card-question">${c.question}</p>
+          <p class="journey-card-value">${c.value}</p>
+          <p class="journey-card-note">${c.note}</p>
+        </div>`).join('')}</li>
+      <li class="journey-suggestions">
+        <p class="journey-suggestions-title">Suggestions</p>
+        <ul class="journey-suggestions-list">
+          ${suggestions.map(s => `<li class="journey-suggestion-item">${s}</li>`).join('')}
+        </ul>
+      </li>`;
+  }
+
+  // Static icons: duality / modality / element / dignity / ascendant
+  document.querySelectorAll('.hover-icon[data-info]').forEach(el => {
+    const info = INFO_CONTENT[el.dataset.info];
+    if(!info) return;
+    el.addEventListener('mouseenter', () => showLeftInfo(info.title, info.desc));
+    el.addEventListener('mouseleave', hideLeftInfo);
+  });
+
+  // Which of the 27 nakshatras (lunar mansions) fall within each sign, with pada coverage
+  const NAKSHATRAS_BY_SIGN = {
+    Aries:       [['Ashwini','Ketu','all 4 padas'], ['Bharani','Venus','all 4 padas'], ['Krittika','Sun','pada 1']],
+    Taurus:      [['Krittika','Sun','padas 2-4'], ['Rohini','Moon','all 4 padas'], ['Mrigashira','Mars','padas 1-2']],
+    Gemini:      [['Mrigashira','Mars','padas 3-4'], ['Ardra','Rahu','all 4 padas'], ['Punarvasu','Jupiter','padas 1-3']],
+    Cancer:      [['Punarvasu','Jupiter','pada 4'], ['Pushya','Saturn','all 4 padas'], ['Ashlesha','Mercury','all 4 padas']],
+    Leo:         [['Magha','Ketu','all 4 padas'], ['Purva Phalguni','Venus','all 4 padas'], ['Uttara Phalguni','Sun','pada 1']],
+    Virgo:       [['Uttara Phalguni','Sun','padas 2-4'], ['Hasta','Moon','all 4 padas'], ['Chitra','Mars','padas 1-2']],
+    Libra:       [['Chitra','Mars','padas 3-4'], ['Swati','Rahu','all 4 padas'], ['Vishakha','Jupiter','padas 1-3']],
+    Scorpio:     [['Vishakha','Jupiter','pada 4'], ['Anuradha','Saturn','all 4 padas'], ['Jyeshtha','Mercury','all 4 padas']],
+    Sagittarius: [['Mula','Ketu','all 4 padas'], ['Purva Ashadha','Venus','all 4 padas'], ['Uttara Ashadha','Sun','pada 1']],
+    Capricorn:   [['Uttara Ashadha','Sun','padas 2-4'], ['Shravana','Moon','all 4 padas'], ['Dhanishta','Mars','padas 1-2']],
+    Aquarius:    [['Dhanishta','Mars','padas 3-4'], ['Shatabhisha','Rahu','all 4 padas'], ['Purva Bhadrapada','Jupiter','padas 1-3']],
+    Pisces:      [['Purva Bhadrapada','Jupiter','pada 4'], ['Uttara Bhadrapada','Saturn','all 4 padas'], ['Revati','Mercury','all 4 padas']]
+  };
+  const NAK_SYMBOL = {Ketu:'☋',Venus:'♀',Sun:'☉',Moon:'☾',Mars:'♂',Rahu:'☊',Jupiter:'♃',Saturn:'♄',Mercury:'☿'};
+
+  function nakshatraText(sign){
+    const list = NAKSHATRAS_BY_SIGN[sign];
+    return list.map(([name, lord, pada]) => `${NAK_SYMBOL[lord]} ${name} (${pada})`).join(', ');
+  }
+
+  // Sign icons on both charts
+  function signInfoDesc(sign, house){
+    const attr = SIGN_INFO[sign];
+    const ruler = RULER_OF[sign];
+    const houseInfo = INFO_CONTENT['house_' + house];
+    const houseName = houseInfo ? houseInfo.title.split('—')[1]?.trim() : '';
+
+    const bullets = [];
+    bullets.push(`<b>Attributes:</b> ${attr.modality} · ${attr.duality} · ${attr.element}`);
+    if(ruler) bullets.push(`<b>Ruled by:</b> ${PLANET_SYMBOL[ruler]} ${ruler}`);
+    if(houseInfo) bullets.push(`<b>Governs (${houseName}):</b> ${houseInfo.desc}`);
+
+    const placedHere = PLANET_DATA.filter(p => userPlacements[p.name] === sign);
+    placedHere.forEach(p => {
+      bullets.push(`<b>${p.symbol} ${p.name}:</b> ${fullDignityStatus(p.name, sign)}`);
+    });
+
+    bullets.push(`<b>Nakshatras here:</b> ${nakshatraText(sign)}`);
+    return bullets;
+  }
+
+  southHouseNums.forEach(el => {
+    el.classList.add('hover-icon');
+    el.addEventListener('mouseenter', () => {
+      const sign = el.dataset.sign;
+      const signIndex = SIGNS.indexOf(sign);
+      const house = ((signIndex - currentAsc + 12) % 12) + 1;
+      showLeftInfo(`${sign} — House ${house}`, signInfoDesc(sign, house));
+    });
+    el.addEventListener('mouseleave', hideLeftInfo);
+  });
+
+  northSlots.forEach(el => {
+    el.classList.add('hover-icon');
+    el.addEventListener('mouseenter', () => {
+      const slot = parseInt(el.dataset.slot, 10);
+      const sign = SIGNS[(currentAsc + slot - 1) % 12];
+      const house = slot;
+      showLeftInfo(`${sign} — House ${house}`, signInfoDesc(sign, house));
+    });
+    el.addEventListener('mouseleave', hideLeftInfo);
+  });
+
+  // Drag-and-drop: planet chips → South Indian sign cells AND North Indian house polygons
+  const planetChips = document.querySelectorAll('.planet-chip');
+  const dropZones = document.querySelectorAll('.drop-zone');
+
+  function refreshChipStates(){
+    planetChips.forEach(chip => {
+      const planet = chip.dataset.planet;
+      chip.classList.toggle('placed', !!userPlacements[planet]);
+      chip.title = userPlacements[planet] ? `Currently in ${userPlacements[planet]} — drag again to move` : '';
+    });
+  }
+
+  planetChips.forEach(chip => {
+    chip.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', chip.dataset.planet);
+      e.dataTransfer.effectAllowed = 'move';
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', () => chip.classList.remove('dragging'));
+
+    // Clicking a planet chip that's currently placed resets just that placement —
+    // identical behavior to clicking the placed planet directly on a chart.
+    chip.addEventListener('click', () => {
+      const planet = chip.dataset.planet;
+      if(planet === 'ASC') return; // the Ascendant marker isn't a removable placement
+      removePlanetPlacements(planet);
+    });
+  });
+
+  // Removes one or more planet placements and refreshes every dependent UI piece in one pass.
+  // Shared by: clicking a placed planet's cell on a chart, and clicking its chip in the tray.
+  function removePlanetPlacements(names){
+    const list = Array.isArray(names) ? names : [names];
+    let removedAny = false;
+    list.forEach(name => {
+      if(userPlacements[name]){
+        delete userPlacements[name];
+        removedAny = true;
+      }
+    });
+    if(!removedAny) return;
+    resetPlanetaryPosition();
+    refreshChipStates();
+    updateAspectsAvailability();
+    render(currentAsc);
+  }
+
+  // Resolves a drop zone (either chart) to the sign it currently represents
+  function zoneSign(zone){
+    if(zone.dataset.dropSign) return zone.dataset.dropSign;             // South: fixed sign per cell
+    if(zone.dataset.dropSlot){                                          // North: sign rotates with ascendant
+      const slot = parseInt(zone.dataset.dropSlot, 10);
+      return SIGNS[(currentAsc + slot - 1) % 12];
+    }
+    return null;
+  }
+
+  // Turns off the Dignities feature the moment a manual drag-drop happens,
+  // since a manual placement and the algorithmic dignity display shouldn't compete for the same view.
+  function resetPlanetaryPosition(){
+    toggleState.dignity = false;
+    const mainBtn = document.querySelector('.glyph-btn[data-toggle="dignity"]');
+    if(mainBtn) mainBtn.setAttribute('aria-pressed', 'false');
+    const subPanel = document.querySelector('.sub-options[data-sub-for="dignity"]');
+    if(subPanel) subPanel.classList.remove('open');
+  }
+
+  // Rahu and Ketu are lunar nodes: always exactly opposite each other (7th from one another)
+  function oppositeSign(sign){
+    return SIGNS[(SIGNS.indexOf(sign) + 6) % 12];
+  }
+
+  // Mercury never strays far from the Sun (max elongation ~28°) — same sign, or one sign either side
+  function signDistance(signA, signB){
+    const a = SIGNS.indexOf(signA), b = SIGNS.indexOf(signB);
+    const diff = Math.abs(a - b);
+    return Math.min(diff, 12 - diff);
+  }
+  function isValidMercuryPlacement(sign){
+    const sunSign = userPlacements['Sun'];
+    if(!sunSign) return true; // Sun not placed yet — Mercury can go anywhere and become the anchor
+    return signDistance(sign, sunSign) <= 1;
+  }
+
+  // Venus never strays far from the Sun either (max elongation ~48°) — up to two signs either side
+  function isValidVenusPlacement(sign){
+    const sunSign = userPlacements['Sun'];
+    if(!sunSign) return true; // Sun not placed yet — Venus can go anywhere and become the anchor
+    return signDistance(sign, sunSign) <= 2;
+  }
+
+  // The Sun itself is now constrained too: if Mercury and/or Venus were placed first, the Sun
+  // must land within THEIR respective limits (1 sign for Mercury, 2 signs for Venus) — this is
+  // what lets any of the three be placed first and have it constrain the other two.
+  function isValidSunPlacement(sign){
+    const mercurySign = userPlacements['Mercury'];
+    const venusSign = userPlacements['Venus'];
+    if(mercurySign && signDistance(sign, mercurySign) > 1) return false;
+    if(venusSign && signDistance(sign, venusSign) > 2) return false;
+    return true;
+  }
+
+  // Small error toast for rejected drag-and-drop actions
+  const dropErrorBar = document.getElementById('dropErrorBar');
+  const dropErrorText = document.getElementById('dropErrorText');
+  let dropErrorTimer = null;
+  function showDropError(message){
+    dropErrorText.textContent = message;
+    dropErrorBar.hidden = false;
+    // force reflow so the show class transition re-triggers even if already visible
+    void dropErrorBar.offsetWidth;
+    dropErrorBar.classList.add('show');
+    clearTimeout(dropErrorTimer);
+    dropErrorTimer = setTimeout(() => {
+      dropErrorBar.classList.remove('show');
+      setTimeout(() => { dropErrorBar.hidden = true; }, 250);
+    }, 3800);
+  }
+
+  dropZones.forEach(zone => {
+    // Zones double as drag SOURCES: picking up whichever planet currently sits in that sign/house
+    zone.addEventListener('dragstart', (e) => {
+      const sign = zoneSign(zone);
+      const names = sign ? planetNamesForSign(sign) : [];
+      if(!names.length){
+        e.preventDefault();
+        return;
+      }
+      e.dataTransfer.setData('text/plain', names[0]);
+      e.dataTransfer.effectAllowed = 'move';
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragend', () => zone.classList.remove('drag-over'));
+
+    // Clicking a cell that already holds a user-placed planet resets just that placement
+    // (as opposed to the Clear button, which wipes every placement on the chart).
+    zone.addEventListener('click', () => {
+      const sign = zoneSign(zone);
+      if(!sign) return;
+      const placedNames = Object.keys(userPlacements).filter(name => userPlacements[name] === sign);
+      removePlanetPlacements(placedNames);
+    });
+
+    zone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      zone.classList.add('drag-over');
+    });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const planet = e.dataTransfer.getData('text/plain');
+      const sign = zoneSign(zone);
+      if(!planet || !sign) return;
+
+      if(planet === 'ASC'){
+        render(SIGNS.indexOf(sign));
+        return;
+      }
+
+      if(planet === 'Mercury' && !isValidMercuryPlacement(sign)){
+        const sunSign = userPlacements['Sun'];
+        showDropError(`Mercury can't go in ${sign} — it must stay within one sign of the Sun (currently in ${sunSign}: only ${SIGNS[(SIGNS.indexOf(sunSign)+11)%12]}, ${sunSign}, or ${SIGNS[(SIGNS.indexOf(sunSign)+1)%12]} allowed).`);
+        return;
+      }
+
+      if(planet === 'Venus' && !isValidVenusPlacement(sign)){
+        const sunSign = userPlacements['Sun'];
+        showDropError(`Venus can't go in ${sign} — it must stay within two signs of the Sun (currently in ${sunSign}: only ${SIGNS[(SIGNS.indexOf(sunSign)+10)%12]}, ${SIGNS[(SIGNS.indexOf(sunSign)+11)%12]}, ${sunSign}, ${SIGNS[(SIGNS.indexOf(sunSign)+1)%12]}, or ${SIGNS[(SIGNS.indexOf(sunSign)+2)%12]} allowed).`);
+        return;
+      }
+
+      if(planet === 'Sun' && !isValidSunPlacement(sign)){
+        const mercurySign = userPlacements['Mercury'];
+        const venusSign = userPlacements['Venus'];
+        const problems = [];
+        if(mercurySign && signDistance(sign, mercurySign) > 1){
+          problems.push(`within one sign of Mercury (currently in ${mercurySign})`);
+        }
+        if(venusSign && signDistance(sign, venusSign) > 2){
+          problems.push(`within two signs of Venus (currently in ${venusSign})`);
+        }
+        showDropError(`Sun can't go in ${sign} — it must stay ${problems.join(' and ')}.`);
+        return;
+      }
+
+      userPlacements[planet] = sign;
+      // Rahu / Ketu are always exactly opposite each other — moving one moves the other automatically
+      if(planet === 'Rahu') userPlacements['Ketu'] = oppositeSign(sign);
+      if(planet === 'Ketu') userPlacements['Rahu'] = oppositeSign(sign);
+
+      resetPlanetaryPosition();
+      refreshChipStates();
+      updateAspectsAvailability();
+      render(currentAsc);
+    });
+    // Drop zones sit on top of the cell text, so they must also carry the hover-info behavior
+    zone.addEventListener('mouseenter', () => {
+      const sign = zoneSign(zone);
+      if(!sign) return;
+      const signIndex = SIGNS.indexOf(sign);
+      const house = ((signIndex - currentAsc + 12) % 12) + 1;
+      showLeftInfo(`${sign} — House ${house}`, signInfoDesc(sign, house));
+    });
+    zone.addEventListener('mouseleave', hideLeftInfo);
+  });
+
+  function clearAllPlacements(){
+    Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+    refreshChipStates();
+    updateAspectsAvailability();
+    render(currentAsc);
+  }
+  ['clearPlacements', 'clearPlacementsNorth'].forEach(id => {
+    const btn = document.getElementById(id);
+    if(btn) btn.addEventListener('click', clearAllPlacements);
+  });
+
+  // Chart view toggle: show both charts, or expand just one for a larger, clearer view
+  const southPanel = document.querySelector('.south-chart-panel');
+  const northPanel = document.querySelector('.north-chart-panel');
+  const chartsRow = document.querySelector('.charts-row');
+  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      southPanel.classList.toggle('chart-hidden', view === 'north');
+      northPanel.classList.toggle('chart-hidden', view === 'south');
+      chartsRow.classList.toggle('single-view', view !== 'both');
+      southPanel.classList.toggle('chart-expanded', view === 'south');
+      northPanel.classList.toggle('chart-expanded', view === 'north');
+      syncPanelHeights();
+    });
+  });
+
+  // Zodiac Layers / Planetary Layers / Flashcards / Journey Coordinates / Courses toggle:
+  // only the selected panel is visible at a time
+  const layerPanels = document.querySelectorAll('.layer-panel');
+  const chartsRowWrapper = document.querySelector('.charts-row-wrapper');
+  const infoLegendCol = document.querySelector('.info-legend-col');
+  const chartSelectToggleEl = document.querySelector('.chart-select-toggle');
+  const chartsRowEl = document.querySelector('.charts-row');
+  const mediaViewerPanel = document.getElementById('mediaViewerPanel');
+  const workbookViewerPanel = document.getElementById('workbookViewerPanel');
+  const mychartViewerPanel = document.getElementById('mychartViewerPanel');
+  const mainEl = document.querySelector('main');
+  document.querySelectorAll('.layers-toggle-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.layerView;
+      document.querySelectorAll('.layers-toggle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      layerPanels.forEach(panel => {
+        panel.classList.toggle('layer-hidden', panel.dataset.layerPanel !== view);
+      });
+
+      // Journey Coordinates hides the charts (and their toggle buttons) entirely and lets
+      // the Info Panel column expand into the freed space for the performance dashboard.
+      if(chartsRowWrapper) chartsRowWrapper.classList.toggle('charts-row-hidden', view === 'journey');
+      if(infoLegendCol) infoLegendCol.classList.toggle('journey-expanded', view === 'journey');
+
+      // Courses hides just the chart toggle (space reserved, for alignment) and the charts
+      // themselves, shows the media viewer in their place, and moves the Info Panel to the
+      // rightmost column so the layout reads: lesson list -> media viewer -> Info Panel.
+      // My Chart follows the exact same swap pattern, showing the multi-tab document instead.
+      const isCourses = view === 'courses';
+      const isWorkbook = view === 'workbook';
+      const isMyChart = view === 'mychart';
+      if(mainEl){
+        mainEl.classList.toggle('courses-mode', isCourses);
+        mainEl.classList.toggle('workbook-mode', isWorkbook);
+        mainEl.classList.toggle('mychart-mode', isMyChart);
+      }
+      if(chartSelectToggleEl) chartSelectToggleEl.classList.toggle('courses-hide-toggle', isCourses || isWorkbook || isMyChart);
+      if(chartsRowEl) chartsRowEl.classList.toggle('courses-hide', isCourses || isWorkbook || isMyChart);
+      if(mediaViewerPanel) mediaViewerPanel.classList.toggle('courses-show', isCourses);
+      if(workbookViewerPanel) workbookViewerPanel.classList.toggle('workbook-show', isWorkbook);
+      if(mychartViewerPanel){
+        mychartViewerPanel.classList.toggle('mychart-show', isMyChart);
+        if(isMyChart) renderMyChart();
+      }
+
+      // Render the Info Panel's content FIRST, then sync heights — otherwise syncPanelHeights
+      // measures the previous (stale) content and panels end up misaligned.
+      // Courses reuses the exact same flashcard mechanism as the Flashcards tab. Workbook and
+      // My Chart don't touch the Info Panel at all — they keep its normal hover-info behavior.
+      flashcardsTabActive = (view === 'flashcards' || isCourses);
+      journeyPinned = (view === 'journey');
+      if(flashcardsTabActive){
+        flashcardsPinned = true;
+        renderCurrentFlashcard();
+      } else if(journeyPinned){
+        flashcardsPinned = false;
+        renderJourneyDashboard();
+      } else {
+        flashcardsPinned = false;
+        hideLeftInfo();
+      }
+      syncPanelHeights();
+      updateFooterVisibility();
+    });
+  });
+
+  // The "Illustrative sample chart..." footer note only makes sense while the charts are
+  // actually on screen — checks real rendered visibility (offsetParent covers both the
+  // element itself and any hidden ancestor, e.g. Journey Coordinates hiding the whole wrapper)
+  // rather than assuming any one specific hiding mechanism.
+  function updateFooterVisibility(){
+    const footerEl = document.querySelector('footer');
+    if(!footerEl || !chartsRowEl) return;
+    const visible = chartsRowEl.offsetParent !== null && window.getComputedStyle(chartsRowEl).display !== 'none';
+    footerEl.style.display = visible ? '' : 'none';
+  }
+
+  // ----- Courses (real learning content) ---------------------------------
+  // Each lesson has a couple of very simple, directly-relevant questions added to the
+  // SAME flashcard queue/UI used everywhere else in the app.
+  // Video: a real YouTube iframe embed — YouTube's embed endpoint is built for this, so unlike
+  // a random third-party page it isn't subject to the same framing issues. A small number of
+  // videos still disable embedding at the uploader's choice, so a "Watch on YouTube" fallback
+  // link is always shown alongside it, same as any real media-library app would do.
+  // PDF / Slides: these are real, freely-available sources (linked below), but arbitrary
+  // third-party pages can't be reliably framed (we hit that exact wall earlier). Rather than
+  // gamble on another embed, each shows a simulated paginated preview built from real content
+  // from that same source, with Prev/Next — clearly labeled as a preview, with the real file
+  // linked for the full document.
+  // ----- Lesson completion tracking -----------------------------------
+  // { courseId: { mediaDone:bool, flashcardsFlipped:[bool,...], completed:bool } }
+  const courseProgress = {};
+  // Which course is currently open in the Media Viewer (used to attribute page turns and
+  // flashcard flips to the right lesson)
+  let currentCourseId = null;
+
+  function ensureCourseProgress(courseId){
+    if(!courseProgress[courseId]){
+      const course = getCourseById(courseId);
+      courseProgress[courseId] = {
+        mediaDone: false,
+        flashcardsFlipped: course ? course.questions.map(() => false) : [],
+        completed: false
+      };
+    }
+    return courseProgress[courseId];
+  }
+
+  // Marks the "watched/read the media" half of completion (video watched, or last page/slide reached)
+  function markCourseMediaComplete(courseId){
+    if(!courseId) return;
+    const progress = ensureCourseProgress(courseId);
+    if(progress.mediaDone) return;
+    progress.mediaDone = true;
+    checkCourseCompletion(courseId);
+  }
+
+  // A lesson counts as fully completed once its media has been consumed AND every one of
+  // its flashcard questions has been flipped at least once
+  function checkCourseCompletion(courseId){
+    const progress = courseProgress[courseId];
+    if(!progress) return;
+    const flashcardsDone = progress.flashcardsFlipped.length > 0 && progress.flashcardsFlipped.every(Boolean);
+    const wasComplete = progress.completed;
+    progress.completed = progress.mediaDone && flashcardsDone;
+    if(progress.completed && !wasComplete) markCourseItemCompleteUI(courseId);
+    updateCourseLockState();
+  }
+
+  // Sequential unlocking: every already-completed lesson stays clickable (for review), plus
+  // exactly the next not-yet-completed lesson in list order — everything further down the
+  // list stays locked (inactive) until the lessons before it are completed.
+  function updateCourseLockState(){
+    const items = Array.from(document.querySelectorAll('.course-item'));
+    let nextUnlocked = false;
+    items.forEach(item => {
+      const courseId = item.dataset.courseId;
+      const progress = courseProgress[courseId];
+      const isComplete = !!(progress && progress.completed);
+      let active;
+      if(isComplete){
+        active = true;
+      } else if(!nextUnlocked){
+        active = true;
+        nextUnlocked = true;
+      } else {
+        active = false;
+      }
+      item.disabled = !active;
+      item.classList.toggle('course-item-locked', !active);
+    });
+  }
+
+  // Adds a small "✓ Completed" badge to a lesson's row in the Courses list
+  function markCourseItemCompleteUI(courseId){
+    const item = document.querySelector(`.course-item[data-course-id="${courseId}"]`);
+    if(!item || item.querySelector('.course-item-complete-badge')) return;
+    const textEl = item.querySelector('.course-item-text');
+    if(!textEl) return;
+    const badge = document.createElement('span');
+    badge.className = 'course-item-complete-badge';
+    badge.textContent = '✓ Completed';
+    textEl.appendChild(badge);
+  }
+
+  // ----- Video "watched" tracking (dwell-time based) -----------------------
+  // The YouTube JS Player API's enablejsapi=1 pattern triggers "Error 153: Video player
+  // configuration error" in some hosting contexts (e.g. opening this file directly rather
+  // than serving it from a matching origin) — that risk isn't worth taking just for
+  // completion tracking. Instead, a plain, always-reliable iframe is used for real playback,
+  // and "watched" is approximated by how long the video has been open in the viewer.
+  let videoDwellTimer = null;
+  const VIDEO_DWELL_MS = 45000; // ~45s open counts as "watched" for completion purposes
+
+  function startVideoDwellTracking(courseId){
+    if(videoDwellTimer) clearTimeout(videoDwellTimer);
+    videoDwellTimer = setTimeout(() => {
+      markCourseMediaComplete(courseId);
+      videoDwellTimer = null;
+    }, VIDEO_DWELL_MS);
+  }
+
+  const COURSE_CONTENT = {
+    'zodiac-intro': {
+      title: 'What is Astrology? — Astrology for Beginners (Jyotish, Part 1)',
+      type: 'Video · MP4 (Internet Archive)',
+      mediaType: 'video-file',
+      fileName: 'What is Astrology.mp4',
+      videoSrc: 'https://archive.org/download/vedic-astrology-astrology-for-beginners-what-is-astrology-by-alok-khandelwal-jyotish-part-1/Vedic%20Astrology%20_%20Astrology%20for%20Beginners%20_%20What%20is%20Astrology%20by%20Alok%20Khandelwal%20_%20jyotish%20_%20Part%201.mp4',
+      sourceUrl: 'https://archive.org/details/vedic-astrology-astrology-for-beginners-what-is-astrology-by-alok-khandelwal-jyotish-part-1',
+      description: 'A real introductory lesson on Vedic astrology basics by Alok Khandelwal, hosted on the Internet Archive.',
+      note: 'A real, direct video file — not a framed third-party page, so it plays here reliably with no embedding restrictions possible.',
+      questions: [
+        { question:'How many zodiac signs are there?', hint:'Think of one per month, roughly.', answer:'12.' },
+        { question:'What is the first sign of the zodiac?', hint:'It kicks off the whole cycle.', answer:'Aries.' }
+      ]
+    },
+    'dignities-pdf': {
+      title: 'Vedic Astrology: An Integrated Approach — Ch. 3, Planetary Dignities',
+      type: 'PDF · P.V.R. Narasimha Rao',
+      mediaType: 'pdf-sim',
+      fileName: 'Planetary dignities.pdf',
+      sourceUrl: 'https://www.vedicastrologer.org/articles/vedic_astro_textbook.pdf',
+      description: 'A real, freely-shared textbook — section 3.3 "Planetary Dignities" covers own sign, exaltation, debilitation, and mooltrikona in detail.',
+      note: 'Simulated preview built from the real chapter — open the full PDF for the complete text.',
+      pages: [
+        { heading: 'Own Sign', paras: [
+          'A planet feels strongest and most natural in a sign it rules — this is its "own sign" (swakshetra).',
+          'Example: the Sun rules Leo, the Moon rules Cancer, Mars rules Aries and Scorpio.'
+        ]},
+        { heading: 'Mooltrikona', paras: [
+          'Mooltrikona is a special zone, usually overlapping a planet\u2019s own sign, that is even stronger — like a planet\u2019s "office" where it performs its duty.',
+          'Example: the Sun\u2019s mooltrikona is Leo (0\u201320\u00B0); Jupiter\u2019s is Sagittarius (0\u201310\u00B0).'
+        ]},
+        { heading: 'Exaltation', paras: [
+          'Exaltation (uchcha) is a planet\u2019s single strongest possible placement — one exact sign where it expresses its highest potential.',
+          'Example: the Sun is exalted in Aries at 10\u00B0; the Moon is exalted in Taurus at 3\u00B0.'
+        ]},
+        { heading: 'Debilitation', paras: [
+          'Debilitation (neecha) is the opposite of exaltation — a planet\u2019s weakest placement, always exactly opposite its exaltation sign.',
+          'Example: the Sun is debilitated in Libra; the Moon is debilitated in Scorpio.'
+        ]}
+      ],
+      questions: [
+        { question:"What's a planet's strongest possible placement called?", hint:'It\'s the peak of its power in one exact sign.', answer:'Exaltation.' },
+        { question:'What is the opposite of exaltation called?', hint:'Always the sign directly across the zodiac.', answer:'Debilitation.' }
+      ]
+    },
+    'aspects-slides': {
+      title: 'Beginners Guide to Predictive Astrology (Course 3)',
+      type: 'Slides · PPTX',
+      mediaType: 'ppt-sim',
+      fileName: 'Predictive astrology basics.pptx',
+      sourceUrl: 'https://www.slideshare.net/slideshow/beginnersguidetopredictiveastrologycourse3pptx/266620621',
+      description: 'A real, publicly-shared slide deck covering signs, planets, houses, and planetary aspects.',
+      note: 'Simulated preview built from the real deck\u2019s topics — open the full slides on SlideShare.',
+      slides: [
+        { title: 'What Is an Aspect?', bullets: [
+          'An aspect (drishti) is how one planet\u2019s influence reaches another sign or house.',
+          'Think of it as where a planet "casts its gaze" beyond its own position.'
+        ]},
+        { title: 'The 7th Aspect', bullets: [
+          'Every planet casts a full aspect on the sign/house directly opposite itself.',
+          'This is the one aspect every single planet shares in common.'
+        ]},
+        { title: 'Special Extra Aspects', bullets: [
+          'Mars also aspects the 4th and 8th from itself.',
+          'Jupiter also aspects the 5th and 9th from itself.',
+          'Saturn also aspects the 3rd and 10th from itself.'
+        ]},
+        { title: 'Try It in This App', bullets: [
+          'Open Planetary Layers \u2192 Aspects From / Aspects To to see these drawn live on your chart.'
+        ]}
+      ],
+      questions: [
+        { question:'Which house does every planet aspect by default?', hint:'Straight across the chart from itself.', answer:'The 7th house from itself.' },
+        { question:'Name one planet with special extra aspects.', hint:'There are exactly three of these.', answer:'Mars, Jupiter, or Saturn.' }
+      ]
+    }
+  };
+
+  // ----- Flexible fallback for lessons with no hand-authored content --------
+  // Only the 3 lessons above have real, hand-written content in COURSE_CONTENT. Any row
+  // added through the "Manage courses by program" grid (by any admin, visible to any user)
+  // has just a Program/Courses/File name — no media type or content of its own. Rather than
+  // silently doing nothing when clicked, this builds a simple simulated preview purely from
+  // the file's own name/extension, so it's never tied to which user happens to see it.
+  function inferMediaTypeFromFileName(fileName){
+    const lower = (fileName || '').toLowerCase();
+    if(/\.(mp4|mov|webm|avi|mkv)$/.test(lower)) return 'video-sim';
+    if(/\.pdf$/.test(lower)) return 'pdf-sim';
+    if(/\.(pptx|ppt)$/.test(lower)) return 'ppt-sim';
+    return 'generic-sim';
+  }
+
+  function buildSimulatedCourse(row){
+    const mediaType = inferMediaTypeFromFileName(row.fileName);
+    const title = row.courseName || row.fileName || 'Untitled lesson';
+    const base = {
+      title,
+      sourceUrl: '',
+      description: `A simulated preview for "${row.fileName || 'this file'}" — no real file is attached yet.`,
+      note: 'Placeholder content, generated from the file name — added through the Manage Courses grid.',
+      questions: [
+        { question: 'What is this lesson about?', hint: 'Think about the course name.', answer: title }
+      ]
+    };
+    if(mediaType === 'pdf-sim'){
+      return { ...base, type:`PDF · ${row.program || 'Simulated'}`, mediaType,
+        pages: [{ heading: title, paras: [`This is a simulated page for "${row.fileName}". Real content can be added later.`] }]
+      };
+    }
+    if(mediaType === 'ppt-sim'){
+      return { ...base, type:`Slides · ${row.program || 'Simulated'}`, mediaType,
+        slides: [{ title, bullets: [`This is a simulated slide for "${row.fileName}".`] }]
+      };
+    }
+    if(mediaType === 'video-sim'){
+      return { ...base, type:`Video · ${row.program || 'Simulated'}`, mediaType };
+    }
+    return { ...base, type:`File · ${row.program || 'Simulated'}`, mediaType };
+  }
+
+  // The real content above is matched purely by FILE NAME now, not by id — this is what a
+  // click actually looks up. Any row (regardless of its internal id, and regardless of how
+  // many rows share the same file name) that says "What is Astrology.mp4" plays the one real
+  // video; anything else gets a simulation built from its own file name. This removes the
+  // whole class of bugs where a row's id and its displayed file name could drift apart.
+  const KNOWN_FILES = {};
+  Object.values(COURSE_CONTENT).forEach(entry => {
+    if(entry.fileName) KNOWN_FILES[entry.fileName.trim().toLowerCase()] = entry;
+  });
+
+  // Looks up a lesson purely by its CURRENT file name: a real, known file plays its real
+  // content; anything else gets a simulation built from that file name/extension.
+  function getCourseForFileName(fileName){
+    const key = (fileName || '').trim().toLowerCase();
+    return KNOWN_FILES[key] || null;
+  }
+
+  // The single lookup used everywhere a lesson needs to be found by id — resolves the row for
+  // that id, then matches its file name against the known real files.
+  function getCourseById(courseId){
+    const row = programCourses.find(r => r.id === courseId);
+    if(!row) return null;
+    return getCourseForFileName(row.fileName) || buildSimulatedCourse(row);
+  }
+
+  const mediaViewerEmpty = document.getElementById('mediaViewerEmpty');
+  const mediaViewerContent = document.getElementById('mediaViewerContent');
+  const mediaViewerTitle = document.getElementById('mediaViewerTitle');
+  const mediaViewerType = document.getElementById('mediaViewerType');
+  const mediaViewerFrameWrap = document.getElementById('mediaViewerFrameWrap');
+  const mediaViewerDesc = document.getElementById('mediaViewerDesc');
+  const mediaViewerNote = document.getElementById('mediaViewerNote');
+
+  const MEDIA_OPEN_LABEL = { 'video-file': 'View on archive.org', youtube: 'Watch on YouTube', 'pdf-sim': 'Open full PDF', 'ppt-sim': 'Open full slide deck' };
+
+  // Tracks which page/slide is showing PER COURSE (not just one global position), so
+  // reaching the last page of one lesson doesn't get confused with another's progress
+  const mediaViewerPageByCourse = {};
+
+  // Renders: a real YouTube player (tracked for ~90%-watched / ended completion, with a
+  // "watch elsewhere" fallback since embedding can be blocked per-video by the uploader),
+  // or a simulated paginated PDF/slide preview built from real content — with a link to the
+  // real full source in every case. Reaching the last page/slide marks that half of completion.
+  function renderMediaViewer(course){
+    if(mediaViewerTitle) mediaViewerTitle.textContent = course.title;
+    if(mediaViewerType) mediaViewerType.textContent = course.type;
+    if(mediaViewerDesc) mediaViewerDesc.textContent = course.description;
+    if(mediaViewerNote) mediaViewerNote.textContent = course.note || '';
+    if(!mediaViewerFrameWrap) return;
+
+    mediaViewerFrameWrap.innerHTML = '';
+
+    if(course.mediaType === 'video-file' && course.videoSrc){
+      const video = document.createElement('video');
+      // Cache-bust every load: if a previous session's video was stopped mid-stream (pause +
+      // removeAttribute('src') + load(), from stopAllMedia() on logout/login), some browsers
+      // can cache that as a partial/incomplete response — a fresh query param each time this
+      // is opened guarantees a genuinely new request instead of risking a stale cache hit.
+      const cacheBustedSrc = course.videoSrc + (course.videoSrc.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
+      video.src = cacheBustedSrc;
+      video.controls = true;
+      video.preload = 'metadata';
+      video.className = 'media-viewer-video';
+      mediaViewerFrameWrap.appendChild(video);
+
+      // If the browser can't actually stream this file (common when this HTML file is opened
+      // directly via file:// — some browsers restrict cross-origin range requests from a
+      // file:// page, even though the same video plays fine from a normal http(s) page), show
+      // a helpful hint alongside the player — WITHOUT hiding the video itself, since a single
+      // "error" event can be transient (a momentary network hiccup, not a real failure) and
+      // hiding it would permanently break playback for something that might recover on its own
+      // or with the browser's native retry/controls.
+      const videoErrorMsg = document.createElement('p');
+      videoErrorMsg.className = 'media-viewer-video-error';
+      videoErrorMsg.hidden = true;
+      videoErrorMsg.innerHTML = `Having trouble playing here? This can happen when opening this file directly rather than from a web server. <a href="${course.sourceUrl}" target="_blank" rel="noopener noreferrer">Open it directly instead ↗</a>`;
+      mediaViewerFrameWrap.appendChild(videoErrorMsg);
+      video.addEventListener('error', () => {
+        // Only surface the hint if the video still hasn't produced any data shortly after
+        // the error — a real, sustained failure — rather than reacting to a single blip.
+        setTimeout(() => {
+          if(video.readyState === 0){
+            videoErrorMsg.hidden = false;
+            syncPanelHeights();
+          }
+        }, 1500);
+      });
+      video.addEventListener('playing', () => {
+        if(!videoErrorMsg.hidden){ videoErrorMsg.hidden = true; syncPanelHeights(); }
+      });
+
+      // The video's real rendered height isn't known until its metadata loads (an async
+      // network round-trip) — that happens AFTER the initial syncPanelHeights() call below,
+      // so without this the panels would align to a placeholder height and then visibly
+      // jump out of alignment once the real video dimensions arrive. Re-sync whenever the
+      // video's own size changes, so top/bottom alignment stays correct dynamically.
+      video.addEventListener('loadedmetadata', () => { syncPanelHeights(); });
+      if(window.ResizeObserver){
+        const videoResizeObserver = new ResizeObserver(() => syncPanelHeights());
+        videoResizeObserver.observe(video);
+      }
+
+      // A real <video> element fires real playback events directly — no iframe, no
+      // postMessage, no cross-origin restrictions — so this tracking is fully reliable.
+      const videoCourseId = currentCourseId;
+      video.addEventListener('timeupdate', () => {
+        if(video.duration > 0 && (video.currentTime / video.duration) >= 0.9){
+          markCourseMediaComplete(videoCourseId);
+        }
+      });
+      video.addEventListener('ended', () => markCourseMediaComplete(videoCourseId));
+    } else if(course.mediaType === 'youtube' && course.youtubeId){
+      const ytWrap = document.createElement('div');
+      ytWrap.className = 'media-viewer-yt';
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${course.youtubeId}`;
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      iframe.setAttribute('allowfullscreen', '');
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('title', course.title);
+      ytWrap.appendChild(iframe);
+      mediaViewerFrameWrap.appendChild(ytWrap);
+
+      startVideoDwellTracking(currentCourseId);
+    } else if(course.mediaType === 'pdf-sim' && course.pages){
+      if(mediaViewerPageByCourse[currentCourseId] == null) mediaViewerPageByCourse[currentCourseId] = 0;
+      mediaViewerPageByCourse[currentCourseId] = Math.min(mediaViewerPageByCourse[currentCourseId], course.pages.length - 1);
+      const pageIdx = mediaViewerPageByCourse[currentCourseId];
+      const page = course.pages[pageIdx];
+      const wrap = document.createElement('div');
+      wrap.className = 'media-viewer-doc-wrap';
+      wrap.innerHTML = `
+        <div class="media-viewer-doc-page">
+          <p class="media-viewer-doc-kicker">${course.title}</p>
+          <h4 class="media-viewer-doc-heading">${page.heading}</h4>
+          ${page.paras.map(p => `<p class="media-viewer-doc-para">${p}</p>`).join('')}
+          <p class="media-viewer-doc-pageno">\u2014 ${pageIdx + 1} \u2014</p>
+        </div>
+        <div class="media-viewer-pager">
+          <button type="button" class="media-viewer-pager-btn" id="mvPrevBtn" ${pageIdx === 0 ? 'disabled' : ''}>\u2190 Prev</button>
+          <span class="media-viewer-pager-label">Page ${pageIdx + 1} of ${course.pages.length}</span>
+          <button type="button" class="media-viewer-pager-btn" id="mvNextBtn" ${pageIdx === course.pages.length - 1 ? 'disabled' : ''}>Next \u2192</button>
+        </div>`;
+      mediaViewerFrameWrap.appendChild(wrap);
+      wireMediaPager(course, course.pages.length);
+      if(pageIdx === course.pages.length - 1) markCourseMediaComplete(currentCourseId);
+    } else if(course.mediaType === 'ppt-sim' && course.slides){
+      if(mediaViewerPageByCourse[currentCourseId] == null) mediaViewerPageByCourse[currentCourseId] = 0;
+      mediaViewerPageByCourse[currentCourseId] = Math.min(mediaViewerPageByCourse[currentCourseId], course.slides.length - 1);
+      const pageIdx = mediaViewerPageByCourse[currentCourseId];
+      const slide = course.slides[pageIdx];
+      const wrap = document.createElement('div');
+      wrap.className = 'media-viewer-doc-wrap';
+      wrap.innerHTML = `
+        <div class="media-viewer-slide">
+          <h4 class="media-viewer-slide-title">${slide.title}</h4>
+          <ul class="media-viewer-slide-bullets">${slide.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+          <p class="media-viewer-doc-pageno">Slide ${pageIdx + 1}</p>
+        </div>
+        <div class="media-viewer-pager">
+          <button type="button" class="media-viewer-pager-btn" id="mvPrevBtn" ${pageIdx === 0 ? 'disabled' : ''}>\u2190 Prev</button>
+          <span class="media-viewer-pager-label">Slide ${pageIdx + 1} of ${course.slides.length}</span>
+          <button type="button" class="media-viewer-pager-btn" id="mvNextBtn" ${pageIdx === course.slides.length - 1 ? 'disabled' : ''}>Next \u2192</button>
+        </div>`;
+      mediaViewerFrameWrap.appendChild(wrap);
+      wireMediaPager(course, course.slides.length);
+      if(pageIdx === course.slides.length - 1) markCourseMediaComplete(currentCourseId);
+    } else if(course.mediaType === 'video-sim' || course.mediaType === 'generic-sim'){
+      // A lesson added through the Manage Courses grid with no real file attached yet —
+      // shows a clearly-labeled placeholder instead of doing nothing when clicked.
+      const wrap = document.createElement('div');
+      wrap.className = 'media-viewer-doc-wrap';
+      const heading = course.mediaType === 'video-sim' ? 'Simulated Video' : 'Simulated File';
+      wrap.innerHTML = `
+        <div class="media-viewer-doc-page">
+          <p class="media-viewer-doc-kicker">${course.title}</p>
+          <h4 class="media-viewer-doc-heading">${heading}</h4>
+          <p class="media-viewer-doc-para">No real file is attached to this lesson yet — this is a placeholder so the lesson can still be opened and worked through.</p>
+        </div>`;
+      mediaViewerFrameWrap.appendChild(wrap);
+      markCourseMediaComplete(currentCourseId);
+    }
+
+    if(course.sourceUrl){
+      const link = document.createElement('a');
+      link.href = course.sourceUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.className = 'media-viewer-external-link';
+      link.textContent = `${MEDIA_OPEN_LABEL[course.mediaType] || 'Open'} ↗`;
+      mediaViewerFrameWrap.appendChild(link);
+    }
+  }
+
+  // Wires up the Prev/Next buttons for the simulated PDF/slide preview (per-course page position)
+  function wireMediaPager(course, count){
+    const prevBtn = document.getElementById('mvPrevBtn');
+    const nextBtn = document.getElementById('mvNextBtn');
+    if(prevBtn) prevBtn.addEventListener('click', () => {
+      if(mediaViewerPageByCourse[currentCourseId] > 0){
+        mediaViewerPageByCourse[currentCourseId] -= 1;
+        renderMediaViewer(course);
+      }
+    });
+    if(nextBtn) nextBtn.addEventListener('click', () => {
+      if(mediaViewerPageByCourse[currentCourseId] < count - 1){
+        mediaViewerPageByCourse[currentCourseId] += 1;
+        renderMediaViewer(course);
+      }
+    });
+  }
+
+  const viewedCourseIds = new Set();
+  const courseListEl = document.getElementById('courseListEl');
+
+  // Wires a single course-item button (used for every dynamically-rendered lesson row)
+  function wireCourseItem(item){
+    item.addEventListener('click', () => {
+      const course = getCourseById(item.dataset.courseId);
+      if(!course) return;
+
+      document.querySelectorAll('.course-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+      viewedCourseIds.add(item.dataset.courseId);
+      currentCourseId = item.dataset.courseId;
+      ensureCourseProgress(currentCourseId);
+
+      if(mediaViewerEmpty) mediaViewerEmpty.hidden = true;
+      if(mediaViewerContent) mediaViewerContent.hidden = false;
+      renderMediaViewer(course);
+
+      // Each course click replaces the flashcard queue entirely with just this lesson's questions
+      flashcards.length = 0;
+      currentFlashcardIndex = -1;
+      flashcardFlipped = false;
+      addFlashcardBatch(course.questions);
+      syncPanelHeights();
+    });
+  }
+
+  // ----- Manage courses by program (admin grid) ---------------------------
+  // The Courses panel's lesson list is now driven entirely by this grid: Program, Courses
+  // (the lesson name), and File name — the same 3 lessons that used to be hardcoded in the
+  // panel now live here instead, editable and deletable, with an "Add Program" row to add more.
+  const PROGRAM_COURSES_KEY = 'vedicChartProgramCourses';
+
+  function defaultProgramCourses(){
+    return [
+      { id:'zodiac-intro',   program:'Trial', courseName:'What is Astrology?',            fileName:'What is Astrology.mp4' },
+      { id:'dignities-pdf',  program:'101',   courseName:'Planetary Dignities',            fileName:'Planetary dignities.pdf' },
+      { id:'aspects-slides', program:'102',   courseName:'Predictive Astrology Basics',    fileName:'Predictive astrology basics.pptx' }
+    ];
+  }
+
+  let programCourses = [];
+  try{
+    const rawPC = localStorage.getItem(PROGRAM_COURSES_KEY);
+    programCourses = rawPC ? JSON.parse(rawPC) : defaultProgramCourses();
+  } catch(e){ programCourses = defaultProgramCourses(); }
+  if(!Array.isArray(programCourses) || !programCourses.length) programCourses = defaultProgramCourses();
+
+  function saveProgramCourses(){
+    try{ localStorage.setItem(PROGRAM_COURSES_KEY, JSON.stringify(programCourses)); } catch(e){ /* ignore */ }
+  }
+
+  // Which program the currently signed-in user has access to (set on login). Empty means
+  // no filtering — used before login, and as a graceful fallback if a user has no program set.
+  let currentUserProgram = '';
+
+  // Rebuilds the Courses panel's lesson list from the grid's current rows, filtered to only
+  // the signed-in user's Program. Rows whose id matches a real COURSE_CONTENT entry (the 3
+  // original lessons) open with full content; any newly-added program row without matching
+  // content simply does nothing when clicked (there's no lesson data behind it yet) rather
+  // than erroring.
+  function renderCourseListFromProgramGrid(){
+    if(!courseListEl) return;
+    const previousActiveId = currentCourseId;
+    courseListEl.innerHTML = '';
+
+    const visibleRows = currentUserProgram
+      ? programCourses.filter(row => (row.program || '').trim().toLowerCase() === currentUserProgram.trim().toLowerCase())
+      : programCourses;
+
+    if(!visibleRows.length){
+      const empty = document.createElement('p');
+      empty.className = 'access-sub';
+      empty.style.margin = '0';
+      empty.textContent = currentUserProgram
+        ? `No lessons are assigned to the "${currentUserProgram}" program yet.`
+        : 'No lessons available yet.';
+      courseListEl.appendChild(empty);
+      updateCourseLockState();
+      return;
+    }
+
+    visibleRows.forEach(row => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'course-item';
+      btn.dataset.courseId = row.id;
+      const typeLine = [row.program, row.courseName].filter(Boolean).join(' · ');
+      btn.innerHTML = `
+        <span class="course-item-text">
+          <span class="course-item-title">${row.fileName || '(untitled file)'}</span>
+          <span class="course-item-type">${typeLine}</span>
+        </span>`;
+      if(row.id === previousActiveId) btn.classList.add('active');
+      courseListEl.appendChild(btn);
+      wireCourseItem(btn);
+    });
+    updateCourseLockState();
+  }
+
+  const programCoursesBody = document.getElementById('programCoursesBody');
+
+  // Builds the Program/Courses/File name grid rows, each field editable in place
+  function renderProgramCoursesGrid(){
+    if(!programCoursesBody) return;
+    programCoursesBody.innerHTML = '';
+    programCourses.forEach(row => {
+      const tr = document.createElement('tr');
+
+      const tdProgram = document.createElement('td');
+      const programInput = document.createElement('input');
+      programInput.type = 'text';
+      programInput.value = row.program || '';
+      programInput.addEventListener('change', () => {
+        row.program = programInput.value;
+        saveProgramCourses();
+        renderCourseListFromProgramGrid();
+      });
+      tdProgram.appendChild(programInput);
+      tr.appendChild(tdProgram);
+
+      const tdCourse = document.createElement('td');
+      const courseInput = document.createElement('input');
+      courseInput.type = 'text';
+      courseInput.style.width = '140px';
+      courseInput.value = row.courseName || '';
+      courseInput.addEventListener('change', () => {
+        row.courseName = courseInput.value;
+        saveProgramCourses();
+        renderCourseListFromProgramGrid();
+      });
+      tdCourse.appendChild(courseInput);
+      tr.appendChild(tdCourse);
+
+      const tdFile = document.createElement('td');
+      const fileInput = document.createElement('input');
+      fileInput.type = 'text';
+      fileInput.style.width = '170px';
+      fileInput.value = row.fileName || '';
+      fileInput.addEventListener('change', () => {
+        row.fileName = fileInput.value;
+        saveProgramCourses();
+        renderCourseListFromProgramGrid();
+      });
+      tdFile.appendChild(fileInput);
+      tr.appendChild(tdFile);
+
+      const tdDelete = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'access-grid-delete-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Remove this row';
+      delBtn.setAttribute('aria-label', 'Remove this row');
+      delBtn.addEventListener('click', () => {
+        programCourses = programCourses.filter(r => r.id !== row.id);
+        saveProgramCourses();
+        renderProgramCoursesGrid();
+        renderCourseListFromProgramGrid();
+      });
+      tdDelete.appendChild(delBtn);
+      tr.appendChild(tdDelete);
+
+      programCoursesBody.appendChild(tr);
+    });
+  }
+  renderProgramCoursesGrid();
+  renderCourseListFromProgramGrid();
+
+  const newProgramInput = document.getElementById('newProgramInput');
+  const addProgramBtn = document.getElementById('addProgramBtn');
+  function addProgramRow(){
+    if(!newProgramInput) return;
+    const programName = newProgramInput.value.trim();
+    if(!programName) return;
+    programCourses.push({ id: 'program-' + Date.now(), program: programName, courseName: '', fileName: '' });
+    saveProgramCourses();
+    renderProgramCoursesGrid();
+    renderCourseListFromProgramGrid();
+    newProgramInput.value = '';
+  }
+  if(addProgramBtn) addProgramBtn.addEventListener('click', addProgramRow);
+  if(newProgramInput) newProgramInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') addProgramRow(); });
+
+  // ----- Workbook (fixed document text + free-typed answers) -------------
+  // Each workbook is stored as a sequence of "blocks" — plain text lines (shown as-is,
+  // in order, exactly like the source document) and "answer" blocks (an editable text
+  // box, placed exactly where the document had a blank to fill in). This shows the whole
+  // document, not just the extracted questions. Answers, and any documents added via
+  // "+ Add Document", are saved to localStorage so everything is exactly as you left it
+  // the next time this document is opened.
+  const WORKBOOK_CONTENT = {
+    'basic-practice-worksheet': {
+      title: 'Basic Vedic Astrology — Practice Worksheet',
+      type: 'Workbook · 3 questions',
+      blocks: [
+        { type:'text', text:'Basic Vedic Astrology — Practice Worksheet' },
+        { type:'text', text:'Name: ______________________   Date: ______________________' },
+        { type:'text', text:'Question 1' },
+        { type:'text', text:'What are the 12 Rashis (zodiac signs), and what does each generally represent in Vedic astrology?' },
+        { type:'text', text:'Answer:' },
+        { type:'answer', index:0 },
+        { type:'text', text:'Question 2' },
+        { type:'text', text:'What is the difference between a Graha (planet) and a Rashi (zodiac sign)? Give one example of each.' },
+        { type:'text', text:'Answer:' },
+        { type:'answer', index:1 },
+        { type:'text', text:'Question 3' },
+        { type:'text', text:'What is a Nakshatra, and why is it important when interpreting a birth chart?' },
+        { type:'text', text:'Answer:' },
+        { type:'answer', index:2 }
+      ]
+    },
+    'signs-basics': {
+      title: 'Zodiac Signs — Practice Sheet',
+      type: 'Workbook · 4 questions',
+      blocks: [
+        { type:'text', text:'Question 1' }, { type:'text', text:'List the three Fire signs.' }, { type:'text', text:'Answer:' }, { type:'answer', index:0 },
+        { type:'text', text:'Question 2' }, { type:'text', text:'Which sign starts the zodiac, and what element is it?' }, { type:'text', text:'Answer:' }, { type:'answer', index:1 },
+        { type:'text', text:'Question 3' }, { type:'text', text:'Name a Cardinal sign and a Fixed sign.' }, { type:'text', text:'Answer:' }, { type:'answer', index:2 },
+        { type:'text', text:'Question 4' }, { type:'text', text:'What duality (Yang/Yin) is Taurus?' }, { type:'text', text:'Answer:' }, { type:'answer', index:3 }
+      ]
+    },
+    'dignities-practice': {
+      title: 'Planetary Dignities — Worksheet',
+      type: 'Workbook · 3 questions',
+      blocks: [
+        { type:'text', text:'Question 1' }, { type:'text', text:'Which sign is the Sun exalted in?' }, { type:'text', text:'Answer:' }, { type:'answer', index:0 },
+        { type:'text', text:'Question 2' }, { type:'text', text:"What is Jupiter's own sign(s)?" }, { type:'text', text:'Answer:' }, { type:'answer', index:1 },
+        { type:'text', text:'Question 3' }, { type:'text', text:'Where is the Moon debilitated?' }, { type:'text', text:'Answer:' }, { type:'answer', index:2 }
+      ]
+    }
+  };
+
+  const workbookViewerEmpty = document.getElementById('workbookViewerEmpty');
+  const workbookViewerContent = document.getElementById('workbookViewerContent');
+  const workbookViewerTitle = document.getElementById('workbookViewerTitle');
+  const workbookViewerType = document.getElementById('workbookViewerType');
+  const workbookQaList = document.getElementById('workbookQaList');
+  const workbookListEl = document.getElementById('workbookListEl');
+  const workbookAddStatus = document.getElementById('workbookAddStatus');
+  const WORKBOOK_STORAGE_KEY = 'vedicChartWorkbookLibrary';
+
+  // { workbookId: [{text, editedBy, editedAt}, ...] } — what's been typed, and by whom
+  const workbookAnswers = {};
+  // { workbookId: [{name, dataUrl} or null, ...] } — one optional file attachment per answer
+  const workbookAttachments = {};
+  // Which workbook is currently open in the editor (so deleting it can reset the viewer)
+  let currentWorkbookId = null;
+
+  const workbookUserNameLabel = document.getElementById('workbookUserNameLabel');
+  const changeUserNameBtn = document.getElementById('changeUserNameBtn');
+  const WORKBOOK_USER_KEY = 'vedicChartWorkbookUserName';
+  let currentUserName = 'You';
+  try{ currentUserName = localStorage.getItem(WORKBOOK_USER_KEY) || 'You'; } catch(e){ /* ignore */ }
+  function updateUserNameLabel(){
+    if(workbookUserNameLabel) workbookUserNameLabel.textContent = currentUserName;
+  }
+  updateUserNameLabel();
+  if(changeUserNameBtn){
+    changeUserNameBtn.addEventListener('click', () => {
+      const next = prompt('Your name (tagged on any answers you edit):', currentUserName);
+      if(next && next.trim()){
+        currentUserName = next.trim();
+        try{ localStorage.setItem(WORKBOOK_USER_KEY, currentUserName); } catch(e){ /* ignore */ }
+        updateUserNameLabel();
+      }
+    });
+  }
+
+  // Persists typed answers, attachments, and any documents added via "+ Add Document" so
+  // they're exactly as left the next time this file is opened.
+  function saveWorkbookLibrary(){
+    try{
+      const uploaded = {};
+      Object.keys(WORKBOOK_CONTENT).forEach(id => {
+        if(id.indexOf('uploaded-') === 0) uploaded[id] = WORKBOOK_CONTENT[id];
+      });
+      localStorage.setItem(WORKBOOK_STORAGE_KEY, JSON.stringify({ uploaded, answers: workbookAnswers, attachments: workbookAttachments }));
+    } catch(e){ /* localStorage may be unavailable (private browsing), or the quota was exceeded by a large attachment — fail silently */ }
+  }
+
+  function loadWorkbookLibrary(){
+    try{
+      const raw = localStorage.getItem(WORKBOOK_STORAGE_KEY);
+      if(!raw) return;
+      const data = JSON.parse(raw);
+      if(data.uploaded){
+        Object.keys(data.uploaded).forEach(id => {
+          WORKBOOK_CONTENT[id] = data.uploaded[id];
+          addWorkbookListItem(id, data.uploaded[id].title, data.uploaded[id].type);
+        });
+      }
+      if(data.answers){
+        Object.keys(data.answers).forEach(id => { workbookAnswers[id] = data.answers[id]; });
+      }
+      if(data.attachments){
+        Object.keys(data.attachments).forEach(id => { workbookAttachments[id] = data.attachments[id]; });
+      }
+    } catch(e){ /* ignore corrupt/unavailable storage */ }
+  }
+
+  // Builds a real inline preview for an attached file — an actual image thumbnail if the
+  // file is an image, or a file icon + name card otherwise — shown directly in the document.
+  function attachmentPreviewHTML(attachment, workbookId, idx){
+    if(!attachment) return '';
+    const isImage = /^data:image\//.test(attachment.dataUrl || '');
+    const body = isImage
+      ? `<img src="${attachment.dataUrl}" alt="${attachment.name}" class="workbook-attachment-thumb">`
+      : `<div class="workbook-attachment-file"><span class="workbook-attachment-file-icon">📄</span><span class="workbook-attachment-file-name">${attachment.name}</span></div>`;
+    return `
+      <div class="workbook-attachment-preview-card">
+        ${body}
+        <div class="workbook-attachment-preview-footer">
+          <span class="workbook-attachment-preview-name">${attachment.name}</span>
+          <button type="button" class="workbook-attachment-remove" data-workbook-id="${workbookId}" data-q-index="${idx}" aria-label="Remove attachment">✕</button>
+        </div>
+      </div>`;
+  }
+
+  // Converts the older { question, placeholder } item format (from before workbooks stored
+  // full document text) into the current block sequence, so anything saved to localStorage
+  // under the old shape still opens correctly instead of erroring on wb.blocks being undefined.
+  function itemsToBlocks(items){
+    const blocks = [];
+    (items || []).forEach((item, i) => {
+      blocks.push({ type:'text', text:`Question ${i + 1}` });
+      blocks.push({ type:'text', text: item.question });
+      blocks.push({ type:'text', text:'Answer:' });
+      blocks.push({ type:'answer', index:i });
+    });
+    return blocks;
+  }
+
+  // Renders the full document text in order, with an editable answer box (tagged with who
+  // last edited it, and an optional file attachment) exactly where the document had a blank.
+  function renderWorkbookViewer(workbookId){
+    const wb = WORKBOOK_CONTENT[workbookId];
+    if(!wb || !workbookQaList) return;
+    currentWorkbookId = workbookId;
+    if(workbookViewerTitle) workbookViewerTitle.textContent = wb.title;
+    if(workbookViewerType) workbookViewerType.textContent = wb.type;
+
+    // Migrate older saved workbooks (items-only, no blocks) so they don't error out here
+    if(!Array.isArray(wb.blocks)){
+      wb.blocks = itemsToBlocks(wb.items);
+      saveWorkbookLibrary();
+    }
+
+    const answerCount = wb.blocks.filter(b => b.type === 'answer').length;
+    const blankAnswer = () => ({ text:'', editedBy:'', editedAt:'' });
+    if(!workbookAnswers[workbookId]) workbookAnswers[workbookId] = new Array(answerCount).fill(0).map(blankAnswer);
+    // Migrate older plain-string answers (before user tagging existed) to the tagged shape
+    workbookAnswers[workbookId] = workbookAnswers[workbookId].map(entry =>
+      (typeof entry === 'string') ? { text: entry, editedBy:'', editedAt:'' } : (entry || blankAnswer())
+    );
+    while(workbookAnswers[workbookId].length < answerCount) workbookAnswers[workbookId].push(blankAnswer());
+    const savedAnswers = workbookAnswers[workbookId];
+    const savedAttachments = workbookAttachments[workbookId] || [];
+
+    workbookQaList.innerHTML = wb.blocks.map(block => {
+      if(block.type === 'answer'){
+        const idx = block.index;
+        const ans = savedAnswers[idx] || blankAnswer();
+        const attachment = savedAttachments[idx];
+        const displayValue = (ans.text && ans.text.length) ? ans.text : `${currentUserName} : `;
+        return `
+          <div class="workbook-answer-input-wrap">
+            <textarea class="workbook-qa-answer" data-workbook-id="${workbookId}" data-q-index="${idx}" placeholder="Type your answer here…">${displayValue}</textarea>
+            <label class="workbook-attach-plus" title="Attach a file" aria-label="Attach a file">+
+              <input type="file" class="workbook-attach-input" data-workbook-id="${workbookId}" data-q-index="${idx}" hidden>
+            </label>
+          </div>
+          ${attachment ? attachmentPreviewHTML(attachment, workbookId, idx) : ''}`;
+      }
+      const cls = /^question\s*\d+/i.test(block.text) ? 'workbook-block-heading' : 'workbook-block-text';
+      return `<p class="${cls}">${block.text}</p>`;
+    }).join('');
+
+    workbookQaList.querySelectorAll('.workbook-qa-answer').forEach(ta => {
+      ta.addEventListener('input', () => {
+        const wid = ta.dataset.workbookId;
+        const qi = parseInt(ta.dataset.qIndex, 10);
+        if(!workbookAnswers[wid]) workbookAnswers[wid] = [];
+        if(!workbookAnswers[wid][qi]) workbookAnswers[wid][qi] = blankAnswer();
+        workbookAnswers[wid][qi].text = ta.value;
+        workbookAnswers[wid][qi].editedBy = currentUserName;
+        workbookAnswers[wid][qi].editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        saveWorkbookLibrary();
+      });
+    });
+
+    workbookQaList.querySelectorAll('.workbook-attach-input').forEach(input => {
+      input.addEventListener('change', () => {
+        const file = input.files && input.files[0];
+        if(!file) return;
+        const wid = input.dataset.workbookId;
+        const qi = parseInt(input.dataset.qIndex, 10);
+        if(file.size > 2 * 1024 * 1024){
+          alert('That file is larger than 2 MB — try a smaller file.');
+          input.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          if(!workbookAttachments[wid]) workbookAttachments[wid] = [];
+          workbookAttachments[wid][qi] = { name: file.name, dataUrl: reader.result };
+          saveWorkbookLibrary();
+          renderWorkbookViewer(wid);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    workbookQaList.querySelectorAll('.workbook-attachment-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const wid = btn.dataset.workbookId;
+        const qi = parseInt(btn.dataset.qIndex, 10);
+        if(workbookAttachments[wid]) workbookAttachments[wid][qi] = null;
+        saveWorkbookLibrary();
+        renderWorkbookViewer(wid);
+      });
+    });
+  }
+
+  // Wires a workbook list button (static or dynamically added) to open it in the editor
+  function wireWorkbookItem(item){
+    item.addEventListener('click', () => {
+      const workbookId = item.dataset.workbookId;
+      if(!WORKBOOK_CONTENT[workbookId]) return;
+
+      document.querySelectorAll('.workbook-item').forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+
+      if(workbookViewerEmpty) workbookViewerEmpty.hidden = true;
+      if(workbookViewerContent) workbookViewerContent.hidden = false;
+      renderWorkbookViewer(workbookId);
+      syncPanelHeights();
+    });
+  }
+
+  // Removes an uploaded document from the list, its answers/attachments, and localStorage.
+  // Only documents added via "+ Add Document" can be removed — the built-in examples can't.
+  function removeWorkbookDocument(id){
+    delete WORKBOOK_CONTENT[id];
+    delete workbookAnswers[id];
+    delete workbookAttachments[id];
+    const itemBtn = workbookListEl ? workbookListEl.querySelector(`[data-workbook-id="${id}"]`) : null;
+    if(itemBtn){
+      const row = itemBtn.closest('.workbook-row');
+      (row || itemBtn).remove();
+    }
+    if(currentWorkbookId === id){
+      currentWorkbookId = null;
+      if(workbookViewerEmpty) workbookViewerEmpty.hidden = false;
+      if(workbookViewerContent) workbookViewerContent.hidden = true;
+    }
+    saveWorkbookLibrary();
+    syncPanelHeights();
+  }
+
+  // Adds a new workbook button to the list (used both for uploads and for restoring
+  // previously-uploaded documents from localStorage). Uploaded documents get a small
+  // delete control next to them; the built-in examples don't.
+  function addWorkbookListItem(id, title, type){
+    if(!workbookListEl || workbookListEl.querySelector(`[data-workbook-id="${id}"]`)) return;
+    const isUploaded = id.indexOf('uploaded-') === 0;
+
+    const itemBtn = document.createElement('button');
+    itemBtn.type = 'button';
+    itemBtn.className = 'workbook-item';
+    itemBtn.dataset.workbookId = id;
+    itemBtn.innerHTML = `
+      <span class="course-item-text">
+        <span class="course-item-title">${title}</span>
+        <span class="course-item-type">${type}</span>
+      </span>`;
+    wireWorkbookItem(itemBtn);
+
+    if(isUploaded){
+      const row = document.createElement('div');
+      row.className = 'workbook-row';
+      row.appendChild(itemBtn);
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'workbook-delete-btn';
+      delBtn.title = 'Remove this document';
+      delBtn.setAttribute('aria-label', 'Remove this document');
+      delBtn.textContent = '✕';
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        removeWorkbookDocument(id);
+      });
+      row.appendChild(delBtn);
+      workbookListEl.appendChild(row);
+    } else {
+      workbookListEl.appendChild(itemBtn);
+    }
+  }
+
+  // Turns raw extracted text (from a .docx or .txt upload) into the same block sequence
+  // used for the built-in workbooks: every real text line is kept and shown as-is, and any
+  // run of blank-fill lines (the "___" writing lines in a printed worksheet) becomes a single
+  // answer box in that exact spot — so the whole document shows, not just its questions.
+  function parseWorkbookDocument(text){
+    const rawLines = (text || '').split(/\r?\n/).map(l => l.trim());
+    const blocks = [];
+    let answerIndex = 0;
+    let i = 0;
+    while(i < rawLines.length){
+      const line = rawLines[i];
+      if(!line){ i++; continue; }
+      if(/^_{5,}$/.test(line)){
+        while(i < rawLines.length && (/^_{5,}$/.test(rawLines[i]) || !rawLines[i])){ i++; }
+        if(!blocks.length || blocks[blocks.length - 1].type !== 'answer'){
+          blocks.push({ type:'answer', index: answerIndex++ });
+        }
+        continue;
+      }
+      blocks.push({ type:'text', text: line });
+      i++;
+    }
+    return blocks;
+  }
+
+  const addWorkbookBtn = document.getElementById('addWorkbookBtn');
+  const workbookFileInput = document.getElementById('workbookFileInput');
+  if(addWorkbookBtn && workbookFileInput){
+    addWorkbookBtn.addEventListener('click', () => workbookFileInput.click());
+    workbookFileInput.addEventListener('change', async () => {
+      const file = workbookFileInput.files && workbookFileInput.files[0];
+      if(!file) return;
+      if(workbookAddStatus) workbookAddStatus.textContent = 'Reading ' + file.name + '…';
+
+      let text = '';
+      try{
+        if(/\.docx$/i.test(file.name) && window.mammoth){
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await window.mammoth.extractRawText({ arrayBuffer });
+          text = result.value || '';
+        } else {
+          text = await file.text();
+        }
+      } catch(err){
+        if(workbookAddStatus) workbookAddStatus.textContent = "Couldn't read that file — try a .docx or .txt file.";
+        workbookFileInput.value = '';
+        return;
+      }
+
+      const blocks = parseWorkbookDocument(text);
+      const answerCount = blocks.filter(b => b.type === 'answer').length;
+      if(!blocks.length){
+        if(workbookAddStatus) workbookAddStatus.textContent = 'No readable text was found in that document.';
+        workbookFileInput.value = '';
+        return;
+      }
+
+      const id = 'uploaded-' + Date.now();
+      const title = file.name;
+      const type = `Workbook · ${answerCount} question${answerCount === 1 ? '' : 's'}`;
+      WORKBOOK_CONTENT[id] = {
+        title: file.name.replace(/\.[^.]+$/, ''),
+        type,
+        blocks
+      };
+      addWorkbookListItem(id, title, type);
+      saveWorkbookLibrary();
+      if(workbookAddStatus) workbookAddStatus.textContent = `Added "${title}" to the repository.`;
+      workbookFileInput.value = '';
+      syncPanelHeights();
+    });
+  }
+
+  loadWorkbookLibrary();
+  document.querySelectorAll('.workbook-item').forEach(wireWorkbookItem);
+
+  // ----- My Chart (multi-tab collaborative document) --------------------------------
+  // Same simulated-collaboration pattern as the Workbook (name tagged inline in the answer
+  // text, "+" file attachment inside the answer box), organized as named sections/tabs
+  // instead of one flat document. The section list lives in the narrow My Chart panel
+  // (same pattern as the Courses/Workbook lists); the wide viewer just shows whichever
+  // section is currently active.
+  const MYCHART_STORAGE_KEY = 'vedicChartMyChartTabs';
+
+  function defaultMyChartTabs(){
+    return [
+      { id:'signs', label:'Zodiac Signs', dot:'#2f5fa8',
+        question:'What are the 12 Rashis (zodiac signs), and what does each generally represent in Vedic astrology?',
+        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 },
+      { id:'planets', label:'Planets vs Signs', dot:'#b8862f',
+        question:'What is the difference between a Graha (planet) and a Rashi (zodiac sign)? Give one example of each.',
+        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 },
+      { id:'nakshatra', label:'Nakshatras', dot:'#2f8a4e',
+        question:'What is a Nakshatra, and why is it important when interpreting a birth chart?',
+        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 }
+    ];
+  }
+
+  let myChartTabs = [];
+  try{
+    const rawMc = localStorage.getItem(MYCHART_STORAGE_KEY);
+    myChartTabs = rawMc ? JSON.parse(rawMc) : defaultMyChartTabs();
+  } catch(e){ myChartTabs = defaultMyChartTabs(); }
+  if(!Array.isArray(myChartTabs) || !myChartTabs.length) myChartTabs = defaultMyChartTabs();
+
+  let activeMyChartTab = myChartTabs[0].id;
+  let addingMyChartSection = false;
+  let renamingMyChartTabId = null;
+  let draggedMyChartTabId = null;
+
+  // Real cross-tab collaboration: if this same file is open in another browser tab/window
+  // and someone edits a section there, the browser fires a "storage" event here the moment
+  // they save — this is genuinely real (not simulated) multi-session awareness, since it only
+  // fires from an actual separate tab/window sharing this same localStorage. Any section
+  // that changed and isn't the one currently open gets its change count bumped.
+  window.addEventListener('storage', (e) => {
+    if(e.key !== MYCHART_STORAGE_KEY || !e.newValue) return;
+    let incoming;
+    try{ incoming = JSON.parse(e.newValue); } catch(err){ return; }
+    if(!Array.isArray(incoming)) return;
+
+    incoming.forEach(incomingTab => {
+      const localTab = myChartTabs.find(t => t.id === incomingTab.id);
+      if(!localTab){
+        // A section that doesn't exist locally yet — adopt it as-is
+        myChartTabs.push(Object.assign({}, incomingTab, { pendingChanges: incomingTab.id === activeMyChartTab ? 0 : 1 }));
+        return;
+      }
+      const changed = incomingTab.editedAt && incomingTab.editedAt !== localTab.editedAt;
+      const wasActive = localTab.id === activeMyChartTab;
+      const carryPending = localTab.pendingChanges || 0;
+      Object.assign(localTab, incomingTab);
+      localTab.pendingChanges = wasActive ? 0 : (changed ? carryPending + 1 : carryPending);
+    });
+    // Drop any local section that was deleted from the other tab/window
+    myChartTabs = myChartTabs.filter(t => incoming.some(i => i.id === t.id));
+
+    renderMyChart();
+  });
+
+  function saveMyChartTabs(){
+    try{ localStorage.setItem(MYCHART_STORAGE_KEY, JSON.stringify(myChartTabs)); } catch(e){ /* ignore */ }
+  }
+
+  function myChartAttachmentPreviewHTML(attachment, tabId){
+    if(!attachment) return '';
+    const isImage = /^data:image\//.test(attachment.dataUrl || '');
+    const body = isImage
+      ? `<img src="${attachment.dataUrl}" alt="${attachment.name}" class="workbook-attachment-thumb">`
+      : `<div class="workbook-attachment-file"><span class="workbook-attachment-file-icon">📄</span><span class="workbook-attachment-file-name">${attachment.name}</span></div>`;
+    return `
+      <div class="workbook-attachment-preview-card">
+        ${body}
+        <div class="workbook-attachment-preview-footer">
+          <span class="workbook-attachment-preview-name">${attachment.name}</span>
+          <button type="button" class="workbook-attachment-remove" data-mychart-tab="${tabId}" aria-label="Remove attachment">✕</button>
+        </div>
+      </div>`;
+  }
+
+  // Renders the section list into the narrow My Chart panel, and the active section's
+  // collaborative Q&A into the wide viewer.
+  function renderMyChart(){
+    const listEl = document.getElementById('mychartListEl');
+    const contentArea = document.getElementById('mychartContentArea');
+    const titleEl = document.getElementById('mychartActiveTabTitle');
+    if(!listEl || !contentArea) return;
+
+    listEl.innerHTML = myChartTabs.map(t => {
+      const isRenaming = t.id === renamingMyChartTabId;
+      if(isRenaming){
+        return `
+        <div class="workbook-row" data-mychart-row="${t.id}" draggable="false">
+          <div class="mychart-item mychart-item-adding">
+            <span class="mychart-tab-dot" style="background:${t.dot}"></span>
+            <input type="text" class="mychart-new-section-input" id="mychartRenameInput" value="${t.label.replace(/"/g,'&quot;')}">
+          </div>
+        </div>`;
+      }
+      return `
+      <div class="workbook-row" data-mychart-row="${t.id}" draggable="true">
+        <button type="button" class="mychart-item ${t.id === activeMyChartTab ? 'active' : ''}" data-mychart-tab="${t.id}">
+          <span class="mychart-tab-handle">⠿</span>
+          <span class="mychart-tab-dot" style="background:${t.dot}"></span>
+          <span class="course-item-text"><span class="course-item-title mychart-label" data-mychart-label="${t.id}" title="Double-click to rename">${t.label}</span></span>
+          ${t.pendingChanges > 0 ? `<span class="mychart-change-count">(${t.pendingChanges})</span>` : ''}
+        </button>
+        <button type="button" class="workbook-delete-btn" data-mychart-delete="${t.id}" title="Remove this section" aria-label="Remove this section">✕</button>
+      </div>`;
+    }).join('');
+
+    if(renamingMyChartTabId){
+      const renameInput = document.getElementById('mychartRenameInput');
+      if(renameInput){
+        let renameCommitted = false;
+        const commitRename = () => {
+          if(renameCommitted) return;
+          renameCommitted = true;
+          const tab = myChartTabs.find(t => t.id === renamingMyChartTabId);
+          const newLabel = renameInput.value.trim();
+          if(tab && newLabel) tab.label = newLabel;
+          renamingMyChartTabId = null;
+          saveMyChartTabs();
+          renderMyChart();
+        };
+        renameInput.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if(e.key === 'Enter') commitRename();
+          else if(e.key === 'Escape'){ renameCommitted = true; renamingMyChartTabId = null; renderMyChart(); }
+        });
+        renameInput.addEventListener('click', (e) => e.stopPropagation());
+        renameInput.addEventListener('blur', commitRename);
+        renameInput.focus();
+        renameInput.select();
+      }
+    }
+
+    // Adding a new section: an inline input line right after the existing tabs, instead of
+    // a floating prompt() dialog.
+    if(addingMyChartSection){
+      const row = document.createElement('div');
+      row.className = 'workbook-row';
+      row.innerHTML = `
+        <div class="mychart-item mychart-item-adding">
+          <span class="mychart-tab-dot" style="background:${MYCHART_DOT_COLORS[myChartTabs.length % MYCHART_DOT_COLORS.length]}"></span>
+          <input type="text" id="mychartNewSectionInput" class="mychart-new-section-input" placeholder="Section name…">
+        </div>`;
+      listEl.appendChild(row);
+      const input = row.querySelector('#mychartNewSectionInput');
+      let committed = false;
+      const commit = () => {
+        // Re-entrancy guard: pressing Enter triggers renderMyChart(), which replaces this
+        // input's DOM node — removing a focused element fires an implicit "blur" on it,
+        // which would otherwise call commit() a second time and create a duplicate section.
+        if(committed) return;
+        committed = true;
+        const label = input.value.trim();
+        addingMyChartSection = false;
+        if(label){
+          const id = 'mychart-' + Date.now();
+          const dot = MYCHART_DOT_COLORS[myChartTabs.length % MYCHART_DOT_COLORS.length];
+          myChartTabs.push({ id, label, dot, question:'Add a question or note for this section.', answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 });
+          activeMyChartTab = id;
+          saveMyChartTabs();
+        }
+        renderMyChart();
+      };
+      input.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') commit();
+        else if(e.key === 'Escape'){ committed = true; addingMyChartSection = false; renderMyChart(); }
+      });
+      input.addEventListener('blur', commit);
+      input.focus();
+    }
+
+    const active = myChartTabs.find(t => t.id === activeMyChartTab) || myChartTabs[0];
+    activeMyChartTab = active.id;
+    if(titleEl) titleEl.textContent = active.label;
+    const displayValue = (active.answer && active.answer.length) ? active.answer : `${currentUserName} : `;
+
+    contentArea.innerHTML = `
+      <p class="mychart-question">${active.question}</p>
+      <div class="workbook-answer-input-wrap">
+        <textarea class="workbook-qa-answer" id="mychartAnswerBox" placeholder="Type your answer here…">${displayValue}</textarea>
+        <label class="workbook-attach-plus" title="Attach a file" aria-label="Attach a file">+
+          <input type="file" id="mychartAttachInput" hidden>
+        </label>
+      </div>
+      ${myChartAttachmentPreviewHTML(active.attachment, active.id)}`;
+
+    const answerBox = document.getElementById('mychartAnswerBox');
+    if(answerBox){
+      answerBox.addEventListener('input', () => {
+        active.answer = answerBox.value;
+        active.editedBy = currentUserName;
+        active.editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+        saveMyChartTabs();
+      });
+    }
+
+    const attachInput = document.getElementById('mychartAttachInput');
+    if(attachInput){
+      attachInput.addEventListener('change', () => {
+        const file = attachInput.files && attachInput.files[0];
+        if(!file) return;
+        if(file.size > 2 * 1024 * 1024){
+          alert('That file is larger than 2 MB — try a smaller file.');
+          attachInput.value = '';
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+          active.attachment = { name: file.name, dataUrl: reader.result };
+          saveMyChartTabs();
+          renderMyChart();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    contentArea.querySelectorAll('.workbook-attachment-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        active.attachment = null;
+        saveMyChartTabs();
+        renderMyChart();
+      });
+    });
+
+    wireMyChartList();
+    syncPanelHeights();
+  }
+
+  // Click-to-open, drag-to-reorder, and delete for the section list in the narrow panel
+  function wireMyChartList(){
+    const listEl = document.getElementById('mychartListEl');
+    if(!listEl) return;
+
+    listEl.querySelectorAll('.mychart-item').forEach(item => {
+      item.addEventListener('click', () => {
+        activeMyChartTab = item.dataset.mychartTab;
+        const tab = myChartTabs.find(t => t.id === activeMyChartTab);
+        if(tab) tab.pendingChanges = 0;
+        saveMyChartTabs();
+        renderMyChart();
+      });
+    });
+
+    listEl.querySelectorAll('.mychart-label').forEach(label => {
+      label.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        renamingMyChartTabId = label.dataset.mychartLabel;
+        renderMyChart();
+      });
+    });
+
+    listEl.querySelectorAll('[data-mychart-delete]').forEach(delBtn => {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if(myChartTabs.length <= 1){
+          alert('At least one section has to stay — add a new one before removing this last one.');
+          return;
+        }
+        const id = delBtn.dataset.mychartDelete;
+        const idx = myChartTabs.findIndex(t => t.id === id);
+        if(idx === -1) return;
+        myChartTabs.splice(idx, 1);
+        if(activeMyChartTab === id){
+          activeMyChartTab = myChartTabs[Math.max(0, idx - 1)].id;
+        }
+        saveMyChartTabs();
+        renderMyChart();
+      });
+    });
+
+    listEl.querySelectorAll('.workbook-row[data-mychart-row]').forEach(row => {
+      row.addEventListener('dragstart', (e) => {
+        draggedMyChartTabId = row.dataset.mychartRow;
+        row.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      row.addEventListener('dragend', () => {
+        row.classList.remove('dragging');
+        listEl.querySelectorAll('.workbook-row').forEach(r => r.classList.remove('drag-over'));
+      });
+      row.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if(row.dataset.mychartRow !== draggedMyChartTabId) row.classList.add('drag-over');
+      });
+      row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const targetId = row.dataset.mychartRow;
+        if(!draggedMyChartTabId || draggedMyChartTabId === targetId) return;
+        const fromIdx = myChartTabs.findIndex(t => t.id === draggedMyChartTabId);
+        const toIdx = myChartTabs.findIndex(t => t.id === targetId);
+        const [moved] = myChartTabs.splice(fromIdx, 1);
+        myChartTabs.splice(toIdx, 0, moved);
+        draggedMyChartTabId = null;
+        saveMyChartTabs();
+        renderMyChart();
+      });
+    });
+  }
+
+  const MYCHART_DOT_COLORS = ['#2f5fa8', '#b8862f', '#2f8a4e', '#8891a0', '#a04ec9', '#c0392b'];
+  const mychartAddTabBtn = document.getElementById('mychartAddTabBtn');
+  if(mychartAddTabBtn){
+    mychartAddTabBtn.addEventListener('click', () => {
+      addingMyChartSection = true;
+      renderMyChart();
+    });
+  }
+
+  // Keep the three toggle-button rows (South/North select, Zodiac/Planetary/Flashcards
+  // select, and the invisible spacer above the Info Panel) the same height, so the panels
+  // below them always start at the same top edge — even if a label wraps at some width.
+  function syncToggleRowHeights(){
+    const rows = [
+      document.querySelector('.chart-select-toggle'),
+      document.querySelector('.layers-view-toggle'),
+      document.querySelector('.toggle-row-spacer')
+    ].filter(Boolean);
+    if(!rows.length) return;
+
+    if(window.innerWidth <= 1200){
+      rows.forEach(r => { r.style.minHeight = ''; });
+      return;
+    }
+
+    rows.forEach(r => { r.style.minHeight = ''; });
+    const maxRowHeight = Math.max(...rows.map(r => r.offsetHeight));
+    rows.forEach(r => { r.style.minHeight = maxRowHeight + 'px'; });
+  }
+
+  // Keep every relevant panel the same length: South chart, North chart, whichever of
+  // Zodiac/Planetary/Flashcards/Journey/Courses/Workbook is active, the Media/Workbook
+  // Viewer, and the Info Panel all share the tallest natural height among them — so North
+  // always matches South, and the viewers line up with everything else, not just when hidden.
+  const infoPanelLeft = document.querySelector('.info-panel-left');
+  function syncPanelHeights(){
+    syncToggleRowHeights();
+
+    const activeLayerPanel = document.querySelector('.layer-panel:not(.layer-hidden)');
+    const panels = [southPanel, northPanel, activeLayerPanel, infoPanelLeft, mediaViewerPanel, workbookViewerPanel, mychartViewerPanel].filter(Boolean);
+    if(!panels.length) return;
+
+    // Below the responsive breakpoint the columns stack full-width, so let panels size naturally.
+    if(window.innerWidth <= 1200){
+      panels.forEach(p => { p.style.minHeight = ''; });
+      return;
+    }
+
+    // Reset first so we measure each panel's own natural content height, not a previously forced one
+    panels.forEach(p => { p.style.minHeight = ''; });
+    const maxHeight = Math.max(...panels.map(p => p.offsetHeight));
+    panels.forEach(p => { p.style.minHeight = maxHeight + 'px'; });
+  }
+  window.addEventListener('load', syncPanelHeights);
+  window.addEventListener('resize', syncPanelHeights);
+
+  // Icon-only toggle buttons (Zodiac/Planetary/Flashcards, Both/South/North) show a plain
+  // aria-label but no visible text — hovering (or keyboard-focusing) shows a custom tooltip
+  // with the label plus how many things are currently "active" for that button, computed fresh
+  // each time so the count is never stale.
+  function iconToggleTooltip(btn){
+    const label = btn.dataset.tooltipLabel;
+    if(btn.dataset.layerView === 'courses'){
+      const n = viewedCourseIds.size;
+      return `${label} — ${n} / ${Object.keys(COURSE_CONTENT).length} viewed`;
+    }
+    if(btn.dataset.layerView === 'zodiac'){
+      const n = ['duality','modality','element'].filter(k => toggleState[k]).length;
+      return `${label} — ${n} active`;
+    }
+    if(btn.dataset.layerView === 'planetary'){
+      const n = ['dignity','aspectsFrom','aspectsTo'].filter(k => toggleState[k]).length;
+      return `${label} — ${n} active`;
+    }
+    if(btn.dataset.layerView === 'flashcards'){
+      return `${label} — ${flashcards.length} generated`;
+    }
+    if(btn.dataset.layerView === 'journey'){
+      const n = ['duality','modality','element','dignity','aspectsFrom','aspectsTo'].filter(k => toggleState[k]).length;
+      return `${label} — ${n} / 6 explored`;
+    }
+    if(btn.dataset.layerView === 'workbook'){
+      const n = document.querySelectorAll('.workbook-item.active').length;
+      return `${label} — ${n} / ${Object.keys(WORKBOOK_CONTENT).length} open`;
+    }
+    if(btn.dataset.view){
+      const n = Object.keys(userPlacements).length;
+      return `${label} — ${n} placed`;
+    }
+    return label;
+  }
+  document.querySelectorAll('.icon-toggle-btn').forEach(btn => {
+    const refreshTooltip = () => { btn.dataset.tooltip = iconToggleTooltip(btn); };
+    refreshTooltip();
+    btn.addEventListener('mouseenter', refreshTooltip);
+    btn.addEventListener('focus', refreshTooltip);
+  });
+
+  updateAspectsAvailability();
+  render(0);
+  syncPanelHeights();
+
+  // ----- Access Screen: sign-in gate + per-user panel visibility grid -----
+  const ENTITY_LIST = [
+    { key:'access',        label:'Access' },
+    { key:'courses',       label:'Courses' },
+    { key:'zodiac',        label:'Zodiac Layers' },
+    { key:'planetary',     label:'Planetary Layers' },
+    { key:'chartSelector', label:'Chart Selector' },
+    { key:'flashcards',    label:'Flashcards' },
+    { key:'workbook',      label:'Workbook' },
+    { key:'mychart',       label:'My Chart' },
+    { key:'journey',       label:'Journey Coord.' }
+  ];
+  const ACCESS_STORAGE_KEY = 'vedicChartAccessGrid';
+
+  // Only Siva is seeded by default — every other user is added and managed entirely
+  // through the "Manage panel access" grid (or auto-added with full access on first sign-in).
+  function defaultAccessGrid(){
+    return {
+      'Siva': { program:'Trial', access:true, courses:true, zodiac:false, planetary:false, chartSelector:false, flashcards:false, mychart:false, journey:false, workbook:false }
+    };
+  }
+
+  let accessGridData = {};
+  try{
+    const raw = localStorage.getItem(ACCESS_STORAGE_KEY);
+    accessGridData = raw ? JSON.parse(raw) : defaultAccessGrid();
+  } catch(e){ accessGridData = defaultAccessGrid(); }
+  if(!accessGridData || !Object.keys(accessGridData).length) accessGridData = defaultAccessGrid();
+  // Admin is a built-in identity, not a configurable record — scrub it out even if an older
+  // saved grid (from before this change) still has it, regardless of how it was cased.
+  // Priya was only ever a seeded example and has been removed from the code entirely — scrub
+  // any lingering saved copy of her too, so removing her from code actually removes her.
+  let scrubbedStaleRecord = false;
+  Object.keys(accessGridData).forEach(key => {
+    if(key.toLowerCase() === 'admin' || key.toLowerCase() === 'priya'){
+      delete accessGridData[key];
+      scrubbedStaleRecord = true;
+    }
+  });
+  if(scrubbedStaleRecord) saveAccessGrid();
+
+  function saveAccessGrid(){
+    try{ localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(accessGridData)); } catch(e){ /* localStorage may be unavailable — fail silently */ }
+  }
+
+  const accessGridHeadRow = document.getElementById('accessGridHeadRow');
+  const accessGridBody = document.getElementById('accessGridBody');
+
+  // Builds the grid table (User/Program + one checkbox column per panel + Delete) from accessGridData
+  function renderAccessGrid(){
+    if(!accessGridHeadRow || !accessGridBody) return;
+    accessGridHeadRow.querySelectorAll('th[data-entity-th], th[data-delete-th]').forEach(th => th.remove());
+    ENTITY_LIST.forEach(ent => {
+      const th = document.createElement('th');
+      th.textContent = ent.label;
+      th.dataset.entityTh = '1';
+      accessGridHeadRow.appendChild(th);
+    });
+    const deleteTh = document.createElement('th');
+    deleteTh.textContent = '';
+    deleteTh.dataset.deleteTh = '1';
+    accessGridHeadRow.appendChild(deleteTh);
+
+    accessGridBody.innerHTML = '';
+    Object.keys(accessGridData).forEach(username => {
+      const row = accessGridData[username];
+      const tr = document.createElement('tr');
+
+      const tdUser = document.createElement('td');
+      tdUser.textContent = username;
+      tr.appendChild(tdUser);
+
+      const tdProgram = document.createElement('td');
+      const programInput = document.createElement('input');
+      programInput.type = 'text';
+      programInput.value = row.program || '';
+      programInput.addEventListener('change', () => { row.program = programInput.value; saveAccessGrid(); });
+      tdProgram.appendChild(programInput);
+      tr.appendChild(tdProgram);
+
+
+      ENTITY_LIST.forEach(ent => {
+        const td = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!row[ent.key];
+        cb.addEventListener('change', () => { row[ent.key] = cb.checked; saveAccessGrid(); });
+        td.appendChild(cb);
+        tr.appendChild(td);
+      });
+
+      const tdDelete = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'access-grid-delete-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = `Remove ${username}`;
+      delBtn.setAttribute('aria-label', `Remove ${username}`);
+      delBtn.addEventListener('click', () => removeAccessUser(username));
+      tdDelete.appendChild(delBtn);
+      tr.appendChild(tdDelete);
+
+      accessGridBody.appendChild(tr);
+    });
+  }
+  renderAccessGrid();
+
+  // Removes a user entry entirely from the grid
+  function removeAccessUser(username){
+    delete accessGridData[username];
+    saveAccessGrid();
+    renderAccessGrid();
+  }
+
+  // Adds a new user entry with full access by default
+  const accessNewUserInput = document.getElementById('accessNewUserInput');
+  const accessAddUserBtn = document.getElementById('accessAddUserBtn');
+  function addAccessUser(){
+    if(!accessNewUserInput) return;
+    const username = accessNewUserInput.value.trim();
+    if(!username) return;
+    if(username.toLowerCase() === 'admin'){
+      accessErrorEl.hidden = false;
+      accessErrorEl.textContent = 'Admin is a built-in identity and isn\u2019t added as a record here.';
+      accessNewUserInput.value = '';
+      return;
+    }
+    if(accessGridData[username]){
+      accessNewUserInput.value = '';
+      return;
+    }
+    accessGridData[username] = {
+      program:'', access:true, courses:true, zodiac:true, planetary:true,
+      chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true
+    };
+    saveAccessGrid();
+    renderAccessGrid();
+    accessNewUserInput.value = '';
+  }
+  if(accessAddUserBtn) accessAddUserBtn.addEventListener('click', addAccessUser);
+  if(accessNewUserInput) accessNewUserInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') addAccessUser(); });
+
+  // Applies one user's grid entry to the live app: only their checked panels stay visible
+  function applyAccessVisibility(entry){
+    // Every login starts from a completely clean slate — nothing carries over from a
+    // previous user's session in the same tab (stray playing media, PDF/slide page
+    // position, completion/lock state, or viewed history). Without this, one user's
+    // interactions could visibly "leak" into the next login and make behavior look
+    // inconsistent between users even though the rendering code itself is identical.
+    stopAllMedia();
+    Object.keys(mediaViewerPageByCourse).forEach(k => delete mediaViewerPageByCourse[k]);
+    Object.keys(courseProgress).forEach(k => delete courseProgress[k]);
+    viewedCourseIds.clear();
+
+    // Filter the Courses panel down to just this user's Program before anything else,
+    // so it's already correct by the time they land on (or switch to) that tab.
+    currentUserProgram = entry.program || '';
+    renderCourseListFromProgramGrid();
+
+    const chartSelectToggleRow = document.querySelector('.chart-select-toggle');
+    const chartsRowEl = document.querySelector('.charts-row');
+
+    // The chart toggle row uses visibility (not display) when hidden, so its space stays
+    // reserved — collapsing it with display:none would let that column's panel start
+    // higher than the others, breaking top alignment across the layers/info/charts columns.
+    if(chartSelectToggleRow){
+      chartSelectToggleRow.style.visibility = entry.chartSelector ? '' : 'hidden';
+      chartSelectToggleRow.style.pointerEvents = entry.chartSelector ? '' : 'none';
+    }
+    if(chartsRowEl) chartsRowEl.style.display = entry.chartSelector ? '' : 'none';
+
+    const PANEL_KEYS = ['courses','zodiac','planetary','flashcards','mychart','journey','workbook'];
+    PANEL_KEYS.forEach(key => {
+      const btn = document.querySelector(`.layers-toggle-btn[data-layer-view="${key}"]`);
+      if(btn) btn.style.display = entry[key] ? '' : 'none';
+    });
+
+    const landingKey = entry.courses ? 'courses' : PANEL_KEYS.find(k => entry[k]);
+    if(landingKey){
+      const btn = document.querySelector(`.layers-toggle-btn[data-layer-view="${landingKey}"]`);
+      if(btn) btn.click();
+    }
+
+    // Sync immediately, then again once the browser has fully settled the layout from
+    // hiding/showing several elements at once — keeps every visible panel's height aligned.
+    syncPanelHeights();
+    setTimeout(syncPanelHeights, 60);
+    updateFooterVisibility();
+  }
+
+  const accessScreenEl = document.getElementById('accessScreen');
+  const accessUsernameInput = document.getElementById('accessUsername');
+  const accessPasswordInput = document.getElementById('accessPassword');
+  const accessErrorEl = document.getElementById('accessError');
+  const accessSignInBtn = document.getElementById('accessSignInBtn');
+
+  const manageAccessSection = document.getElementById('manageAccessSection');
+  const accessContinueBtn = document.getElementById('accessContinueBtn');
+  let pendingAdminEntry = null;
+
+  function attemptSignIn(){
+    const username = (accessUsernameInput.value || '').trim();
+    const password = (accessPasswordInput.value || '').trim();
+
+    if(!username){
+      accessErrorEl.textContent = 'Enter a user name.';
+      accessErrorEl.hidden = false;
+      return;
+    }
+    if(password.toUpperCase() !== 'ATV'){
+      accessErrorEl.textContent = 'Incorrect password.';
+      accessErrorEl.hidden = false;
+      return;
+    }
+
+    accessErrorEl.hidden = true;
+
+    // Admin is hardcoded here — it's never looked up from, or written into, either config
+    // grid. Full access to every panel, and an empty program so the Courses list shows
+    // everything (currentUserProgram === '' skips filtering entirely).
+    if(username.toLowerCase() === 'admin'){
+      const adminEntry = { program:'', access:true, courses:true, zodiac:true, planetary:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
+      pendingAdminEntry = adminEntry;
+      if(manageAccessSection) manageAccessSection.hidden = false;
+      return;
+    }
+
+    let entry = accessGridData[username];
+    if(!entry){
+      // Unknown user name — add with full access by default
+      entry = { program:'', access:true, courses:true, zodiac:true, planetary:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
+      accessGridData[username] = entry;
+      saveAccessGrid();
+      renderAccessGrid();
+    }
+
+    if(!entry.access){
+      accessErrorEl.textContent = `Access is turned off for "${username}" — ask an admin to enable it in the grid below.`;
+      accessErrorEl.hidden = false;
+      return;
+    }
+
+    if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
+    applyAccessVisibility(entry);
+  }
+
+  if(accessContinueBtn){
+    accessContinueBtn.addEventListener('click', () => {
+      if(!pendingAdminEntry) return;
+      if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
+      if(manageAccessSection) manageAccessSection.hidden = true;
+      applyAccessVisibility(pendingAdminEntry);
+      pendingAdminEntry = null;
+    });
+  }
+
+  if(accessSignInBtn) accessSignInBtn.addEventListener('click', attemptSignIn);
+  [accessUsernameInput, accessPasswordInput].forEach(el => {
+    if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') attemptSignIn(); });
+  });
+
+  // Stops any playing video and resets the Media Viewer back to its empty state — removing
+  // the elements alone often stops playback, but explicitly pausing first is the reliable way
+  // to guarantee it, rather than leaving audio/video running behind the Access screen.
+  function stopAllMedia(){
+    if(!mediaViewerFrameWrap) return;
+    mediaViewerFrameWrap.querySelectorAll('video, audio').forEach(el => {
+      try{ el.pause(); el.removeAttribute('src'); el.load(); } catch(e){ /* ignore */ }
+    });
+    mediaViewerFrameWrap.querySelectorAll('iframe').forEach(el => { el.src = 'about:blank'; });
+    mediaViewerFrameWrap.innerHTML = '';
+    if(mediaViewerEmpty) mediaViewerEmpty.hidden = false;
+    if(mediaViewerContent) mediaViewerContent.hidden = true;
+    currentCourseId = null;
+    document.querySelectorAll('.course-item.active').forEach(i => i.classList.remove('active'));
+  }
+
+  // Logout: brings the Access screen back. The next sign-in re-applies that user's own
+  // panel visibility fresh via applyAccessVisibility(), so nothing here needs to be undone.
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn){
+    logoutBtn.addEventListener('click', () => {
+      stopAllMedia();
+      if(accessScreenEl) accessScreenEl.classList.remove('access-hidden');
+      if(accessPasswordInput) accessPasswordInput.value = '';
+      if(accessUsernameInput) accessUsernameInput.value = '';
+      if(accessErrorEl) accessErrorEl.hidden = true;
+      if(manageAccessSection) manageAccessSection.hidden = true;
+      pendingAdminEntry = null;
+      currentUserProgram = '';
+      renderCourseListFromProgramGrid();
+    });
+  }
+  updateFooterVisibility();

@@ -1,0 +1,7 @@
+name = "vedic-astrology-site"
+pages_build_output_dir = "public"
+
+[[redirects]]
+from = "/kundali"
+to = "/index.html"
+status = 200
