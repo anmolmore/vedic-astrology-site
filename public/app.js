@@ -1768,8 +1768,6 @@
   const mediaViewerDesc = document.getElementById('mediaViewerDesc');
   const mediaViewerNote = document.getElementById('mediaViewerNote');
 
-  const MEDIA_OPEN_LABEL = { 'video-file': 'View on archive.org', youtube: 'Watch on YouTube', 'pdf-sim': 'Open full PDF', 'ppt-sim': 'Open full slide deck' };
-
   // Tracks which page/slide is showing PER COURSE (not just one global position), so
   // reaching the last page of one lesson doesn't get confused with another's progress
   const mediaViewerPageByCourse = {};
@@ -1796,6 +1794,12 @@
       const cacheBustedSrc = course.videoSrc + (course.videoSrc.indexOf('?') === -1 ? '?' : '&') + '_cb=' + Date.now();
       video.src = cacheBustedSrc;
       video.controls = true;
+      // Removes just the download button from the native control bar (Chrome/Edge) — every
+      // other control (play, pause, seek, volume, fullscreen) stays fully active/visible.
+      video.setAttribute('controlsList', 'nodownload');
+      // Also blocks "Save video as..." via right-click, another download path the
+      // controlsList attribute alone doesn't cover.
+      video.addEventListener('contextmenu', (e) => e.preventDefault());
       video.preload = 'metadata';
       video.className = 'media-viewer-video';
       mediaViewerFrameWrap.appendChild(video);
@@ -1917,16 +1921,6 @@
       mediaViewerFrameWrap.appendChild(wrap);
       markCourseMediaComplete(currentCourseId);
     }
-
-    if(course.sourceUrl){
-      const link = document.createElement('a');
-      link.href = course.sourceUrl;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.className = 'media-viewer-external-link';
-      link.textContent = `${MEDIA_OPEN_LABEL[course.mediaType] || 'Open'} ↗`;
-      mediaViewerFrameWrap.appendChild(link);
-    }
   }
 
   // Wires up the Prev/Next buttons for the simulated PDF/slide preview (per-course page position)
@@ -2035,11 +2029,11 @@
       btn.type = 'button';
       btn.className = 'course-item';
       btn.dataset.courseId = row.id;
-      const typeLine = [row.program, row.courseName].filter(Boolean).join(' · ');
+      const titleLine = [row.program, row.courseName].filter(Boolean).join(' · ');
       btn.innerHTML = `
         <span class="course-item-text">
-          <span class="course-item-title">${row.fileName || '(untitled file)'}</span>
-          <span class="course-item-type">${typeLine}</span>
+          <span class="course-item-title">${titleLine || '(untitled lesson)'}</span>
+          <span class="course-item-type">${row.fileName || ''}</span>
         </span>`;
       if(row.id === previousActiveId) btn.classList.add('active');
       courseListEl.appendChild(btn);
