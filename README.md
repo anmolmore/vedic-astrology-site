@@ -35,9 +35,16 @@ Cloudflare D1 (SQLite)         Cloudflare R2 (object storage)
   (Web Crypto, since D1/Workers has no native bcrypt/scrypt binding) and sessions are
   HttpOnly cookies backed by hashed tokens stored in D1.
 
-There is no CI/CD and no GitHub integration — deploys are a direct `wrangler pages deploy`
-from a local machine straight to Cloudflare's API (see "Deploy" below). Pushing to GitHub
-does **not** trigger a deploy; keep git and the live site in sync manually.
+This Cloudflare Pages project has **GitHub integration enabled** (confirmed via `wrangler
+pages project list` → `Git Provider: Yes`, and via GitHub check-runs posted by the
+`cloudflare-workers-and-pages` App on every push) — pushing to `main` triggers an automatic
+build/deploy on its own. `npm run deploy` (see "Deploy" below) is a *second*, independent
+path: a direct `wrangler pages deploy` from a local machine straight to Cloudflare's API,
+same as before Git integration was added. Both can fire for the same commit (a manual
+`npm run deploy` followed by a `git push`, or vice versa) and each produces its own
+deployment — harmless as long as both pick up the same `wrangler.toml` bindings (D1, R2),
+worth spot-checking in the dashboard if you're relying on the Git-triggered build rather
+than the CLI one.
 
 ## Structure
 
@@ -231,11 +238,12 @@ npm run deploy
 Runs `wrangler pages deploy public --project-name=vedic-astrology-site`, which bundles
 `public/` (static assets) together with the sibling `functions/` directory (the API) and
 uploads both directly to Cloudflare via your authenticated Wrangler CLI session — a new
-`*.pages.dev` URL is live within seconds. **This does not go through GitHub**: there's no
-build hook, no Pages-GitHub integration configured for this project, and pushing to the
-repo has no effect on what's live. If you change schema (a new migration file), re-run the
-`wrangler d1 execute` commands above (both `--local` and `--remote`) before deploying code
-that depends on it.
+`*.pages.dev` URL is live within seconds. This is independent of the project's GitHub
+integration (see "Architecture" above) — pushing to `main` *also* triggers a deploy on its
+own, so you don't strictly need to run this manually after a push, but it's useful for
+testing local changes before committing them. If you change schema (a new migration file),
+re-run the `wrangler d1 execute` commands above (both `--local` and `--remote`) before
+deploying code that depends on it — that step isn't automated by either deploy path.
 
 Attach a custom domain from the Cloudflare dashboard → Workers & Pages → your project →
 Custom domains.
