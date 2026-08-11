@@ -162,9 +162,12 @@
     house_12: { title: 'House 12 — Vyaya Bhava', desc: 'Loss, isolation, expenditure, foreign lands, and spiritual release.' }
   };
 
-  // Active dignity is only whichever sub-option is selected, and only while the main toggle is on
-  function getSelectedDignity(){
-    return toggleState.dignity ? filterState.dignity : '';
+  // Active dignity categories are whichever sub-options are selected, and only while the
+  // main toggle is on. Unlike Duality/Modality/Element, an EMPTY selection here means
+  // "show nothing" rather than "show all" — highlighting every dignity at once by default
+  // wouldn't mean anything useful the way it does for sign classifications.
+  function getSelectedDignities(){
+    return toggleState.dignity ? multiFilter.dignity : new Set();
   }
 
   function dignityTooltip(planetName, mark){
@@ -176,15 +179,22 @@
     return '';
   }
 
-  // A planet belongs to `sign` under the currently-selected dignity category
-  function planetBelongsToSign(planetName, sign){
+  // Which selected dignity categories a planet matches in `sign` (can be more than one —
+  // e.g. a planet's mooltrikona sign is always also one of its own signs)
+  function matchedDignitiesForSign(planetName, sign){
     const d = DIGNITY[planetName];
-    const selectedDignity = getSelectedDignity();
-    if(selectedDignity === 'own')   return d.own.includes(sign);
-    if(selectedDignity === 'exalt') return d.exalt === sign;
-    if(selectedDignity === 'debil') return d.debil === sign;
-    if(selectedDignity === 'moola') return d.moola === sign;
-    return false;
+    const selected = getSelectedDignities();
+    const matches = [];
+    if(selected.has('own')   && d.own.includes(sign)) matches.push('own');
+    if(selected.has('moola') && d.moola === sign)      matches.push('moola');
+    if(selected.has('exalt') && d.exalt === sign)      matches.push('exalt');
+    if(selected.has('debil') && d.debil === sign)      matches.push('debil');
+    return matches;
+  }
+
+  // A planet belongs to `sign` if it matches ANY of the currently-selected dignity categories
+  function planetBelongsToSign(planetName, sign){
+    return matchedDignitiesForSign(planetName, sign).length > 0;
   }
 
   // Describes ALL dignity statuses a planet holds in a given sign (a planet can be both
@@ -200,7 +210,20 @@
   }
 
   // User's drag-and-drop planet placements: { PlanetName: SignName }
+  // Persist the latest chart positions so logout/re-login does not reset the chart.
+  const PLANET_PLACEMENTS_STORAGE_KEY = 'vedicChartPlanetPlacements';
   const userPlacements = {};
+  try{
+    const rawPlacements = localStorage.getItem(PLANET_PLACEMENTS_STORAGE_KEY);
+    const savedPlacements = rawPlacements ? JSON.parse(rawPlacements) : {};
+    if(savedPlacements && typeof savedPlacements === 'object' && !Array.isArray(savedPlacements)){
+      Object.assign(userPlacements, savedPlacements);
+    }
+  } catch(e){ /* ignore unavailable/corrupt saved placement data */ }
+
+  function savePlanetPlacements(){
+    try{ localStorage.setItem(PLANET_PLACEMENTS_STORAGE_KEY, JSON.stringify(userPlacements)); } catch(e){ /* ignore */ }
+  }
 
   // Classical Parashari aspects: every planet aspects the 7th sign from itself (offset +6).
   // Mars, Jupiter, and Saturn have additional special aspects.
@@ -228,8 +251,7 @@
   function planetNamesForSign(sign){
     const placedHere = PLANET_DATA.filter(p => userPlacements[p.name] === sign);
     if(placedHere.length) return placedHere.map(p => p.name);
-    const selectedDignity = getSelectedDignity();
-    if(!selectedDignity) return [];
+    if(!getSelectedDignities().size) return [];
     return PLANET_DATA.filter(p => !userPlacements[p.name] && planetBelongsToSign(p.name, sign)).map(p => p.name);
   }
 
@@ -241,13 +263,30 @@
         `<tspan class="user-placed-txt">${p.symbol}<title>${p.name} — ${fullDignityStatus(p.name, sign)}</title></tspan>`
       ).join('<tspan dx="3"></tspan>');
     }
-    const selectedDignity = getSelectedDignity();
-    if(!selectedDignity) return '';
-    // Once a planet has been manually dragged anywhere, it no longer shows via the dignity system
-    const matches = PLANET_DATA.filter(p => !userPlacements[p.name] && planetBelongsToSign(p.name, sign));
-    return matches.map(p =>
-      `<tspan class="dignity-${selectedDignity}-txt">${p.symbol}<title>${p.name} — ${dignityTooltip(p.name, selectedDignity)}</title></tspan>`
-    ).join('<tspan dx="3"></tspan>');
+    if(!getSelectedDignities().size) return '';
+    // Once a planet has been manually dragged anywhere, it no longer shows via the dignity system.
+    // Planets are ordered by dignity category in the same fixed sequence every time — Own Sign,
+    // Mooltrikona, Exaltation, Debilitation — the same "real estate and sequence" convention
+    // used for Duality/Modality/Element, applied here to which planets appear and in what order.
+    // A planet matching more than one selected category only appears once, at its first
+    // matching category's position in that sequence.
+    const shown = new Set();
+    const ordered = [];
+    DIGNITY_SEQUENCE.forEach(mark => {
+      if(!getSelectedDignities().has(mark)) return;
+      PLANET_DATA.forEach(p => {
+        if(userPlacements[p.name] || shown.has(p.name)) return;
+        const matched = matchedDignitiesForSign(p.name, sign);
+        if(matched.includes(mark)){
+          shown.add(p.name);
+          ordered.push({ planet: p, matched, primary: mark });
+        }
+      });
+    });
+    return ordered.map(({ planet: p, matched, primary }) => {
+      const tooltipText = matched.map(mark => dignityTooltip(p.name, mark)).join('; ');
+      return `<tspan class="dignity-${primary}-txt">${p.symbol}<title>${p.name} — ${tooltipText}</title></tspan>`;
+    }).join('<tspan dx="3"></tspan>');
   }
   const SIGN_INFO = {
     Aries:      {modality:'Cardinal', duality:'Yang', element:'Fire'},
@@ -268,13 +307,17 @@
     duality:  {Yang:'+', Yin:'−'},
     element:  {Fire:'🜂', Earth:'🜃', Air:'🜁', Water:'🜄'}
   };
+  // Fixed display sequence for the dignity categories — Own Sign, Mooltrikona, Exaltation,
+  // Debilitation — used to order which planets appear first when several qualify in the
+  // same sign under different selected categories (see planetsForSign below).
+  const DIGNITY_SEQUENCE = ['own', 'moola', 'exalt', 'debil'];
 
-  // toggleState: on/off for each category. filterState: '' (show all) or a specific value to isolate.
+  // toggleState: on/off for each category.
   const toggleState = {modality:false, duality:false, element:false, dignity:false};
-  const filterState  = {dignity:'own'};
-  // Duality, Modality, and Element all support choosing any combination (empty set = show all).
+  // Duality, Modality, Element, and Dignities all support choosing any combination (empty
+  // set = show all). Dignities starts with 'own' selected, matching the pre-checked button.
   // aspectsFrom/aspectsTo track which planets are toggled on in the new Aspects From / Aspects To sections.
-  const multiFilter = {duality: new Set(), modality: new Set(), element: new Set(), aspectsFrom: new Set(), aspectsTo: new Set()};
+  const multiFilter = {duality: new Set(), modality: new Set(), element: new Set(), dignity: new Set(['own']), aspectsFrom: new Set(), aspectsTo: new Set()};
 
   function categoryGlyph(key, sign){
     if(!toggleState[key]) return '';
@@ -304,10 +347,20 @@
   const southAscCells = document.querySelectorAll('[data-asc-cell]');
   const southTopLeftGlyphs = document.querySelectorAll('[data-sign-label]');
   const southPlanetEls = document.querySelectorAll('[data-sign-planets]');
+  const ASC_POSITION_STORAGE_KEY = 'vedicChartAscPosition';
   let currentAsc = 0;
+  try{
+    const savedAsc = parseInt(localStorage.getItem(ASC_POSITION_STORAGE_KEY), 10);
+    if(Number.isInteger(savedAsc) && savedAsc >= 0 && savedAsc < SIGNS.length) currentAsc = savedAsc;
+  } catch(e){ /* ignore unavailable/corrupt saved ascendant position */ }
+
+  function saveAscPosition(){
+    try{ localStorage.setItem(ASC_POSITION_STORAGE_KEY, String(currentAsc)); } catch(e){ /* ignore */ }
+  }
 
   function render(ascIndex){
-    currentAsc = ascIndex;
+    currentAsc = ((ascIndex % SIGNS.length) + SIGNS.length) % SIGNS.length;
+    saveAscPosition();
 
     // North Indian: fixed house positions (slot 1..12), sign rotates with ascendant
     northSlots.forEach(el => {
@@ -407,11 +460,32 @@
 
     path.setAttribute('d', `M${sx},${sy} Q${cx},${cy} ${ex},${ey}`);
     path.setAttribute('class', 'aspect-arrow-path');
+    // Markers only resolve within the <svg> they're defined in — the North chart has its own
+    // #aspectArrowHeadNorth copy (see its <defs>) since it can't see the South chart's marker.
+    // Override the CSS default per-path so each arrow points at the marker that's actually
+    // reachable from its own SVG root.
+    if(group.id === 'northAspectArrows'){
+      path.style.markerEnd = 'url(#aspectArrowHeadNorth)';
+    }
     group.appendChild(path);
 
+    // Place the source planet's glyph near the arrowhead (not the curve's midpoint), so it
+    // reads as "this planet's aspect is landing here" rather than sitting anonymously in the
+    // middle of the line. labelT=1 would be the arrowhead itself, so pull back slightly along
+    // the curve, then nudge perpendicular by the same bow direction as the curve itself
+    // (offset further, since the curve control point is off-path) to keep the glyph clear of
+    // the stroke and the arrowhead marker.
+    const labelT = 0.82;
+    const labelOmT = 1 - labelT;
+    const lx = labelOmT*labelOmT*sx + 2*labelOmT*labelT*cx + labelT*labelT*ex;
+    const ly = labelOmT*labelOmT*sy + 2*labelOmT*labelT*cy + labelT*labelT*ey;
+    const labelOffset = 9;
+    const lox = lx - (dy/len)*labelOffset;
+    const loy = ly + (dx/len)*labelOffset;
+
     const label_el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    label_el.setAttribute('x', cx);
-    label_el.setAttribute('y', cy);
+    label_el.setAttribute('x', lox);
+    label_el.setAttribute('y', loy);
     label_el.setAttribute('text-anchor', 'middle');
     label_el.setAttribute('class', 'aspect-arrow-label');
     label_el.textContent = label;
@@ -530,6 +604,7 @@
       // so the algorithmic dignity display isn't blocked by earlier manual placements.
       if(key === 'dignity' && toggleState.dignity){
         Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+        savePlanetPlacements();
         refreshChipStates();
         updateAspectsAvailability();
       }
@@ -541,25 +616,7 @@
     });
   });
 
-  // Dignities sub-options: single choice — click again to deselect
-  document.querySelectorAll('.sub-btn:not([data-multi])').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const key = btn.dataset.key;
-      const value = btn.dataset.value;
-      const wasActive = btn.classList.contains('active');
-      document.querySelectorAll(`.sub-btn[data-key="${key}"]:not([data-multi])`).forEach(b => b.classList.remove('active'));
-      if(wasActive){
-        filterState[key] = '';
-      } else {
-        filterState[key] = value;
-        btn.classList.add('active');
-      }
-      render(currentAsc);
-      addFlashcard(generateFlashcard({group:key, value}));
-    });
-  });
-
-  // Duality, Modality, and Element sub-options: multi-select — any combination can be chosen independently
+  // Duality, Modality, Element, and Dignities sub-options: multi-select — any combination can be chosen independently
   document.querySelectorAll('.sub-btn[data-multi]').forEach(btn => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.key;
@@ -712,7 +769,7 @@
   }
 
   // ----- Flashcards -----------------------------------------------------
-  // Every button clicked in Zodiac Layers / Planetary Layers generates one basic
+  // Every button clicked in Cosmic Layers generates one basic
   // Vedic astrology flashcard, shown one at a time (with a hint, and a click-to-flip
   // reveal) in the Info Panel — independent of whatever else is selected there.
 
@@ -878,7 +935,7 @@
     }
   }
 
-  // Every button click in Zodiac Layers / Planetary Layers always adds to the flashcard
+  // Every button click in Cosmic Layers always adds to the flashcard
   // queue, but it's only actually displayed in the Info Panel while the Flashcards tab is active —
   // otherwise the Info Panel keeps showing its normal hover-info / aspects-summary content.
   function addFlashcard(card){
@@ -917,7 +974,7 @@
 
     if(currentFlashcardIndex < 0 || !flashcards[currentFlashcardIndex]){
       leftInfoTitle.textContent = 'Flashcards';
-      leftInfoList.innerHTML = `<li class="flashcard-empty">No flashcards yet — click a button in Zodiac Layers or Planetary Layers to generate one, then come back here.</li>`;
+      leftInfoList.innerHTML = `<li class="flashcard-empty">No flashcards yet — click a button in Cosmic Layers to generate one, then come back here.</li>`;
       return;
     }
 
@@ -970,7 +1027,7 @@
       // Attribute this flip to the currently open course's completion progress, but only if
       // the flipped card is actually one of that course's own questions (indices 0..N-1,
       // since a course click always resets the flashcard queue to just its own questions —
-      // anything added afterward from Zodiac/Planetary Layers falls outside that range).
+      // anything added afterward from Cosmic Layers falls outside that range).
       if(typeof currentCourseId !== 'undefined' && currentCourseId){
         const openCourse = getCourseById(currentCourseId);
         if(openCourse && currentFlashcardIndex < openCourse.questions.length){
@@ -990,18 +1047,21 @@
     renderCurrentFlashcard();
   }
 
-  // End returns to the Zodiac Layers panel; the layer-toggle handler takes care of
-  // un-pinning flashcards and restoring the Info Panel's normal content.
+  // End jumps back to the first question in the current flashcard queue — stays within
+  // whichever Info Panel is showing flashcards (Flashcards tab or a Courses lesson),
+  // rather than navigating away.
   function endFlashcards(){
-    const zodiacBtn = document.querySelector('.layers-toggle-btn[data-layer-view="zodiac"]');
-    if(zodiacBtn) zodiacBtn.click();
+    if(!flashcards.length) return;
+    currentFlashcardIndex = 0;
+    flashcardFlipped = false;
+    renderCurrentFlashcard();
   }
 
-  // Scans every currently active Zodiac/Planetary Layers selection (main toggles that are
+  // Scans every currently active Cosmic Layers selection (main toggles that are
   // "on", plus whichever specific sub-values/planets are chosen under each) into flashcard contexts
   function collectActiveFlashcardContexts(){
     const contexts = [];
-    ['duality', 'modality', 'element'].forEach(key => {
+    ['duality', 'modality', 'element', 'dignity'].forEach(key => {
       if(!toggleState[key]) return;
       if(multiFilter[key].size){
         multiFilter[key].forEach(value => contexts.push({group:key, value}));
@@ -1009,9 +1069,6 @@
         contexts.push({group:key});
       }
     });
-    if(toggleState.dignity){
-      contexts.push(filterState.dignity ? {group:'dignity', value:filterState.dignity} : {group:'dignity'});
-    }
     ['aspectsFrom', 'aspectsTo'].forEach(key => {
       if(!toggleState[key]) return;
       if(multiFilter[key].size){
@@ -1024,7 +1081,7 @@
   }
 
   // Clears every flashcard and regenerates a fresh set from whatever is currently
-  // toggled on in Zodiac Layers / Planetary Layers
+  // toggled on in Cosmic Layers
   function refreshFlashcards(){
     flashcards.length = 0;
     currentFlashcardIndex = -1;
@@ -1236,6 +1293,7 @@
       }
     });
     if(!removedAny) return;
+    savePlanetPlacements();
     resetPlanetaryPosition();
     refreshChipStates();
     updateAspectsAvailability();
@@ -1386,6 +1444,7 @@
       if(planet === 'Rahu') userPlacements['Ketu'] = oppositeSign(sign);
       if(planet === 'Ketu') userPlacements['Rahu'] = oppositeSign(sign);
 
+      savePlanetPlacements();
       resetPlanetaryPosition();
       refreshChipStates();
       updateAspectsAvailability();
@@ -1404,6 +1463,7 @@
 
   function clearAllPlacements(){
     Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+    savePlanetPlacements();
     refreshChipStates();
     updateAspectsAvailability();
     render(currentAsc);
@@ -1417,21 +1477,39 @@
   const southPanel = document.querySelector('.south-chart-panel');
   const northPanel = document.querySelector('.north-chart-panel');
   const chartsRow = document.querySelector('.charts-row');
-  document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+  // Scoped specifically to this button group — '.view-toggle-btn' alone is a shared base
+  // class also used by the layer tabs and Logout, so a bare query here would incorrectly
+  // catch every one of those clicks too (each with an undefined data-view, which always
+  // fails the "=== 'both'" check, silently turning single-view on and stripping this
+  // group's own active state any time an unrelated button was clicked).
+  document.querySelectorAll('.chart-select-toggle .view-toggle-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const view = btn.dataset.view;
-      document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.chart-select-toggle .view-toggle-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       southPanel.classList.toggle('chart-hidden', view === 'north');
       northPanel.classList.toggle('chart-hidden', view === 'south');
       chartsRow.classList.toggle('single-view', view !== 'both');
       southPanel.classList.toggle('chart-expanded', view === 'south');
       northPanel.classList.toggle('chart-expanded', view === 'north');
+      updateMyChartSingleLayout();
       syncPanelHeights();
     });
   });
 
-  // Zodiac Layers / Planetary Layers / Flashcards / Journey Coordinates / Courses toggle:
+  // When My Chart is active AND only one chart (South or North) is showing, the viewer gets
+  // extra width (freed up by the hidden second chart) and the remaining single chart sits
+  // immediately to its right — rather than leaving that freed space stranded inside the
+  // normal two-chart column span. Checked from both the layer-tab and chart-view toggles,
+  // since either one changing can affect whether this combined condition applies.
+  function updateMyChartSingleLayout(){
+    if(!mainEl) return;
+    const isMyChartActive = mainEl.classList.contains('mychart-mode');
+    const isSingleChart = chartsRow && chartsRow.classList.contains('single-view');
+    mainEl.classList.toggle('mychart-single-chart', isMyChartActive && isSingleChart);
+  }
+
+  // Cosmic Layers / Flashcards / Journey Coordinates / Courses toggle:
   // only the selected panel is visible at a time
   const layerPanels = document.querySelectorAll('.layer-panel');
   const chartsRowWrapper = document.querySelector('.charts-row-wrapper');
@@ -1459,7 +1537,9 @@
       // Courses hides just the chart toggle (space reserved, for alignment) and the charts
       // themselves, shows the media viewer in their place, and moves the Info Panel to the
       // rightmost column so the layout reads: lesson list -> media viewer -> Info Panel.
-      // My Chart follows the exact same swap pattern, showing the multi-tab document instead.
+      // My Chart is different: it keeps the charts fully visible (with drag-and-drop) in
+      // their normal position, and instead swaps the My Chart document in for the Info Panel
+      // within that same column, so the layout reads: section list -> document -> charts.
       const isCourses = view === 'courses';
       const isWorkbook = view === 'workbook';
       const isMyChart = view === 'mychart';
@@ -1468,14 +1548,16 @@
         mainEl.classList.toggle('workbook-mode', isWorkbook);
         mainEl.classList.toggle('mychart-mode', isMyChart);
       }
-      if(chartSelectToggleEl) chartSelectToggleEl.classList.toggle('courses-hide-toggle', isCourses || isWorkbook || isMyChart);
-      if(chartsRowEl) chartsRowEl.classList.toggle('courses-hide', isCourses || isWorkbook || isMyChart);
+      if(chartSelectToggleEl) chartSelectToggleEl.classList.toggle('courses-hide-toggle', isCourses || isWorkbook);
+      if(chartsRowEl) chartsRowEl.classList.toggle('courses-hide', isCourses || isWorkbook);
       if(mediaViewerPanel) mediaViewerPanel.classList.toggle('courses-show', isCourses);
       if(workbookViewerPanel) workbookViewerPanel.classList.toggle('workbook-show', isWorkbook);
+      if(infoPanelLeft) infoPanelLeft.style.display = isMyChart ? 'none' : '';
       if(mychartViewerPanel){
         mychartViewerPanel.classList.toggle('mychart-show', isMyChart);
         if(isMyChart) renderMyChart();
       }
+      updateMyChartSingleLayout();
 
       // Render the Info Panel's content FIRST, then sync heights — otherwise syncPanelHeights
       // measures the previous (stale) content and panels end up misaligned.
@@ -1683,7 +1765,7 @@
           'Saturn also aspects the 3rd and 10th from itself.'
         ]},
         { title: 'Try It in This App', bullets: [
-          'Open Planetary Layers \u2192 Aspects From / Aspects To to see these drawn live on your chart.'
+          'Open Cosmic Layers \u2192 Aspects From / Aspects To to see these drawn live on your chart.'
         ]}
       ],
       questions: [
@@ -2699,26 +2781,159 @@
     const active = myChartTabs.find(t => t.id === activeMyChartTab) || myChartTabs[0];
     activeMyChartTab = active.id;
     if(titleEl) titleEl.textContent = active.label;
-    const displayValue = (active.answer && active.answer.length) ? active.answer : `${currentUserName} : `;
+    // Generated interpretation sections use a guided ATV conversation. Manually-added
+    // sections retain the original single-question/single-answer editor below.
+    const isGenerated = !!active.generated || /^mychart-interp-/.test(active.id || '');
 
-    contentArea.innerHTML = `
-      <p class="mychart-question">${active.question}</p>
-      <div class="workbook-answer-input-wrap">
-        <textarea class="workbook-qa-answer" id="mychartAnswerBox" placeholder="Type your answer here…">${displayValue}</textarea>
-        <label class="workbook-attach-plus" title="Attach a file" aria-label="Attach a file">+
-          <input type="file" id="mychartAttachInput" hidden>
-        </label>
-      </div>
-      ${myChartAttachmentPreviewHTML(active.attachment, active.id)}`;
+    if(isGenerated){
+      const starter = active.sentenceStarter || SENTENCE_STARTER[active.planetName] || 'I express';
+      const responses = active.responses || (active.responses = {
+        planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:''
+      });
 
-    const answerBox = document.getElementById('mychartAnswerBox');
-    if(answerBox){
-      answerBox.addEventListener('input', () => {
-        active.answer = answerBox.value;
+      // Backward compatibility: an older generated section may only have the original
+      // free-form answer. Keep it available as the first response rather than losing it.
+      if(!responses.planetSentence && !responses.planetWord && active.answer){
+        responses.planetSentence = active.answer;
+      }
+
+      const esc = (value) => String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      const systemLine = (text) => `
+        <div class="mychart-collab-line mychart-collab-system" contenteditable="false">
+          <span class="mychart-name-tag">ATV:</span><span>${esc(text)}</span>
+        </div>`;
+      const userLine = (key, value, placeholder) => `
+        <div class="mychart-collab-line mychart-collab-user">
+          <span class="mychart-name-tag" contenteditable="false">${esc(currentUserName)}:</span>
+          <span class="mychart-collab-user-input" contenteditable="true" spellcheck="true"
+            data-atv-key="${key}" data-placeholder="${esc(placeholder)}">${esc(value)}</span>
+        </div>`;
+
+      const complete = (key) => String(responses[key] || '').trim().length > 0;
+      const lines = [];
+      lines.push(systemLine(`Give me one word that describes ${active.planetName || 'this planet'}.`));
+      lines.push(userLine('planetWord', responses.planetWord, 'Your Planet word…'));
+
+      if(complete('planetWord')){
+        lines.push(systemLine(`Make a sentence starter with “My” or “I” and the planet word.`));
+        lines.push(userLine('planetSentence', responses.planetSentence, 'Write your Sentence Starter…'));
+      }
+      if(complete('planetSentence')){
+        lines.push(systemLine(`Give me one word that describes the Duality of this Sign.`));
+        lines.push(userLine('dualityWord', responses.dualityWord, 'Your Duality word…'));
+      }
+      // The Duality prompt above asks for the word first; once it is supplied, replace the
+      // next prompt with the sentence-building instruction while keeping everything in the
+      // same collaborative input window.
+      if(complete('dualityWord')){
+        lines.push(systemLine(`Using the Sentence Starter and your Duality word, make a sentence.`));
+        lines.push(userLine('dualitySentence', responses.dualitySentence, 'Write your sentence…'));
+      }
+      if(complete('dualitySentence')){
+        lines.push(systemLine(`Give me one word that describes the Modality of this Sign.`));
+        lines.push(userLine('modalityWord', responses.modalityWord, 'Your Modality word…'));
+      }
+      if(complete('modalityWord')){
+        lines.push(systemLine(`Using the Sentence Starter and your Modality word, make a sentence.`));
+        lines.push(userLine('modalitySentence', responses.modalitySentence, 'Write your sentence…'));
+      }
+      if(complete('modalitySentence')){
+        lines.push(systemLine(`Give me one word that describes the Element of this Sign.`));
+        lines.push(userLine('elementWord', responses.elementWord, 'Your Element word…'));
+      }
+      if(complete('elementWord')){
+        lines.push(systemLine(`Using the Sentence Starter and your Element word, make a sentence.`));
+        lines.push(userLine('elementSentence', responses.elementSentence, 'Write your sentence…'));
+      }
+      if(complete('elementSentence')){
+        lines.push(systemLine(`Make a sentence using ${responses.planetSentence || starter}, ${responses.dualityWord}, ${responses.modalityWord}, and ${responses.elementWord}.`));
+        lines.push(userLine('fourWordsSentence', responses.fourWordsSentence, 'Write your sentence…'));
+      }
+      if(complete('fourWordsSentence')){
+        lines.push(systemLine(`Give me one word that describes House ${active.house || ''}.`));
+        lines.push(userLine('houseWord', responses.houseWord, 'Your House word…'));
+      }
+      if(complete('houseWord')){
+        lines.push(systemLine(`Using the Sentence Starter and your House word, make a sentence.`));
+        lines.push(userLine('houseSentence', responses.houseSentence, 'Write your sentence…'));
+      }
+
+      // Newest prompt on top, oldest at the bottom: each system prompt + its answer line
+      // was pushed above as an intact pair, in chronological order — chunk back into those
+      // pairs and reverse the pair order (not the raw line order, which would separate a
+      // prompt from its own answer).
+      const pairs = [];
+      for(let i = 0; i < lines.length; i += 2) pairs.push(lines.slice(i, i + 2));
+      const orderedLines = pairs.reverse().flat();
+
+      contentArea.innerHTML = `
+        <div class="mychart-collab-input-window" id="mychartCollabInputWindow">
+          ${orderedLines.join('')}
+        </div>`;
+
+      const collabWindow = document.getElementById('mychartCollabInputWindow');
+      const updateCollabState = (input, commitNext) => {
+        const key = input.dataset.atvKey;
+        responses[key] = input.textContent.trim();
+        active.answer = Object.entries(responses)
+          .filter(([,v]) => String(v || '').trim())
+          .map(([k,v]) => `${k}: ${String(v).trim()}`)
+          .join('\n');
         active.editedBy = currentUserName;
         active.editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
         saveMyChartTabs();
-      });
+        if(commitNext) renderMyChart();
+      };
+
+      if(collabWindow){
+        collabWindow.querySelectorAll('.mychart-collab-user-input').forEach(input => {
+          const placeholder = input.dataset.placeholder || '';
+          if(!input.textContent.trim() && placeholder) input.dataset.empty = 'true';
+          input.addEventListener('focus', () => {
+            if(input.dataset.empty === 'true'){
+              input.textContent = '';
+              input.dataset.empty = 'false';
+            }
+          });
+          input.addEventListener('input', () => updateCollabState(input, false));
+          input.addEventListener('blur', () => {
+            updateCollabState(input, true);
+          });
+          input.addEventListener('keydown', (e) => {
+            if(e.key === 'Enter'){
+              e.preventDefault();
+              updateCollabState(input, true);
+            }
+          });
+        });
+      }
+      // The latest prompt now renders at the top, so keep the view pinned there (rather than
+      // the old scroll-to-bottom) as new prompts appear.
+      if(collabWindow){
+        requestAnimationFrame(() => { collabWindow.scrollTop = 0; });
+      }
+    } else {
+      const displayValue = (active.answer && active.answer.length) ? active.answer : `${currentUserName} : `;
+
+      contentArea.innerHTML = `
+        <p class="mychart-question">${active.question}</p>
+        <div class="workbook-answer-input-wrap">
+          <textarea class="workbook-qa-answer" id="mychartAnswerBox" placeholder="Type your answer here…">${displayValue}</textarea>
+          <label class="workbook-attach-plus" title="Attach a file" aria-label="Attach a file">+
+            <input type="file" id="mychartAttachInput" hidden>
+          </label>
+        </div>
+        ${myChartAttachmentPreviewHTML(active.attachment, active.id)}`;
+
+      const answerBox = document.getElementById('mychartAnswerBox');
+      if(answerBox){
+        answerBox.addEventListener('input', () => {
+          active.answer = answerBox.value;
+          active.editedBy = currentUserName;
+          active.editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+          saveMyChartTabs();
+        });
+      }
     }
 
     const attachInput = document.getElementById('mychartAttachInput');
@@ -2834,7 +3049,70 @@
     });
   }
 
-  // Keep the three toggle-button rows (South/North select, Zodiac/Planetary/Flashcards
+  // Generate Interpretation: one section per currently-placed planet, PLUS one section for
+  // the Ascendant (ASC) itself — same generation pipeline, same label formation, same guided
+  // prompting sequence. ASC is folded in as just another entry: unlike a planet it doesn't
+  // need to be dragged into place (its sign comes straight from the current Ascendant
+  // rotation), and by definition it always occupies House 1. Labeled "{Planet} in {Sign},
+  // House {House}" — reusing the exact same house formula used everywhere else in the app
+  // (SIGNS.indexOf(sign) relative to currentAsc). Re-clicking only adds sections for
+  // placements that don't already have a matching label — a planet (or ASC) that hasn't
+  // moved is never duplicated; one that WAS moved to a new sign/house gets a new section for
+  // its new placement (its label is different, so it isn't considered a match).
+  const mychartGenerateBtn = document.getElementById('mychartGenerateBtn');
+  if(mychartGenerateBtn){
+    mychartGenerateBtn.addEventListener('click', () => {
+      const placedNames = Object.keys(userPlacements).filter(name => name !== 'ASC');
+
+      // Same shape as a planet placement ({ name, sign }) so the loop below treats ASC
+      // identically to every Graha — it's just always "placed", via the Ascendant rotation
+      // rather than drag-and-drop.
+      const entries = placedNames.map(name => ({ name, sign: userPlacements[name] }));
+      entries.push({ name: 'ASC', sign: SIGNS[currentAsc] });
+
+      let addedCount = 0;
+      let lastAddedId = null;
+      entries.forEach(({ name: planetName, sign }) => {
+        const house = planetName === 'ASC' ? 1 : ((SIGNS.indexOf(sign) - currentAsc + 12) % 12) + 1;
+        const label = `${planetName} in ${sign},\nHouse ${house}`;
+
+        // Skip if a section with this exact label already exists — no duplicates on re-click
+        const alreadyExists = myChartTabs.some(t => t.label === label);
+        if(alreadyExists) return;
+
+        const starter = SENTENCE_STARTER[planetName] || 'I express';
+        const id = 'mychart-interp-' + planetName.toLowerCase() + '-' + Date.now() + '-' + addedCount;
+        const dot = planetName === 'ASC' ? '#b8500f' : MYCHART_DOT_COLORS[myChartTabs.length % MYCHART_DOT_COLORS.length];
+        myChartTabs.push({
+          id, label, dot, generated:true, planetName, sign, house, sentenceStarter:starter,
+          question: `Using ${planetName}'s sentence starter ("${starter}...") and the duality, modality, and element of ${sign}, plus what House ${house} represents, write your interpretation of this placement.`,
+          answer: '', editedBy: '', editedAt: '', attachment: null,
+          responses:{ planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:'' }
+        });
+        addedCount++;
+        lastAddedId = id;
+      });
+
+      if(addedCount > 0){
+        if(lastAddedId) activeMyChartTab = lastAddedId;
+        saveMyChartTabs();
+        renderMyChart();
+      } else {
+        alert('Interpretation sections for your current placements already exist — nothing new to add.');
+      }
+    });
+  }
+
+  // Fixed sentence starters per planet, following the Golden Rule guided-interpretation
+  // method — every generated section begins from one of these, never an invented sentence.
+  // ASC (Lagna) gets its own starter, matching how it's described elsewhere in the app: the
+  // rising sign that shapes how you present yourself, not an inner planet.
+  const SENTENCE_STARTER = {
+    Sun:'I am', Moon:'I feel', Mars:'I act', Mercury:'I think', Jupiter:'I learn',
+    Venus:'I enjoy', Saturn:'I work', Rahu:'I seek', Ketu:'I let go of', ASC:'I appear as'
+  };
+
+  // Keep the three toggle-button rows (South/North select, Cosmic/Flashcards
   // select, and the invisible spacer above the Info Panel) the same height, so the panels
   // below them always start at the same top edge — even if a label wraps at some width.
   function syncToggleRowHeights(){
@@ -2855,48 +3133,67 @@
     rows.forEach(r => { r.style.minHeight = maxRowHeight + 'px'; });
   }
 
-  // Keep every relevant panel the same length: South chart, North chart, whichever of
-  // Zodiac/Planetary/Flashcards/Journey/Courses/Workbook is active, the Media/Workbook
-  // Viewer, and the Info Panel all share the tallest natural height among them — so North
-  // always matches South, and the viewers line up with everything else, not just when hidden.
+  // Keep every relevant panel exactly the same length — South chart, North chart, whichever
+  // of Cosmic/Flashcards/Journey/Courses/Workbook is active, the Media/Workbook Viewer, and
+  // the Info Panel — so their tops AND bottoms always line up as one row, never just their
+  // tops. The shared row height is the tallest panel's natural content height, clamped to
+  // whatever's actually visible on screen below this row (so the row itself never pushes the
+  // page taller than the window); anything that doesn't fit at that height scrolls inside its
+  // own panel, most notably the Info Panel, whose content varies the most.
+  //
+  // Charts are the one exception to the scroll-if-it-doesn't-fit rule: their SVG is a fixed
+  // 1:1 square, so its rendered height is locked to its own width (single-view mode already
+  // caps that width against the viewport for this reason — see .charts-row.single-view). A
+  // chart can't "scroll" without looking broken, so it always gets its full natural height
+  // with no overflow, in both single- and dual-chart view — and the row height is never
+  // allowed to clamp below whichever chart is tallest right now, so it's never clipped either.
   const infoPanelLeft = document.querySelector('.info-panel-left');
   function syncPanelHeights(){
     syncToggleRowHeights();
 
     const activeLayerPanel = document.querySelector('.layer-panel:not(.layer-hidden)');
-    const panels = [southPanel, northPanel, activeLayerPanel, infoPanelLeft, mediaViewerPanel, workbookViewerPanel, mychartViewerPanel].filter(Boolean);
+    const chartPanels = [southPanel, northPanel].filter(Boolean);
+    const scrollPanels = [activeLayerPanel, infoPanelLeft, mediaViewerPanel, workbookViewerPanel, mychartViewerPanel].filter(Boolean);
+    const panels = [...chartPanels, ...scrollPanels];
     if(!panels.length) return;
 
     // Below the responsive breakpoint the columns stack full-width, so let panels size naturally.
     if(window.innerWidth <= 1200){
-      panels.forEach(p => { p.style.minHeight = ''; });
+      panels.forEach(p => { p.style.minHeight = ''; p.style.height = ''; p.style.maxHeight = ''; p.style.overflowY = ''; });
       return;
     }
 
     // Reset first so we measure each panel's own natural content height, not a previously forced one
-    panels.forEach(p => { p.style.minHeight = ''; });
-    const maxHeight = Math.max(...panels.map(p => p.offsetHeight));
-    panels.forEach(p => { p.style.minHeight = maxHeight + 'px'; });
+    panels.forEach(p => { p.style.minHeight = ''; p.style.height = ''; p.style.maxHeight = ''; p.style.overflowY = ''; });
+    const naturalMax = Math.max(...panels.map(p => p.offsetHeight));
+    const tallestChart = chartPanels.length ? Math.max(...chartPanels.map(p => p.offsetHeight)) : 0;
+
+    // All synced panels share the same top (CSS grid row), so any one of them gives the row's
+    // real position on screen right now.
+    const top = panels[0].getBoundingClientRect().top;
+    const viewportCap = Math.max(240, Math.floor(window.innerHeight - top - 24));
+    const rowHeight = Math.max(Math.min(naturalMax, viewportCap), tallestChart);
+
+    // Charts: natural height, aligned via min-height only — never forced shorter, never scrolls.
+    chartPanels.forEach(p => { p.style.minHeight = rowHeight + 'px'; });
+    // Everything else: hard-capped to the same row height, scrolling internally past it.
+    scrollPanels.forEach(p => { p.style.height = rowHeight + 'px'; p.style.overflowY = 'auto'; });
   }
   window.addEventListener('load', syncPanelHeights);
   window.addEventListener('resize', syncPanelHeights);
 
-  // Icon-only toggle buttons (Zodiac/Planetary/Flashcards, Both/South/North) show a plain
+  // Icon-only toggle buttons (Cosmic/Flashcards, Both/South/North) show a plain
   // aria-label but no visible text — hovering (or keyboard-focusing) shows a custom tooltip
   // with the label plus how many things are currently "active" for that button, computed fresh
   // each time so the count is never stale.
   function iconToggleTooltip(btn){
     const label = btn.dataset.tooltipLabel;
     if(btn.dataset.layerView === 'courses'){
-      const n = viewedCourseIds.size;
-      return `${label} — ${n} / ${Object.keys(COURSE_CONTENT).length} viewed`;
+      const totalVisible = document.querySelectorAll('.course-item').length;
+      return `${label} — ${viewedCourseIds.size} / ${totalVisible} viewed`;
     }
-    if(btn.dataset.layerView === 'zodiac'){
-      const n = ['duality','modality','element'].filter(k => toggleState[k]).length;
-      return `${label} — ${n} active`;
-    }
-    if(btn.dataset.layerView === 'planetary'){
-      const n = ['dignity','aspectsFrom','aspectsTo'].filter(k => toggleState[k]).length;
+    if(btn.dataset.layerView === 'cosmic'){
+      const n = ['duality','modality','element','dignity','aspectsFrom','aspectsTo'].filter(k => toggleState[k]).length;
       return `${label} — ${n} active`;
     }
     if(btn.dataset.layerView === 'flashcards'){
@@ -2924,6 +3221,7 @@
   });
 
   updateAspectsAvailability();
+  refreshChipStates();
   render(0);
   syncPanelHeights();
 
@@ -2931,8 +3229,7 @@
   const ENTITY_LIST = [
     { key:'access',        label:'Access' },
     { key:'courses',       label:'Courses' },
-    { key:'zodiac',        label:'Zodiac Layers' },
-    { key:'planetary',     label:'Planetary Layers' },
+    { key:'cosmic',        label:'Cosmic Layers' },
     { key:'chartSelector', label:'Chart Selector' },
     { key:'flashcards',    label:'Flashcards' },
     { key:'workbook',      label:'Workbook' },
@@ -2945,7 +3242,7 @@
   // through the "Manage panel access" grid (or auto-added with full access on first sign-in).
   function defaultAccessGrid(){
     return {
-      'Siva': { program:'Trial', access:true, courses:true, zodiac:false, planetary:false, chartSelector:false, flashcards:false, mychart:false, journey:false, workbook:false }
+      'Siva': { program:'Trial', access:true, courses:true, cosmic:false, chartSelector:false, flashcards:false, mychart:false, journey:false, workbook:false }
     };
   }
 
@@ -3059,7 +3356,7 @@
       return;
     }
     accessGridData[username] = {
-      program:'', access:true, courses:true, zodiac:true, planetary:true,
+      program:'', access:true, courses:true, cosmic:true,
       chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true
     };
     saveAccessGrid();
@@ -3098,7 +3395,7 @@
     }
     if(chartsRowEl) chartsRowEl.style.display = entry.chartSelector ? '' : 'none';
 
-    const PANEL_KEYS = ['courses','zodiac','planetary','flashcards','mychart','journey','workbook'];
+    const PANEL_KEYS = ['courses','cosmic','flashcards','mychart','journey','workbook'];
     PANEL_KEYS.forEach(key => {
       const btn = document.querySelector(`.layers-toggle-btn[data-layer-view="${key}"]`);
       if(btn) btn.style.display = entry[key] ? '' : 'none';
@@ -3148,7 +3445,7 @@
     // grid. Full access to every panel, and an empty program so the Courses list shows
     // everything (currentUserProgram === '' skips filtering entirely).
     if(username.toLowerCase() === 'admin'){
-      const adminEntry = { program:'', access:true, courses:true, zodiac:true, planetary:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
+      const adminEntry = { program:'', access:true, courses:true, cosmic:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
       pendingAdminEntry = adminEntry;
       if(manageAccessSection) manageAccessSection.hidden = false;
       return;
@@ -3157,7 +3454,7 @@
     let entry = accessGridData[username];
     if(!entry){
       // Unknown user name — add with full access by default
-      entry = { program:'', access:true, courses:true, zodiac:true, planetary:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
+      entry = { program:'', access:true, courses:true, cosmic:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
       accessGridData[username] = entry;
       saveAccessGrid();
       renderAccessGrid();
