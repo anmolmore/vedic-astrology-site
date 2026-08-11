@@ -1,7 +1,13 @@
 name = "vedic-astrology-site"
 pages_build_output_dir = "public"
+compatibility_date = "2025-01-01"
 
 [[redirects]]
 from = "/kundali"
 to = "/index.html"
 status = 200
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vedic-astrology-db"
+database_id = "3c5405f9-8b34-4bd2-bf52-b5157fe222be"

@@ -15,7 +15,7 @@
   <div class="access-card">
     <p class="eyebrow" style="margin:0 0 4px;">Learn Vedic Astrology</p>
     <h1 class="access-title">Sign in</h1>
-    <p class="access-sub">Enter any user name — password is <b>ATV</b> for everyone, for now.</p>
+    <p class="access-sub">Enter your user name and password. Don't have an account? Ask your admin.</p>
 
     <label class="access-label" for="accessUsername">User name</label>
     <input type="text" id="accessUsername" class="access-input" autocomplete="username" placeholder="e.g. Siva">
@@ -33,12 +33,13 @@
       <p class="access-sub">Choose which panels each user name can see. New user names get full access by default.</p>
       <div class="access-grid-wrap">
         <table class="access-grid" id="accessGrid">
-          <thead><tr id="accessGridHeadRow"><th>User</th><th>Program</th></tr></thead>
+          <thead><tr id="accessGridHeadRow"><th>User</th></tr></thead>
           <tbody id="accessGridBody"></tbody>
         </table>
       </div>
       <div class="access-add-row">
         <input type="text" id="accessNewUserInput" class="access-input" style="margin:0;" placeholder="New user name">
+        <input type="password" id="accessNewUserPasswordInput" class="access-input" style="margin:0;" placeholder="Temporary password" autocomplete="new-password">
         <button type="button" id="accessAddUserBtn" class="glyph-btn">+ Add user</button>
       </div>
 
@@ -101,6 +102,7 @@
   <aside class="panel courses-panel layer-panel" data-layer-panel="courses" aria-label="Courses">
     <p class="flashcards-intro">Pick a real Vedic astrology lesson to view it in the media viewer and get a couple of simple flashcard questions about it.</p>
     <div class="course-list" id="courseListEl"></div>
+    <button type="button" id="clearProgressBtn" class="workbook-link-btn">Clear my progress</button>
   </aside>
 
   <aside class="panel info-panel layer-panel layer-hidden" data-layer-panel="cosmic" aria-label="Cosmic layers">

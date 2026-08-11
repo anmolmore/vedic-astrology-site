@@ -1618,8 +1618,59 @@
         flashcardsFlipped: course ? course.questions.map(() => false) : [],
         completed: false
       };
+      // A brand-new entry means this course was just opened for the first time —
+      // persist that "viewed" moment immediately rather than waiting for completion.
+      saveCourseProgress(courseId);
     }
     return courseProgress[courseId];
+  }
+
+  // Persists one course's progress to the signed-in user's account (D1-backed, via
+  // functions/api/progress/[courseId].js) so it survives logout/login and follows them
+  // across devices instead of resetting every session like the old localStorage-free,
+  // in-memory-only version did. Best-effort: local state already reflects the change
+  // either way, so a failed save just means it'll look unsaved on the next login.
+  function saveCourseProgress(courseId){
+    const progress = courseProgress[courseId];
+    if(!progress) return;
+    fetch(`/api/progress/${encodeURIComponent(courseId)}`, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mediaDone: progress.mediaDone,
+        flashcardsFlipped: progress.flashcardsFlipped,
+        completed: progress.completed
+      })
+    }).catch(() => { /* best-effort */ });
+  }
+
+  // Fetches every course_progress row for the signed-in user and hydrates courseProgress
+  // + viewedCourseIds from it (a row's mere existence means "viewed"). Called after login,
+  // once loadMyCourses() has rendered the course-item buttons updateCourseLockState() needs.
+  async function loadCourseProgress(){
+    try{
+      const res = await fetch('/api/progress', { credentials:'same-origin' });
+      const data = res.ok ? await res.json() : {};
+      Object.keys(data).forEach(courseId => {
+        courseProgress[courseId] = data[courseId];
+        viewedCourseIds.add(courseId);
+      });
+    } catch(e){ /* stay with whatever's already local */ }
+    updateCourseLockState();
+  }
+
+  // Self-service "Clear my progress": wipes local + server-side progress for every
+  // course, re-locking the list back down to just the first lesson.
+  const clearProgressBtn = document.getElementById('clearProgressBtn');
+  if(clearProgressBtn){
+    clearProgressBtn.addEventListener('click', async () => {
+      if(!confirm('Clear all your course progress? Completed lessons will show as unfinished again and the list will re-lock from the start.')) return;
+      Object.keys(courseProgress).forEach(k => delete courseProgress[k]);
+      viewedCourseIds.clear();
+      renderCourseListFromProgramGrid();
+      await fetch('/api/progress', { method:'DELETE', credentials:'same-origin' }).catch(() => {});
+    });
   }
 
   // Marks the "watched/read the media" half of completion (video watched, or last page/slide reached)
@@ -1641,6 +1692,7 @@
     progress.completed = progress.mediaDone && flashcardsDone;
     if(progress.completed && !wasComplete) markCourseItemCompleteUI(courseId);
     updateCourseLockState();
+    saveCourseProgress(courseId);
   }
 
   // Sequential unlocking: every already-completed lesson stays clickable (for review), plus
@@ -1837,7 +1889,7 @@
   // The single lookup used everywhere a lesson needs to be found by id — resolves the row for
   // that id, then matches its file name against the known real files.
   function getCourseById(courseId){
-    const row = programCourses.find(r => r.id === courseId);
+    const row = myCourses.find(r => r.id === courseId);
     if(!row) return null;
     return getCourseForFileName(row.fileName) || buildSimulatedCourse(row);
   }
@@ -2051,62 +2103,46 @@
     });
   }
 
-  // ----- Manage courses by program (admin grid) ---------------------------
-  // The Courses panel's lesson list is now driven entirely by this grid: Program, Courses
-  // (the lesson name), and File name — the same 3 lessons that used to be hardcoded in the
-  // panel now live here instead, editable and deletable, with an "Add Program" row to add more.
-  const PROGRAM_COURSES_KEY = 'vedicChartProgramCourses';
+  // ----- Manage courses by program ----------------------------------------
+  // The Courses panel's lesson list lives in D1 now (see migrations/0001_init.sql),
+  // reached via GET /api/courses (already filtered server-side to the signed-in user's
+  // enrolled programs) and, for admins, the full CRUD grid backed by /api/admin/programs.
 
-  function defaultProgramCourses(){
-    return [
-      { id:'zodiac-intro',   program:'Trial', courseName:'What is Astrology?',            fileName:'What is Astrology.mp4' },
-      { id:'dignities-pdf',  program:'101',   courseName:'Planetary Dignities',            fileName:'Planetary dignities.pdf' },
-      { id:'aspects-slides', program:'102',   courseName:'Predictive Astrology Basics',    fileName:'Predictive astrology basics.pptx' }
-    ];
+  // The signed-in user's own course list, as returned by the server — what's rendered in
+  // the Courses panel and what course clicks resolve against.
+  let myCourses = [];
+  let currentUserPrograms = [];
+
+  async function loadMyCourses(){
+    try{
+      const res = await fetch('/api/courses', { credentials:'same-origin' });
+      myCourses = res.ok ? await res.json() : [];
+    } catch(e){ myCourses = []; }
+    renderCourseListFromProgramGrid();
   }
 
-  let programCourses = [];
-  try{
-    const rawPC = localStorage.getItem(PROGRAM_COURSES_KEY);
-    programCourses = rawPC ? JSON.parse(rawPC) : defaultProgramCourses();
-  } catch(e){ programCourses = defaultProgramCourses(); }
-  if(!Array.isArray(programCourses) || !programCourses.length) programCourses = defaultProgramCourses();
-
-  function saveProgramCourses(){
-    try{ localStorage.setItem(PROGRAM_COURSES_KEY, JSON.stringify(programCourses)); } catch(e){ /* ignore */ }
-  }
-
-  // Which program the currently signed-in user has access to (set on login). Empty means
-  // no filtering — used before login, and as a graceful fallback if a user has no program set.
-  let currentUserProgram = '';
-
-  // Rebuilds the Courses panel's lesson list from the grid's current rows, filtered to only
-  // the signed-in user's Program. Rows whose id matches a real COURSE_CONTENT entry (the 3
-  // original lessons) open with full content; any newly-added program row without matching
-  // content simply does nothing when clicked (there's no lesson data behind it yet) rather
-  // than erroring.
+  // Rebuilds the Courses panel's lesson list from myCourses. Rows whose id matches a real
+  // COURSE_CONTENT entry (the 3 original lessons) open with full content; any admin-added
+  // row without matching content simply does nothing when clicked (there's no lesson data
+  // behind it yet) rather than erroring.
   function renderCourseListFromProgramGrid(){
     if(!courseListEl) return;
     const previousActiveId = currentCourseId;
     courseListEl.innerHTML = '';
 
-    const visibleRows = currentUserProgram
-      ? programCourses.filter(row => (row.program || '').trim().toLowerCase() === currentUserProgram.trim().toLowerCase())
-      : programCourses;
-
-    if(!visibleRows.length){
+    if(!myCourses.length){
       const empty = document.createElement('p');
       empty.className = 'access-sub';
       empty.style.margin = '0';
-      empty.textContent = currentUserProgram
-        ? `No lessons are assigned to the "${currentUserProgram}" program yet.`
+      empty.textContent = currentUserPrograms.length
+        ? `No lessons are assigned to "${currentUserPrograms.join(', ')}" yet.`
         : 'No lessons available yet.';
       courseListEl.appendChild(empty);
       updateCourseLockState();
       return;
     }
 
-    visibleRows.forEach(row => {
+    myCourses.forEach(row => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'course-item';
@@ -2124,13 +2160,35 @@
     updateCourseLockState();
   }
 
+  // ----- Admin: Manage courses by program grid (full CRUD, admin-only) ----
+  let adminProgramCourses = [];
   const programCoursesBody = document.getElementById('programCoursesBody');
+
+  async function loadAdminProgramCourses(){
+    try{
+      const res = await fetch('/api/admin/programs', { credentials:'same-origin' });
+      adminProgramCourses = res.ok ? await res.json() : [];
+    } catch(e){ adminProgramCourses = []; }
+    renderProgramCoursesGrid();
+  }
+
+  async function patchProgramCourseRow(id, patch){
+    await fetch(`/api/admin/programs/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+    // Program names feed the per-user "Programs" checkboxes in the access grid — keep
+    // those columns in sync whenever a row's program name changes.
+    if('program' in patch) refreshAccessGrid();
+  }
 
   // Builds the Program/Courses/File name grid rows, each field editable in place
   function renderProgramCoursesGrid(){
     if(!programCoursesBody) return;
     programCoursesBody.innerHTML = '';
-    programCourses.forEach(row => {
+    adminProgramCourses.forEach(row => {
       const tr = document.createElement('tr');
 
       const tdProgram = document.createElement('td');
@@ -2139,8 +2197,7 @@
       programInput.value = row.program || '';
       programInput.addEventListener('change', () => {
         row.program = programInput.value;
-        saveProgramCourses();
-        renderCourseListFromProgramGrid();
+        patchProgramCourseRow(row.id, { program: row.program });
       });
       tdProgram.appendChild(programInput);
       tr.appendChild(tdProgram);
@@ -2152,8 +2209,7 @@
       courseInput.value = row.courseName || '';
       courseInput.addEventListener('change', () => {
         row.courseName = courseInput.value;
-        saveProgramCourses();
-        renderCourseListFromProgramGrid();
+        patchProgramCourseRow(row.id, { courseName: row.courseName });
       });
       tdCourse.appendChild(courseInput);
       tr.appendChild(tdCourse);
@@ -2165,8 +2221,7 @@
       fileInput.value = row.fileName || '';
       fileInput.addEventListener('change', () => {
         row.fileName = fileInput.value;
-        saveProgramCourses();
-        renderCourseListFromProgramGrid();
+        patchProgramCourseRow(row.id, { fileName: row.fileName });
       });
       tdFile.appendChild(fileInput);
       tr.appendChild(tdFile);
@@ -2178,11 +2233,11 @@
       delBtn.textContent = '✕';
       delBtn.title = 'Remove this row';
       delBtn.setAttribute('aria-label', 'Remove this row');
-      delBtn.addEventListener('click', () => {
-        programCourses = programCourses.filter(r => r.id !== row.id);
-        saveProgramCourses();
+      delBtn.addEventListener('click', async () => {
+        adminProgramCourses = adminProgramCourses.filter(r => r.id !== row.id);
         renderProgramCoursesGrid();
-        renderCourseListFromProgramGrid();
+        await fetch(`/api/admin/programs/${encodeURIComponent(row.id)}`, { method:'DELETE', credentials:'same-origin' });
+        refreshAccessGrid();
       });
       tdDelete.appendChild(delBtn);
       tr.appendChild(tdDelete);
@@ -2190,20 +2245,25 @@
       programCoursesBody.appendChild(tr);
     });
   }
-  renderProgramCoursesGrid();
-  renderCourseListFromProgramGrid();
 
   const newProgramInput = document.getElementById('newProgramInput');
   const addProgramBtn = document.getElementById('addProgramBtn');
-  function addProgramRow(){
+  async function addProgramRow(){
     if(!newProgramInput) return;
     const programName = newProgramInput.value.trim();
     if(!programName) return;
-    programCourses.push({ id: 'program-' + Date.now(), program: programName, courseName: '', fileName: '' });
-    saveProgramCourses();
-    renderProgramCoursesGrid();
-    renderCourseListFromProgramGrid();
     newProgramInput.value = '';
+    const res = await fetch('/api/admin/programs', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ program: programName })
+    });
+    if(res.ok){
+      adminProgramCourses.push(await res.json());
+      renderProgramCoursesGrid();
+      refreshAccessGrid();
+    }
   }
   if(addProgramBtn) addProgramBtn.addEventListener('click', addProgramRow);
   if(newProgramInput) newProgramInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') addProgramRow(); });
@@ -3226,8 +3286,11 @@
   syncPanelHeights();
 
   // ----- Access Screen: sign-in gate + per-user panel visibility grid -----
+  // Real accounts live in D1 (see migrations/0001_init.sql) behind Cloudflare Pages
+  // Functions under /api — this section talks to that API instead of a localStorage-only
+  // access grid, so accounts and access rules follow a user across devices/browsers.
   const ENTITY_LIST = [
-    { key:'access',        label:'Access' },
+    { key:'active',        label:'Access' },
     { key:'courses',       label:'Courses' },
     { key:'cosmic',        label:'Cosmic Layers' },
     { key:'chartSelector', label:'Chart Selector' },
@@ -3236,138 +3299,190 @@
     { key:'mychart',       label:'My Chart' },
     { key:'journey',       label:'Journey Coord.' }
   ];
-  const ACCESS_STORAGE_KEY = 'vedicChartAccessGrid';
-
-  // Only Siva is seeded by default — every other user is added and managed entirely
-  // through the "Manage panel access" grid (or auto-added with full access on first sign-in).
-  function defaultAccessGrid(){
-    return {
-      'Siva': { program:'Trial', access:true, courses:true, cosmic:false, chartSelector:false, flashcards:false, mychart:false, journey:false, workbook:false }
-    };
-  }
-
-  let accessGridData = {};
-  try{
-    const raw = localStorage.getItem(ACCESS_STORAGE_KEY);
-    accessGridData = raw ? JSON.parse(raw) : defaultAccessGrid();
-  } catch(e){ accessGridData = defaultAccessGrid(); }
-  if(!accessGridData || !Object.keys(accessGridData).length) accessGridData = defaultAccessGrid();
-  // Admin is a built-in identity, not a configurable record — scrub it out even if an older
-  // saved grid (from before this change) still has it, regardless of how it was cased.
-  // Priya was only ever a seeded example and has been removed from the code entirely — scrub
-  // any lingering saved copy of her too, so removing her from code actually removes her.
-  let scrubbedStaleRecord = false;
-  Object.keys(accessGridData).forEach(key => {
-    if(key.toLowerCase() === 'admin' || key.toLowerCase() === 'priya'){
-      delete accessGridData[key];
-      scrubbedStaleRecord = true;
-    }
-  });
-  if(scrubbedStaleRecord) saveAccessGrid();
-
-  function saveAccessGrid(){
-    try{ localStorage.setItem(ACCESS_STORAGE_KEY, JSON.stringify(accessGridData)); } catch(e){ /* localStorage may be unavailable — fail silently */ }
-  }
 
   const accessGridHeadRow = document.getElementById('accessGridHeadRow');
   const accessGridBody = document.getElementById('accessGridBody');
 
-  // Builds the grid table (User/Program + one checkbox column per panel + Delete) from accessGridData
+  let adminUsersData = [];
+  let knownProgramNames = [];
+
+  async function loadAdminUsersData(){
+    try{
+      const res = await fetch('/api/admin/users', { credentials:'same-origin' });
+      adminUsersData = res.ok ? await res.json() : [];
+    } catch(e){ adminUsersData = []; }
+  }
+
+  // Refetches both the user list and the program list (the "Programs" checkbox columns
+  // below are dynamic, sourced from whatever program names exist in the Manage Courses
+  // grid) and re-renders. Called after any admin edit that could change either.
+  async function refreshAccessGrid(){
+    await Promise.all([loadAdminUsersData(), loadAdminProgramCourses()]);
+    knownProgramNames = [...new Set(adminProgramCourses.map(r => (r.program || '').trim()).filter(Boolean))].sort();
+    renderAccessGrid();
+  }
+
+  async function patchUser(username, patch){
+    await fetch(`/api/admin/users/${encodeURIComponent(username)}`, {
+      method: 'PATCH',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch)
+    });
+  }
+
+  // Builds the grid table (User + one checkbox column per known Program + one per panel +
+  // Reset password + Clear progress + Delete) from adminUsersData
   function renderAccessGrid(){
     if(!accessGridHeadRow || !accessGridBody) return;
-    accessGridHeadRow.querySelectorAll('th[data-entity-th], th[data-delete-th]').forEach(th => th.remove());
+    accessGridHeadRow.querySelectorAll('th[data-program-th], th[data-entity-th], th[data-reset-th], th[data-clear-progress-th], th[data-delete-th]').forEach(th => th.remove());
+
+    knownProgramNames.forEach(program => {
+      const th = document.createElement('th');
+      th.textContent = program;
+      th.dataset.programTh = '1';
+      accessGridHeadRow.appendChild(th);
+    });
     ENTITY_LIST.forEach(ent => {
       const th = document.createElement('th');
       th.textContent = ent.label;
       th.dataset.entityTh = '1';
       accessGridHeadRow.appendChild(th);
     });
+    const resetTh = document.createElement('th');
+    resetTh.textContent = '';
+    resetTh.dataset.resetTh = '1';
+    accessGridHeadRow.appendChild(resetTh);
+    const clearProgressTh = document.createElement('th');
+    clearProgressTh.textContent = '';
+    clearProgressTh.dataset.clearProgressTh = '1';
+    accessGridHeadRow.appendChild(clearProgressTh);
     const deleteTh = document.createElement('th');
     deleteTh.textContent = '';
     deleteTh.dataset.deleteTh = '1';
     accessGridHeadRow.appendChild(deleteTh);
 
     accessGridBody.innerHTML = '';
-    Object.keys(accessGridData).forEach(username => {
-      const row = accessGridData[username];
+    adminUsersData.forEach(user => {
       const tr = document.createElement('tr');
 
       const tdUser = document.createElement('td');
-      tdUser.textContent = username;
+      tdUser.textContent = user.username + (user.isAdmin ? ' (admin)' : '');
       tr.appendChild(tdUser);
 
-      const tdProgram = document.createElement('td');
-      const programInput = document.createElement('input');
-      programInput.type = 'text';
-      programInput.value = row.program || '';
-      programInput.addEventListener('change', () => { row.program = programInput.value; saveAccessGrid(); });
-      tdProgram.appendChild(programInput);
-      tr.appendChild(tdProgram);
-
+      knownProgramNames.forEach(program => {
+        const td = document.createElement('td');
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = user.programs.includes(program);
+        cb.addEventListener('change', () => {
+          if(cb.checked){ if(!user.programs.includes(program)) user.programs.push(program); }
+          else { user.programs = user.programs.filter(p => p !== program); }
+          patchUser(user.username, { programs: user.programs });
+        });
+        td.appendChild(cb);
+        tr.appendChild(td);
+      });
 
       ENTITY_LIST.forEach(ent => {
         const td = document.createElement('td');
         const cb = document.createElement('input');
         cb.type = 'checkbox';
-        cb.checked = !!row[ent.key];
-        cb.addEventListener('change', () => { row[ent.key] = cb.checked; saveAccessGrid(); });
+        cb.checked = !!user[ent.key];
+        cb.addEventListener('change', () => { user[ent.key] = cb.checked; patchUser(user.username, { [ent.key]: cb.checked }); });
         td.appendChild(cb);
         tr.appendChild(td);
       });
+
+      const tdReset = document.createElement('td');
+      const resetBtn = document.createElement('button');
+      resetBtn.type = 'button';
+      resetBtn.className = 'access-grid-delete-btn';
+      resetBtn.textContent = '⟳';
+      resetBtn.title = `Reset ${user.username}'s password`;
+      resetBtn.setAttribute('aria-label', `Reset ${user.username}'s password`);
+      resetBtn.addEventListener('click', async () => {
+        const newPassword = prompt(`New password for "${user.username}":`);
+        if(!newPassword) return;
+        await fetch(`/api/admin/users/${encodeURIComponent(user.username)}/reset-password`, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: newPassword })
+        });
+      });
+      tdReset.appendChild(resetBtn);
+      tr.appendChild(tdReset);
+
+      const tdClearProgress = document.createElement('td');
+      const clearProgressUserBtn = document.createElement('button');
+      clearProgressUserBtn.type = 'button';
+      clearProgressUserBtn.className = 'access-grid-delete-btn';
+      clearProgressUserBtn.textContent = '⌫';
+      clearProgressUserBtn.title = `Clear ${user.username}'s course progress`;
+      clearProgressUserBtn.setAttribute('aria-label', `Clear ${user.username}'s course progress`);
+      clearProgressUserBtn.addEventListener('click', async () => {
+        if(!confirm(`Clear all course progress for "${user.username}"? This can't be undone.`)) return;
+        await fetch(`/api/admin/users/${encodeURIComponent(user.username)}/progress`, { method:'DELETE', credentials:'same-origin' });
+      });
+      tdClearProgress.appendChild(clearProgressUserBtn);
+      tr.appendChild(tdClearProgress);
 
       const tdDelete = document.createElement('td');
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
       delBtn.className = 'access-grid-delete-btn';
       delBtn.textContent = '✕';
-      delBtn.title = `Remove ${username}`;
-      delBtn.setAttribute('aria-label', `Remove ${username}`);
-      delBtn.addEventListener('click', () => removeAccessUser(username));
+      delBtn.title = `Remove ${user.username}`;
+      delBtn.setAttribute('aria-label', `Remove ${user.username}`);
+      delBtn.addEventListener('click', () => removeAccessUser(user.username));
       tdDelete.appendChild(delBtn);
       tr.appendChild(tdDelete);
 
       accessGridBody.appendChild(tr);
     });
   }
-  renderAccessGrid();
 
-  // Removes a user entry entirely from the grid
-  function removeAccessUser(username){
-    delete accessGridData[username];
-    saveAccessGrid();
+  // Removes a user account entirely
+  async function removeAccessUser(username){
+    adminUsersData = adminUsersData.filter(u => u.username !== username);
     renderAccessGrid();
+    await fetch(`/api/admin/users/${encodeURIComponent(username)}`, { method:'DELETE', credentials:'same-origin' });
   }
 
-  // Adds a new user entry with full access by default
+  // Creates a new user account with a temporary password and full panel access by
+  // default; no programs are checked yet — the admin ticks those in afterward.
   const accessNewUserInput = document.getElementById('accessNewUserInput');
+  const accessNewUserPasswordInput = document.getElementById('accessNewUserPasswordInput');
   const accessAddUserBtn = document.getElementById('accessAddUserBtn');
-  function addAccessUser(){
-    if(!accessNewUserInput) return;
+  async function addAccessUser(){
+    if(!accessNewUserInput || !accessNewUserPasswordInput) return;
     const username = accessNewUserInput.value.trim();
-    if(!username) return;
-    if(username.toLowerCase() === 'admin'){
+    const password = accessNewUserPasswordInput.value;
+    if(!username || !password) return;
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    if(res.ok){
+      accessNewUserInput.value = '';
+      accessNewUserPasswordInput.value = '';
+      refreshAccessGrid();
+    } else {
+      const body = await res.json().catch(() => ({}));
+      accessErrorEl.textContent = body.error || 'Could not create that user.';
       accessErrorEl.hidden = false;
-      accessErrorEl.textContent = 'Admin is a built-in identity and isn\u2019t added as a record here.';
-      accessNewUserInput.value = '';
-      return;
     }
-    if(accessGridData[username]){
-      accessNewUserInput.value = '';
-      return;
-    }
-    accessGridData[username] = {
-      program:'', access:true, courses:true, cosmic:true,
-      chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true
-    };
-    saveAccessGrid();
-    renderAccessGrid();
-    accessNewUserInput.value = '';
   }
   if(accessAddUserBtn) accessAddUserBtn.addEventListener('click', addAccessUser);
-  if(accessNewUserInput) accessNewUserInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') addAccessUser(); });
+  [accessNewUserInput, accessNewUserPasswordInput].forEach(el => {
+    if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') addAccessUser(); });
+  });
 
-  // Applies one user's grid entry to the live app: only their checked panels stay visible
-  function applyAccessVisibility(entry){
+  // Applies one user's account to the live app: only their checked panels stay visible
+  function applyAccessVisibility(user){
     // Every login starts from a completely clean slate — nothing carries over from a
     // previous user's session in the same tab (stray playing media, PDF/slide page
     // position, completion/lock state, or viewed history). Without this, one user's
@@ -3378,10 +3493,13 @@
     Object.keys(courseProgress).forEach(k => delete courseProgress[k]);
     viewedCourseIds.clear();
 
-    // Filter the Courses panel down to just this user's Program before anything else,
-    // so it's already correct by the time they land on (or switch to) that tab.
-    currentUserProgram = entry.program || '';
-    renderCourseListFromProgramGrid();
+    // Load this user's own course list (server-filtered to their enrolled programs)
+    // before anything else, so it's already correct by the time they land on (or switch
+    // to) that tab.
+    currentUserPrograms = user.programs || [];
+    // loadCourseProgress() needs the course-item buttons loadMyCourses() renders (it calls
+    // updateCourseLockState(), which walks the DOM), so it's chained to run after.
+    loadMyCourses().then(loadCourseProgress);
 
     const chartSelectToggleRow = document.querySelector('.chart-select-toggle');
     const chartsRowEl = document.querySelector('.charts-row');
@@ -3390,18 +3508,18 @@
     // reserved — collapsing it with display:none would let that column's panel start
     // higher than the others, breaking top alignment across the layers/info/charts columns.
     if(chartSelectToggleRow){
-      chartSelectToggleRow.style.visibility = entry.chartSelector ? '' : 'hidden';
-      chartSelectToggleRow.style.pointerEvents = entry.chartSelector ? '' : 'none';
+      chartSelectToggleRow.style.visibility = user.chartSelector ? '' : 'hidden';
+      chartSelectToggleRow.style.pointerEvents = user.chartSelector ? '' : 'none';
     }
-    if(chartsRowEl) chartsRowEl.style.display = entry.chartSelector ? '' : 'none';
+    if(chartsRowEl) chartsRowEl.style.display = user.chartSelector ? '' : 'none';
 
     const PANEL_KEYS = ['courses','cosmic','flashcards','mychart','journey','workbook'];
     PANEL_KEYS.forEach(key => {
       const btn = document.querySelector(`.layers-toggle-btn[data-layer-view="${key}"]`);
-      if(btn) btn.style.display = entry[key] ? '' : 'none';
+      if(btn) btn.style.display = user[key] ? '' : 'none';
     });
 
-    const landingKey = entry.courses ? 'courses' : PANEL_KEYS.find(k => entry[k]);
+    const landingKey = user.courses ? 'courses' : PANEL_KEYS.find(k => user[k]);
     if(landingKey){
       const btn = document.querySelector(`.layers-toggle-btn[data-layer-view="${landingKey}"]`);
       if(btn) btn.click();
@@ -3422,61 +3540,55 @@
 
   const manageAccessSection = document.getElementById('manageAccessSection');
   const accessContinueBtn = document.getElementById('accessContinueBtn');
-  let pendingAdminEntry = null;
+  let pendingAdminUser = null;
 
-  function attemptSignIn(){
+  async function attemptSignIn(){
     const username = (accessUsernameInput.value || '').trim();
-    const password = (accessPasswordInput.value || '').trim();
+    const password = accessPasswordInput.value || '';
 
-    if(!username){
-      accessErrorEl.textContent = 'Enter a user name.';
-      accessErrorEl.hidden = false;
-      return;
-    }
-    if(password.toUpperCase() !== 'ATV'){
-      accessErrorEl.textContent = 'Incorrect password.';
+    if(!username || !password){
+      accessErrorEl.textContent = 'Enter a user name and password.';
       accessErrorEl.hidden = false;
       return;
     }
 
     accessErrorEl.hidden = true;
+    accessSignInBtn.disabled = true;
+    try{
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const user = await res.json().catch(() => ({}));
+      if(!res.ok){
+        accessErrorEl.textContent = user.error || 'Sign-in failed.';
+        accessErrorEl.hidden = false;
+        return;
+      }
 
-    // Admin is hardcoded here — it's never looked up from, or written into, either config
-    // grid. Full access to every panel, and an empty program so the Courses list shows
-    // everything (currentUserProgram === '' skips filtering entirely).
-    if(username.toLowerCase() === 'admin'){
-      const adminEntry = { program:'', access:true, courses:true, cosmic:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
-      pendingAdminEntry = adminEntry;
-      if(manageAccessSection) manageAccessSection.hidden = false;
-      return;
+      if(user.isAdmin){
+        pendingAdminUser = user;
+        await refreshAccessGrid();
+        if(manageAccessSection) manageAccessSection.hidden = false;
+        return;
+      }
+
+      if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
+      applyAccessVisibility(user);
+    } finally {
+      accessSignInBtn.disabled = false;
     }
-
-    let entry = accessGridData[username];
-    if(!entry){
-      // Unknown user name — add with full access by default
-      entry = { program:'', access:true, courses:true, cosmic:true, chartSelector:true, flashcards:true, mychart:true, journey:true, workbook:true };
-      accessGridData[username] = entry;
-      saveAccessGrid();
-      renderAccessGrid();
-    }
-
-    if(!entry.access){
-      accessErrorEl.textContent = `Access is turned off for "${username}" — ask an admin to enable it in the grid below.`;
-      accessErrorEl.hidden = false;
-      return;
-    }
-
-    if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
-    applyAccessVisibility(entry);
   }
 
   if(accessContinueBtn){
     accessContinueBtn.addEventListener('click', () => {
-      if(!pendingAdminEntry) return;
+      if(!pendingAdminUser) return;
       if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
       if(manageAccessSection) manageAccessSection.hidden = true;
-      applyAccessVisibility(pendingAdminEntry);
-      pendingAdminEntry = null;
+      applyAccessVisibility(pendingAdminUser);
+      pendingAdminUser = null;
     });
   }
 
@@ -3501,20 +3613,40 @@
     document.querySelectorAll('.course-item.active').forEach(i => i.classList.remove('active'));
   }
 
-  // Logout: brings the Access screen back. The next sign-in re-applies that user's own
-  // panel visibility fresh via applyAccessVisibility(), so nothing here needs to be undone.
+  // Logout: clears the server session, then brings the Access screen back. The next
+  // sign-in re-applies that user's own panel visibility fresh via applyAccessVisibility().
   const logoutBtn = document.getElementById('logoutBtn');
   if(logoutBtn){
     logoutBtn.addEventListener('click', () => {
+      fetch('/api/logout', { method:'POST', credentials:'same-origin' });
       stopAllMedia();
       if(accessScreenEl) accessScreenEl.classList.remove('access-hidden');
       if(accessPasswordInput) accessPasswordInput.value = '';
       if(accessUsernameInput) accessUsernameInput.value = '';
       if(accessErrorEl) accessErrorEl.hidden = true;
       if(manageAccessSection) manageAccessSection.hidden = true;
-      pendingAdminEntry = null;
-      currentUserProgram = '';
+      pendingAdminUser = null;
+      currentUserPrograms = [];
+      myCourses = [];
       renderCourseListFromProgramGrid();
     });
   }
   updateFooterVisibility();
+
+  // On page load, check for an existing session (the cookie persists across visits) and
+  // skip straight past the sign-in screen if one is still valid.
+  (async () => {
+    try{
+      const res = await fetch('/api/me', { credentials:'same-origin' });
+      if(!res.ok) return;
+      const user = await res.json();
+      if(user.isAdmin){
+        pendingAdminUser = user;
+        await refreshAccessGrid();
+        if(manageAccessSection) manageAccessSection.hidden = false;
+        return;
+      }
+      if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
+      applyAccessVisibility(user);
+    } catch(e){ /* no valid session — stay on the sign-in screen */ }
+  })();

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "wrangler pages dev public",
-    "deploy": "wrangler pages deploy public --project-name=vedic-astrology-site"
+    "deploy": "wrangler pages deploy public --project-name=vedic-astrology-site",
+    "create-admin": "node scripts/create-admin.mjs"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
