@@ -2268,13 +2268,97 @@
   if(addProgramBtn) addProgramBtn.addEventListener('click', addProgramRow);
   if(newProgramInput) newProgramInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') addProgramRow(); });
 
+  // Debounces by a caller-supplied key so unrelated fields (different questions/tabs) don't
+  // cancel each other's pending saves — only repeated edits to the SAME field get coalesced.
+  // Used for free-typed answer text, where the browser's "input" event fires per keystroke;
+  // saving that straight to the network (rather than localStorage) on every keystroke would
+  // spam the API, so those saves are debounced while local state still updates instantly.
+  function makeKeyedDebouncer(wait){
+    const timers = {};
+    return (key, fn) => {
+      clearTimeout(timers[key]);
+      timers[key] = setTimeout(fn, wait);
+    };
+  }
+  const debouncedSave = makeKeyedDebouncer(600);
+
+  // ----- Shared file attachments (Workbook answers + My Chart tabs) -------
+  // Both features attach at most one file to a slot (a workbook answer, or a My Chart tab);
+  // uploads live in R2 with metadata in D1 (functions/api/uploads/**). One shared index,
+  // fetched once per login, backs both panels instead of two separate localStorage blobs.
+  const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // matches functions/_lib/uploads.js
+  let uploadsIndex = {};
+
+  async function loadUploadsIndex(){
+    try{
+      const res = await fetch('/api/uploads', { credentials:'same-origin' });
+      const rows = res.ok ? await res.json() : [];
+      uploadsIndex = {};
+      rows.forEach(row => { uploadsIndex[`${row.context}:${row.contextRef}`] = row; });
+    } catch(e){ uploadsIndex = {}; }
+  }
+
+  function getUpload(uploadContext, contextRef){
+    return uploadsIndex[`${uploadContext}:${contextRef}`] || null;
+  }
+
+  // Uploads a file for a given slot, replacing any existing attachment there (the server
+  // deletes the old R2 object/row first — see functions/api/uploads/index.js).
+  async function uploadAttachment(file, uploadContext, contextRef){
+    if(file.size > MAX_ATTACHMENT_BYTES){
+      alert('That file is larger than 10 MB — try a smaller file.');
+      return false;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('context', uploadContext);
+    formData.append('contextRef', contextRef);
+    const res = await fetch('/api/uploads', { method:'POST', credentials:'same-origin', body: formData });
+    if(!res.ok){
+      const body = await res.json().catch(() => ({}));
+      alert(body.error || "Couldn't upload that file.");
+      return false;
+    }
+    await loadUploadsIndex();
+    return true;
+  }
+
+  async function removeUpload(uploadId){
+    await fetch(`/api/uploads/${encodeURIComponent(uploadId)}`, { method:'DELETE', credentials:'same-origin' }).catch(() => {});
+    await loadUploadsIndex();
+  }
+
+  // Shared preview card for an uploaded attachment (used by both Workbook answers and My
+  // Chart tabs) — an image gets an inline thumbnail (the <img> request carries the session
+  // cookie same-origin, and browsers render <img src> regardless of the download's
+  // Content-Disposition), anything else gets a generic file icon + name. The download link
+  // and the remove button both key off the upload's own id, so removal doesn't need to know
+  // which feature the attachment belongs to.
+  function attachmentPreviewHTML(upload){
+    if(!upload) return '';
+    const url = `/api/uploads/${upload.id}`;
+    const isImage = /^image\//.test(upload.mimeType || '');
+    const body = isImage
+      ? `<img src="${url}" alt="${upload.fileName}" class="workbook-attachment-thumb">`
+      : `<div class="workbook-attachment-file"><span class="workbook-attachment-file-icon">📄</span><span class="workbook-attachment-file-name">${upload.fileName}</span></div>`;
+    return `
+      <div class="workbook-attachment-preview-card">
+        ${body}
+        <div class="workbook-attachment-preview-footer">
+          <a class="workbook-attachment-preview-name" href="${url}" download="${upload.fileName}">${upload.fileName}</a>
+          <button type="button" class="workbook-attachment-remove" data-upload-id="${upload.id}" aria-label="Remove attachment">✕</button>
+        </div>
+      </div>`;
+  }
+
   // ----- Workbook (fixed document text + free-typed answers) -------------
   // Each workbook is stored as a sequence of "blocks" — plain text lines (shown as-is,
   // in order, exactly like the source document) and "answer" blocks (an editable text
   // box, placed exactly where the document had a blank to fill in). This shows the whole
-  // document, not just the extracted questions. Answers, and any documents added via
-  // "+ Add Document", are saved to localStorage so everything is exactly as you left it
-  // the next time this document is opened.
+  // document, not just the extracted questions. Answers and any documents added via
+  // "+ Add Document" are saved to the signed-in user's account (D1, via functions/api/
+  // workbook/**) so everything is exactly as left the next time this file is opened —
+  // on any device, not just this browser.
   const WORKBOOK_CONTENT = {
     'basic-practice-worksheet': {
       title: 'Basic Vedic Astrology — Practice Worksheet',
@@ -2324,12 +2408,9 @@
   const workbookQaList = document.getElementById('workbookQaList');
   const workbookListEl = document.getElementById('workbookListEl');
   const workbookAddStatus = document.getElementById('workbookAddStatus');
-  const WORKBOOK_STORAGE_KEY = 'vedicChartWorkbookLibrary';
 
   // { workbookId: [{text, editedBy, editedAt}, ...] } — what's been typed, and by whom
   const workbookAnswers = {};
-  // { workbookId: [{name, dataUrl} or null, ...] } — one optional file attachment per answer
-  const workbookAttachments = {};
   // Which workbook is currently open in the editor (so deleting it can reset the viewer)
   let currentWorkbookId = null;
 
@@ -2353,68 +2434,46 @@
     });
   }
 
-  // Persists typed answers, attachments, and any documents added via "+ Add Document" so
-  // they're exactly as left the next time this file is opened.
-  function saveWorkbookLibrary(){
-    try{
-      const uploaded = {};
-      Object.keys(WORKBOOK_CONTENT).forEach(id => {
-        if(id.indexOf('uploaded-') === 0) uploaded[id] = WORKBOOK_CONTENT[id];
-      });
-      localStorage.setItem(WORKBOOK_STORAGE_KEY, JSON.stringify({ uploaded, answers: workbookAnswers, attachments: workbookAttachments }));
-    } catch(e){ /* localStorage may be unavailable (private browsing), or the quota was exceeded by a large attachment — fail silently */ }
-  }
-
-  function loadWorkbookLibrary(){
-    try{
-      const raw = localStorage.getItem(WORKBOOK_STORAGE_KEY);
-      if(!raw) return;
-      const data = JSON.parse(raw);
-      if(data.uploaded){
-        Object.keys(data.uploaded).forEach(id => {
-          WORKBOOK_CONTENT[id] = data.uploaded[id];
-          addWorkbookListItem(id, data.uploaded[id].title, data.uploaded[id].type);
-        });
-      }
-      if(data.answers){
-        Object.keys(data.answers).forEach(id => { workbookAnswers[id] = data.answers[id]; });
-      }
-      if(data.attachments){
-        Object.keys(data.attachments).forEach(id => { workbookAttachments[id] = data.attachments[id]; });
-      }
-    } catch(e){ /* ignore corrupt/unavailable storage */ }
-  }
-
-  // Builds a real inline preview for an attached file — an actual image thumbnail if the
-  // file is an image, or a file icon + name card otherwise — shown directly in the document.
-  function attachmentPreviewHTML(attachment, workbookId, idx){
-    if(!attachment) return '';
-    const isImage = /^data:image\//.test(attachment.dataUrl || '');
-    const body = isImage
-      ? `<img src="${attachment.dataUrl}" alt="${attachment.name}" class="workbook-attachment-thumb">`
-      : `<div class="workbook-attachment-file"><span class="workbook-attachment-file-icon">📄</span><span class="workbook-attachment-file-name">${attachment.name}</span></div>`;
-    return `
-      <div class="workbook-attachment-preview-card">
-        ${body}
-        <div class="workbook-attachment-preview-footer">
-          <span class="workbook-attachment-preview-name">${attachment.name}</span>
-          <button type="button" class="workbook-attachment-remove" data-workbook-id="${workbookId}" data-q-index="${idx}" aria-label="Remove attachment">✕</button>
-        </div>
-      </div>`;
-  }
-
-  // Converts the older { question, placeholder } item format (from before workbooks stored
-  // full document text) into the current block sequence, so anything saved to localStorage
-  // under the old shape still opens correctly instead of erroring on wb.blocks being undefined.
-  function itemsToBlocks(items){
-    const blocks = [];
-    (items || []).forEach((item, i) => {
-      blocks.push({ type:'text', text:`Question ${i + 1}` });
-      blocks.push({ type:'text', text: item.question });
-      blocks.push({ type:'text', text:'Answer:' });
-      blocks.push({ type:'answer', index:i });
+  // Self-service "clear my uploads": wipes every file this user has ever attached, across
+  // both Workbook answers and My Chart tabs, then re-renders whichever is currently open so
+  // the removed attachments disappear immediately.
+  const clearUploadsBtn = document.getElementById('clearUploadsBtn');
+  if(clearUploadsBtn){
+    clearUploadsBtn.addEventListener('click', async () => {
+      if(!confirm("Clear all your uploaded files? This can't be undone.")) return;
+      await fetch('/api/uploads', { method:'DELETE', credentials:'same-origin' }).catch(() => {});
+      await loadUploadsIndex();
+      if(currentWorkbookId) renderWorkbookViewer(currentWorkbookId);
+      if(myChartTabs.length) renderMyChart();
     });
-    return blocks;
+  }
+
+  // Fetches this user's custom workbook documents and answers from the server and hydrates
+  // WORKBOOK_CONTENT/workbookAnswers from them. Called after login, alongside loadMyCourses()
+  // etc. — see applyAccessVisibility().
+  async function loadWorkbookState(){
+    try{
+      const [docsRes, answersRes] = await Promise.all([
+        fetch('/api/workbook/documents', { credentials:'same-origin' }),
+        fetch('/api/workbook/answers', { credentials:'same-origin' }),
+      ]);
+      const docs = docsRes.ok ? await docsRes.json() : [];
+      docs.forEach(doc => {
+        WORKBOOK_CONTENT[doc.id] = { title: doc.title, type: doc.type, blocks: doc.blocks };
+        addWorkbookListItem(doc.id, doc.title, doc.type);
+      });
+      const answers = answersRes.ok ? await answersRes.json() : {};
+      Object.keys(answers).forEach(id => { workbookAnswers[id] = answers[id]; });
+    } catch(e){ /* stay with whatever's already local */ }
+  }
+
+  function saveWorkbookAnswer(workbookId, questionIndex, text, editedBy, editedAt){
+    fetch('/api/workbook/answers', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workbookId, questionIndex, text, editedBy, editedAt })
+    }).catch(() => { /* best-effort */ });
   }
 
   // Renders the full document text in order, with an editable answer box (tagged with who
@@ -2426,28 +2485,17 @@
     if(workbookViewerTitle) workbookViewerTitle.textContent = wb.title;
     if(workbookViewerType) workbookViewerType.textContent = wb.type;
 
-    // Migrate older saved workbooks (items-only, no blocks) so they don't error out here
-    if(!Array.isArray(wb.blocks)){
-      wb.blocks = itemsToBlocks(wb.items);
-      saveWorkbookLibrary();
-    }
-
     const answerCount = wb.blocks.filter(b => b.type === 'answer').length;
     const blankAnswer = () => ({ text:'', editedBy:'', editedAt:'' });
     if(!workbookAnswers[workbookId]) workbookAnswers[workbookId] = new Array(answerCount).fill(0).map(blankAnswer);
-    // Migrate older plain-string answers (before user tagging existed) to the tagged shape
-    workbookAnswers[workbookId] = workbookAnswers[workbookId].map(entry =>
-      (typeof entry === 'string') ? { text: entry, editedBy:'', editedAt:'' } : (entry || blankAnswer())
-    );
     while(workbookAnswers[workbookId].length < answerCount) workbookAnswers[workbookId].push(blankAnswer());
     const savedAnswers = workbookAnswers[workbookId];
-    const savedAttachments = workbookAttachments[workbookId] || [];
 
     workbookQaList.innerHTML = wb.blocks.map(block => {
       if(block.type === 'answer'){
         const idx = block.index;
         const ans = savedAnswers[idx] || blankAnswer();
-        const attachment = savedAttachments[idx];
+        const attachment = getUpload('workbook-answer', `${workbookId}:${idx}`);
         const displayValue = (ans.text && ans.text.length) ? ans.text : `${currentUserName} : `;
         return `
           <div class="workbook-answer-input-wrap">
@@ -2456,7 +2504,7 @@
               <input type="file" class="workbook-attach-input" data-workbook-id="${workbookId}" data-q-index="${idx}" hidden>
             </label>
           </div>
-          ${attachment ? attachmentPreviewHTML(attachment, workbookId, idx) : ''}`;
+          ${attachmentPreviewHTML(attachment)}`;
       }
       const cls = /^question\s*\d+/i.test(block.text) ? 'workbook-block-heading' : 'workbook-block-text';
       return `<p class="${cls}">${block.text}</p>`;
@@ -2471,39 +2519,28 @@
         workbookAnswers[wid][qi].text = ta.value;
         workbookAnswers[wid][qi].editedBy = currentUserName;
         workbookAnswers[wid][qi].editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-        saveWorkbookLibrary();
+        debouncedSave(`workbook:${wid}:${qi}`, () => {
+          saveWorkbookAnswer(wid, qi, workbookAnswers[wid][qi].text, workbookAnswers[wid][qi].editedBy, workbookAnswers[wid][qi].editedAt);
+        });
       });
     });
 
     workbookQaList.querySelectorAll('.workbook-attach-input').forEach(input => {
-      input.addEventListener('change', () => {
+      input.addEventListener('change', async () => {
         const file = input.files && input.files[0];
         if(!file) return;
         const wid = input.dataset.workbookId;
-        const qi = parseInt(input.dataset.qIndex, 10);
-        if(file.size > 2 * 1024 * 1024){
-          alert('That file is larger than 2 MB — try a smaller file.');
-          input.value = '';
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          if(!workbookAttachments[wid]) workbookAttachments[wid] = [];
-          workbookAttachments[wid][qi] = { name: file.name, dataUrl: reader.result };
-          saveWorkbookLibrary();
-          renderWorkbookViewer(wid);
-        };
-        reader.readAsDataURL(file);
+        const qi = input.dataset.qIndex;
+        const ok = await uploadAttachment(file, 'workbook-answer', `${wid}:${qi}`);
+        input.value = '';
+        if(ok) renderWorkbookViewer(wid);
       });
     });
 
     workbookQaList.querySelectorAll('.workbook-attachment-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const wid = btn.dataset.workbookId;
-        const qi = parseInt(btn.dataset.qIndex, 10);
-        if(workbookAttachments[wid]) workbookAttachments[wid][qi] = null;
-        saveWorkbookLibrary();
-        renderWorkbookViewer(wid);
+      btn.addEventListener('click', async () => {
+        await removeUpload(btn.dataset.uploadId);
+        renderWorkbookViewer(workbookId);
       });
     });
   }
@@ -2524,12 +2561,11 @@
     });
   }
 
-  // Removes an uploaded document from the list, its answers/attachments, and localStorage.
+  // Removes an uploaded document from the list, its answers/attachments, and the server.
   // Only documents added via "+ Add Document" can be removed — the built-in examples can't.
-  function removeWorkbookDocument(id){
+  async function removeWorkbookDocument(id){
     delete WORKBOOK_CONTENT[id];
     delete workbookAnswers[id];
-    delete workbookAttachments[id];
     const itemBtn = workbookListEl ? workbookListEl.querySelector(`[data-workbook-id="${id}"]`) : null;
     if(itemBtn){
       const row = itemBtn.closest('.workbook-row');
@@ -2540,13 +2576,14 @@
       if(workbookViewerEmpty) workbookViewerEmpty.hidden = false;
       if(workbookViewerContent) workbookViewerContent.hidden = true;
     }
-    saveWorkbookLibrary();
     syncPanelHeights();
+    await fetch(`/api/workbook/documents/${encodeURIComponent(id)}`, { method:'DELETE', credentials:'same-origin' }).catch(() => {});
+    await loadUploadsIndex();
   }
 
   // Adds a new workbook button to the list (used both for uploads and for restoring
-  // previously-uploaded documents from localStorage). Uploaded documents get a small
-  // delete control next to them; the built-in examples don't.
+  // previously-added documents from the server). Uploaded documents get a small delete
+  // control next to them; the built-in examples don't.
   function addWorkbookListItem(id, title, type){
     if(!workbookListEl || workbookListEl.querySelector(`[data-workbook-id="${id}"]`)) return;
     const isUploaded = id.indexOf('uploaded-') === 0;
@@ -2640,107 +2677,113 @@
         return;
       }
 
-      const id = 'uploaded-' + Date.now();
-      const title = file.name;
+      const title = file.name.replace(/\.[^.]+$/, '');
       const type = `Workbook · ${answerCount} question${answerCount === 1 ? '' : 's'}`;
-      WORKBOOK_CONTENT[id] = {
-        title: file.name.replace(/\.[^.]+$/, ''),
-        type,
-        blocks
-      };
-      addWorkbookListItem(id, title, type);
-      saveWorkbookLibrary();
-      if(workbookAddStatus) workbookAddStatus.textContent = `Added "${title}" to the repository.`;
+      const res = await fetch('/api/workbook/documents', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, type, blocks })
+      });
+      if(!res.ok){
+        if(workbookAddStatus) workbookAddStatus.textContent = "Couldn't save that document — try again.";
+        workbookFileInput.value = '';
+        return;
+      }
+      const doc = await res.json();
+      WORKBOOK_CONTENT[doc.id] = { title: doc.title, type: doc.type, blocks: doc.blocks };
+      addWorkbookListItem(doc.id, doc.title, doc.type);
+      if(workbookAddStatus) workbookAddStatus.textContent = `Added "${file.name}" to the repository.`;
       workbookFileInput.value = '';
       syncPanelHeights();
     });
   }
 
-  loadWorkbookLibrary();
   document.querySelectorAll('.workbook-item').forEach(wireWorkbookItem);
 
   // ----- My Chart (multi-tab collaborative document) --------------------------------
-  // Same simulated-collaboration pattern as the Workbook (name tagged inline in the answer
-  // text, "+" file attachment inside the answer box), organized as named sections/tabs
-  // instead of one flat document. The section list lives in the narrow My Chart panel
-  // (same pattern as the Courses/Workbook lists); the wide viewer just shows whichever
-  // section is currently active.
-  const MYCHART_STORAGE_KEY = 'vedicChartMyChartTabs';
+  // Same pattern as the Workbook (name tagged inline in the answer text, "+" file
+  // attachment inside the answer box), organized as named sections/tabs instead of one
+  // flat document. The section list lives in the narrow My Chart panel (same pattern as
+  // the Courses/Workbook lists); the wide viewer just shows whichever section is active.
+  // Tabs — including "Generate Interpretation" sections, whose shape grows well beyond
+  // label/question/answer (generated/planetName/sign/house/sentenceStarter/responses{10
+  // sub-fields}) — are persisted server-side as one JSON blob each (see functions/api/
+  // mychart/tabs.js and migrations/0003_uploads_and_documents.sql).
 
-  function defaultMyChartTabs(){
+  function defaultMyChartTabsSeed(){
     return [
-      { id:'signs', label:'Zodiac Signs', dot:'#2f5fa8',
+      { label:'Zodiac Signs', dot:'#2f5fa8',
         question:'What are the 12 Rashis (zodiac signs), and what does each generally represent in Vedic astrology?',
-        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 },
-      { id:'planets', label:'Planets vs Signs', dot:'#b8862f',
+        answer:'', editedBy:'', editedAt:'' },
+      { label:'Planets vs Signs', dot:'#b8862f',
         question:'What is the difference between a Graha (planet) and a Rashi (zodiac sign)? Give one example of each.',
-        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 },
-      { id:'nakshatra', label:'Nakshatras', dot:'#2f8a4e',
+        answer:'', editedBy:'', editedAt:'' },
+      { label:'Nakshatras', dot:'#2f8a4e',
         question:'What is a Nakshatra, and why is it important when interpreting a birth chart?',
-        answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 }
+        answer:'', editedBy:'', editedAt:'' }
     ];
   }
 
   let myChartTabs = [];
-  try{
-    const rawMc = localStorage.getItem(MYCHART_STORAGE_KEY);
-    myChartTabs = rawMc ? JSON.parse(rawMc) : defaultMyChartTabs();
-  } catch(e){ myChartTabs = defaultMyChartTabs(); }
-  if(!Array.isArray(myChartTabs) || !myChartTabs.length) myChartTabs = defaultMyChartTabs();
-
-  let activeMyChartTab = myChartTabs[0].id;
+  let activeMyChartTab = null;
   let addingMyChartSection = false;
   let renamingMyChartTabId = null;
   let draggedMyChartTabId = null;
 
-  // Real cross-tab collaboration: if this same file is open in another browser tab/window
-  // and someone edits a section there, the browser fires a "storage" event here the moment
-  // they save — this is genuinely real (not simulated) multi-session awareness, since it only
-  // fires from an actual separate tab/window sharing this same localStorage. Any section
-  // that changed and isn't the one currently open gets its change count bumped.
-  window.addEventListener('storage', (e) => {
-    if(e.key !== MYCHART_STORAGE_KEY || !e.newValue) return;
-    let incoming;
-    try{ incoming = JSON.parse(e.newValue); } catch(err){ return; }
-    if(!Array.isArray(incoming)) return;
-
-    incoming.forEach(incomingTab => {
-      const localTab = myChartTabs.find(t => t.id === incomingTab.id);
-      if(!localTab){
-        // A section that doesn't exist locally yet — adopt it as-is
-        myChartTabs.push(Object.assign({}, incomingTab, { pendingChanges: incomingTab.id === activeMyChartTab ? 0 : 1 }));
-        return;
-      }
-      const changed = incomingTab.editedAt && incomingTab.editedAt !== localTab.editedAt;
-      const wasActive = localTab.id === activeMyChartTab;
-      const carryPending = localTab.pendingChanges || 0;
-      Object.assign(localTab, incomingTab);
-      localTab.pendingChanges = wasActive ? 0 : (changed ? carryPending + 1 : carryPending);
-    });
-    // Drop any local section that was deleted from the other tab/window
-    myChartTabs = myChartTabs.filter(t => incoming.some(i => i.id === t.id));
-
-    renderMyChart();
-  });
-
-  function saveMyChartTabs(){
-    try{ localStorage.setItem(MYCHART_STORAGE_KEY, JSON.stringify(myChartTabs)); } catch(e){ /* ignore */ }
+  async function createMyChartTab(fields){
+    try{
+      const res = await fetch('/api/mychart/tabs', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+      });
+      return res.ok ? await res.json() : null;
+    } catch(e){ return null; }
   }
 
-  function myChartAttachmentPreviewHTML(attachment, tabId){
-    if(!attachment) return '';
-    const isImage = /^data:image\//.test(attachment.dataUrl || '');
-    const body = isImage
-      ? `<img src="${attachment.dataUrl}" alt="${attachment.name}" class="workbook-attachment-thumb">`
-      : `<div class="workbook-attachment-file"><span class="workbook-attachment-file-icon">📄</span><span class="workbook-attachment-file-name">${attachment.name}</span></div>`;
-    return `
-      <div class="workbook-attachment-preview-card">
-        ${body}
-        <div class="workbook-attachment-preview-footer">
-          <span class="workbook-attachment-preview-name">${attachment.name}</span>
-          <button type="button" class="workbook-attachment-remove" data-mychart-tab="${tabId}" aria-label="Remove attachment">✕</button>
-        </div>
-      </div>`;
+  function updateMyChartTab(id, fields){
+    fetch(`/api/mychart/tabs/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields)
+    }).catch(() => { /* best-effort */ });
+  }
+
+  async function deleteMyChartTab(id){
+    await fetch(`/api/mychart/tabs/${encodeURIComponent(id)}`, { method:'DELETE', credentials:'same-origin' }).catch(() => {});
+  }
+
+  // Fetches this user's My Chart tabs; a brand-new user has none yet, so the same 3 starter
+  // sections everyone used to get by default are created for them server-side. Called after
+  // login, alongside loadMyCourses() etc. — see applyAccessVisibility().
+  async function loadMyChartTabs(){
+    try{
+      const res = await fetch('/api/mychart/tabs', { credentials:'same-origin' });
+      let tabs = res.ok ? await res.json() : [];
+      if(!tabs.length){
+        const seeds = defaultMyChartTabsSeed();
+        tabs = [];
+        for(let i = 0; i < seeds.length; i++){
+          const created = await createMyChartTab({ ...seeds[i], sortOrder: i });
+          if(created) tabs.push(created);
+        }
+      }
+      myChartTabs = tabs;
+    } catch(e){ myChartTabs = []; }
+    if(!myChartTabs.length){
+      // Server unreachable on a brand-new account — fall back to local-only starter
+      // sections rather than showing an empty panel; they'll sync up on the next load.
+      myChartTabs = defaultMyChartTabsSeed().map((t, i) => ({ id: 'local-' + i, sortOrder: i, ...t }));
+    }
+    activeMyChartTab = myChartTabs[0].id;
+    renderMyChart();
+  }
+
+  function myChartAttachmentPreviewHTML(tabId){
+    return attachmentPreviewHTML(getUpload('mychart-tab', tabId));
   }
 
   // Renders the section list into the narrow My Chart panel, and the active section's
@@ -2749,7 +2792,7 @@
     const listEl = document.getElementById('mychartListEl');
     const contentArea = document.getElementById('mychartContentArea');
     const titleEl = document.getElementById('mychartActiveTabTitle');
-    if(!listEl || !contentArea) return;
+    if(!listEl || !contentArea || !myChartTabs.length) return;
 
     listEl.innerHTML = myChartTabs.map(t => {
       const isRenaming = t.id === renamingMyChartTabId;
@@ -2768,7 +2811,6 @@
           <span class="mychart-tab-handle">⠿</span>
           <span class="mychart-tab-dot" style="background:${t.dot}"></span>
           <span class="course-item-text"><span class="course-item-title mychart-label" data-mychart-label="${t.id}" title="Double-click to rename">${t.label}</span></span>
-          ${t.pendingChanges > 0 ? `<span class="mychart-change-count">(${t.pendingChanges})</span>` : ''}
         </button>
         <button type="button" class="workbook-delete-btn" data-mychart-delete="${t.id}" title="Remove this section" aria-label="Remove this section">✕</button>
       </div>`;
@@ -2783,9 +2825,11 @@
           renameCommitted = true;
           const tab = myChartTabs.find(t => t.id === renamingMyChartTabId);
           const newLabel = renameInput.value.trim();
-          if(tab && newLabel) tab.label = newLabel;
+          if(tab && newLabel){
+            tab.label = newLabel;
+            updateMyChartTab(tab.id, { label: newLabel });
+          }
           renamingMyChartTabId = null;
-          saveMyChartTabs();
           renderMyChart();
         };
         renameInput.addEventListener('keydown', (e) => {
@@ -2813,7 +2857,7 @@
       listEl.appendChild(row);
       const input = row.querySelector('#mychartNewSectionInput');
       let committed = false;
-      const commit = () => {
+      const commit = async () => {
         // Re-entrancy guard: pressing Enter triggers renderMyChart(), which replaces this
         // input's DOM node — removing a focused element fires an implicit "blur" on it,
         // which would otherwise call commit() a second time and create a duplicate section.
@@ -2822,11 +2866,15 @@
         const label = input.value.trim();
         addingMyChartSection = false;
         if(label){
-          const id = 'mychart-' + Date.now();
           const dot = MYCHART_DOT_COLORS[myChartTabs.length % MYCHART_DOT_COLORS.length];
-          myChartTabs.push({ id, label, dot, question:'Add a question or note for this section.', answer:'', editedBy:'', editedAt:'', attachment:null, pendingChanges:0 });
-          activeMyChartTab = id;
-          saveMyChartTabs();
+          const created = await createMyChartTab({
+            label, dot, question:'Add a question or note for this section.', answer:'', editedBy:'', editedAt:'',
+            sortOrder: myChartTabs.length
+          });
+          if(created){
+            myChartTabs.push(created);
+            activeMyChartTab = created.id;
+          }
         }
         renderMyChart();
       };
@@ -2932,6 +2980,9 @@
         </div>`;
 
       const collabWindow = document.getElementById('mychartCollabInputWindow');
+      // The network save (and re-render) only happens on commit (blur / Enter) — updating
+      // `responses`/`active.answer` on every keystroke stays purely local, matching the old
+      // localStorage version's responsiveness without hitting the API per character typed.
       const updateCollabState = (input, commitNext) => {
         const key = input.dataset.atvKey;
         responses[key] = input.textContent.trim();
@@ -2941,8 +2992,10 @@
           .join('\n');
         active.editedBy = currentUserName;
         active.editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-        saveMyChartTabs();
-        if(commitNext) renderMyChart();
+        if(commitNext){
+          updateMyChartTab(active.id, { responses, answer: active.answer, editedBy: active.editedBy, editedAt: active.editedAt });
+          renderMyChart();
+        }
       };
 
       if(collabWindow){
@@ -2983,7 +3036,7 @@
             <input type="file" id="mychartAttachInput" hidden>
           </label>
         </div>
-        ${myChartAttachmentPreviewHTML(active.attachment, active.id)}`;
+        ${myChartAttachmentPreviewHTML(active.id)}`;
 
       const answerBox = document.getElementById('mychartAnswerBox');
       if(answerBox){
@@ -2991,35 +3044,27 @@
           active.answer = answerBox.value;
           active.editedBy = currentUserName;
           active.editedAt = new Date().toLocaleString([], { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-          saveMyChartTabs();
+          debouncedSave(`mychart:${active.id}`, () => {
+            updateMyChartTab(active.id, { answer: active.answer, editedBy: active.editedBy, editedAt: active.editedAt });
+          });
         });
       }
     }
 
     const attachInput = document.getElementById('mychartAttachInput');
     if(attachInput){
-      attachInput.addEventListener('change', () => {
+      attachInput.addEventListener('change', async () => {
         const file = attachInput.files && attachInput.files[0];
         if(!file) return;
-        if(file.size > 2 * 1024 * 1024){
-          alert('That file is larger than 2 MB — try a smaller file.');
-          attachInput.value = '';
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => {
-          active.attachment = { name: file.name, dataUrl: reader.result };
-          saveMyChartTabs();
-          renderMyChart();
-        };
-        reader.readAsDataURL(file);
+        const ok = await uploadAttachment(file, 'mychart-tab', active.id);
+        attachInput.value = '';
+        if(ok) renderMyChart();
       });
     }
 
     contentArea.querySelectorAll('.workbook-attachment-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        active.attachment = null;
-        saveMyChartTabs();
+      btn.addEventListener('click', async () => {
+        await removeUpload(btn.dataset.uploadId);
         renderMyChart();
       });
     });
@@ -3036,9 +3081,6 @@
     listEl.querySelectorAll('.mychart-item').forEach(item => {
       item.addEventListener('click', () => {
         activeMyChartTab = item.dataset.mychartTab;
-        const tab = myChartTabs.find(t => t.id === activeMyChartTab);
-        if(tab) tab.pendingChanges = 0;
-        saveMyChartTabs();
         renderMyChart();
       });
     });
@@ -3052,7 +3094,7 @@
     });
 
     listEl.querySelectorAll('[data-mychart-delete]').forEach(delBtn => {
-      delBtn.addEventListener('click', (e) => {
+      delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         if(myChartTabs.length <= 1){
           alert('At least one section has to stay — add a new one before removing this last one.');
@@ -3065,8 +3107,8 @@
         if(activeMyChartTab === id){
           activeMyChartTab = myChartTabs[Math.max(0, idx - 1)].id;
         }
-        saveMyChartTabs();
         renderMyChart();
+        await deleteMyChartTab(id);
       });
     });
 
@@ -3094,8 +3136,8 @@
         const [moved] = myChartTabs.splice(fromIdx, 1);
         myChartTabs.splice(toIdx, 0, moved);
         draggedMyChartTabId = null;
-        saveMyChartTabs();
         renderMyChart();
+        myChartTabs.forEach((t, i) => updateMyChartTab(t.id, { sortOrder: i }));
       });
     });
   }
@@ -3121,7 +3163,7 @@
   // its new placement (its label is different, so it isn't considered a match).
   const mychartGenerateBtn = document.getElementById('mychartGenerateBtn');
   if(mychartGenerateBtn){
-    mychartGenerateBtn.addEventListener('click', () => {
+    mychartGenerateBtn.addEventListener('click', async () => {
       const placedNames = Object.keys(userPlacements).filter(name => name !== 'ASC');
 
       // Same shape as a planet placement ({ name, sign }) so the loop below treats ASC
@@ -3132,30 +3174,32 @@
 
       let addedCount = 0;
       let lastAddedId = null;
-      entries.forEach(({ name: planetName, sign }) => {
+      for(const { name: planetName, sign } of entries){
         const house = planetName === 'ASC' ? 1 : ((SIGNS.indexOf(sign) - currentAsc + 12) % 12) + 1;
         const label = `${planetName} in ${sign},\nHouse ${house}`;
 
         // Skip if a section with this exact label already exists — no duplicates on re-click
         const alreadyExists = myChartTabs.some(t => t.label === label);
-        if(alreadyExists) return;
+        if(alreadyExists) continue;
 
         const starter = SENTENCE_STARTER[planetName] || 'I express';
-        const id = 'mychart-interp-' + planetName.toLowerCase() + '-' + Date.now() + '-' + addedCount;
         const dot = planetName === 'ASC' ? '#b8500f' : MYCHART_DOT_COLORS[myChartTabs.length % MYCHART_DOT_COLORS.length];
-        myChartTabs.push({
-          id, label, dot, generated:true, planetName, sign, house, sentenceStarter:starter,
+        const created = await createMyChartTab({
+          label, dot, generated:true, planetName, sign, house, sentenceStarter:starter,
           question: `Using ${planetName}'s sentence starter ("${starter}...") and the duality, modality, and element of ${sign}, plus what House ${house} represents, write your interpretation of this placement.`,
-          answer: '', editedBy: '', editedAt: '', attachment: null,
-          responses:{ planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:'' }
+          answer: '', editedBy: '', editedAt: '',
+          responses:{ planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:'' },
+          sortOrder: myChartTabs.length
         });
-        addedCount++;
-        lastAddedId = id;
-      });
+        if(created){
+          myChartTabs.push(created);
+          addedCount++;
+          lastAddedId = created.id;
+        }
+      }
 
       if(addedCount > 0){
         if(lastAddedId) activeMyChartTab = lastAddedId;
-        saveMyChartTabs();
         renderMyChart();
       } else {
         alert('Interpretation sections for your current placements already exist — nothing new to add.');
@@ -3317,9 +3361,70 @@
   // below are dynamic, sourced from whatever program names exist in the Manage Courses
   // grid) and re-renders. Called after any admin edit that could change either.
   async function refreshAccessGrid(){
-    await Promise.all([loadAdminUsersData(), loadAdminProgramCourses()]);
+    await Promise.all([loadAdminUsersData(), loadAdminProgramCourses(), loadAdminUploadsGrid()]);
     knownProgramNames = [...new Set(adminProgramCourses.map(r => (r.program || '').trim()).filter(Boolean))].sort();
     renderAccessGrid();
+  }
+
+  // Admin visibility into every upload across every account — the "All uploads" grid.
+  const adminUploadsBody = document.getElementById('adminUploadsBody');
+  function formatFileSize(bytes){
+    if(bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    if(bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${bytes} B`;
+  }
+  async function loadAdminUploadsGrid(){
+    if(!adminUploadsBody) return;
+    let rows = [];
+    try{
+      const res = await fetch('/api/admin/uploads', { credentials:'same-origin' });
+      rows = res.ok ? await res.json() : [];
+    } catch(e){ rows = []; }
+
+    adminUploadsBody.innerHTML = '';
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+
+      const tdUser = document.createElement('td');
+      tdUser.textContent = row.username;
+      tr.appendChild(tdUser);
+
+      const tdFile = document.createElement('td');
+      const link = document.createElement('a');
+      link.href = `/api/uploads/${row.id}`;
+      link.textContent = row.fileName;
+      link.setAttribute('download', row.fileName);
+      tdFile.appendChild(link);
+      tr.appendChild(tdFile);
+
+      const tdWhere = document.createElement('td');
+      tdWhere.textContent = row.context === 'mychart-tab' ? 'My Chart' : 'Workbook';
+      tr.appendChild(tdWhere);
+
+      const tdSize = document.createElement('td');
+      tdSize.textContent = formatFileSize(row.sizeBytes);
+      tr.appendChild(tdSize);
+
+      const tdDate = document.createElement('td');
+      tdDate.textContent = new Date(row.uploadedAt).toLocaleDateString();
+      tr.appendChild(tdDate);
+
+      const tdDelete = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'access-grid-delete-btn';
+      delBtn.textContent = '✕';
+      delBtn.title = `Remove ${row.fileName}`;
+      delBtn.setAttribute('aria-label', `Remove ${row.fileName}`);
+      delBtn.addEventListener('click', async () => {
+        await fetch(`/api/admin/uploads/${row.id}`, { method:'DELETE', credentials:'same-origin' });
+        loadAdminUploadsGrid();
+      });
+      tdDelete.appendChild(delBtn);
+      tr.appendChild(tdDelete);
+
+      adminUploadsBody.appendChild(tr);
+    });
   }
 
   async function patchUser(username, patch){
@@ -3332,10 +3437,10 @@
   }
 
   // Builds the grid table (User + one checkbox column per known Program + one per panel +
-  // Reset password + Clear progress + Delete) from adminUsersData
+  // Reset password + Clear progress + Clear uploads + Delete) from adminUsersData
   function renderAccessGrid(){
     if(!accessGridHeadRow || !accessGridBody) return;
-    accessGridHeadRow.querySelectorAll('th[data-program-th], th[data-entity-th], th[data-reset-th], th[data-clear-progress-th], th[data-delete-th]').forEach(th => th.remove());
+    accessGridHeadRow.querySelectorAll('th[data-program-th], th[data-entity-th], th[data-reset-th], th[data-clear-progress-th], th[data-clear-uploads-th], th[data-delete-th]').forEach(th => th.remove());
 
     knownProgramNames.forEach(program => {
       const th = document.createElement('th');
@@ -3357,6 +3462,10 @@
     clearProgressTh.textContent = '';
     clearProgressTh.dataset.clearProgressTh = '1';
     accessGridHeadRow.appendChild(clearProgressTh);
+    const clearUploadsTh = document.createElement('th');
+    clearUploadsTh.textContent = '';
+    clearUploadsTh.dataset.clearUploadsTh = '1';
+    accessGridHeadRow.appendChild(clearUploadsTh);
     const deleteTh = document.createElement('th');
     deleteTh.textContent = '';
     deleteTh.dataset.deleteTh = '1';
@@ -3428,6 +3537,21 @@
       tdClearProgress.appendChild(clearProgressUserBtn);
       tr.appendChild(tdClearProgress);
 
+      const tdClearUploads = document.createElement('td');
+      const clearUploadsUserBtn = document.createElement('button');
+      clearUploadsUserBtn.type = 'button';
+      clearUploadsUserBtn.className = 'access-grid-delete-btn';
+      clearUploadsUserBtn.textContent = '🗑';
+      clearUploadsUserBtn.title = `Clear ${user.username}'s uploaded files`;
+      clearUploadsUserBtn.setAttribute('aria-label', `Clear ${user.username}'s uploaded files`);
+      clearUploadsUserBtn.addEventListener('click', async () => {
+        if(!confirm(`Clear all uploaded files for "${user.username}"? This can't be undone.`)) return;
+        await fetch(`/api/admin/users/${encodeURIComponent(user.username)}/uploads`, { method:'DELETE', credentials:'same-origin' });
+        loadAdminUploadsGrid();
+      });
+      tdClearUploads.appendChild(clearUploadsUserBtn);
+      tr.appendChild(tdClearUploads);
+
       const tdDelete = document.createElement('td');
       const delBtn = document.createElement('button');
       delBtn.type = 'button';
@@ -3481,6 +3605,25 @@
     if(el) el.addEventListener('keydown', (e) => { if(e.key === 'Enter') addAccessUser(); });
   });
 
+  // Drops any custom Workbook documents/answers/My Chart tabs/upload metadata the current
+  // browser tab has loaded, so a login or logout never briefly shows one user's content to
+  // the next. Shared by applyAccessVisibility() (before loading the new user's own data) and
+  // the logout handler (which has no new data to load, just needs the slate clean).
+  function resetWorkbookAndMyChartState(){
+    Object.keys(WORKBOOK_CONTENT).forEach(id => {
+      if(id.indexOf('uploaded-') !== 0) return;
+      delete WORKBOOK_CONTENT[id];
+      const itemBtn = workbookListEl ? workbookListEl.querySelector(`[data-workbook-id="${id}"]`) : null;
+      if(itemBtn) (itemBtn.closest('.workbook-row') || itemBtn).remove();
+    });
+    Object.keys(workbookAnswers).forEach(k => delete workbookAnswers[k]);
+    currentWorkbookId = null;
+    if(workbookViewerEmpty) workbookViewerEmpty.hidden = false;
+    if(workbookViewerContent) workbookViewerContent.hidden = true;
+    myChartTabs = [];
+    uploadsIndex = {};
+  }
+
   // Applies one user's account to the live app: only their checked panels stay visible
   function applyAccessVisibility(user){
     // Every login starts from a completely clean slate — nothing carries over from a
@@ -3492,6 +3635,7 @@
     Object.keys(mediaViewerPageByCourse).forEach(k => delete mediaViewerPageByCourse[k]);
     Object.keys(courseProgress).forEach(k => delete courseProgress[k]);
     viewedCourseIds.clear();
+    resetWorkbookAndMyChartState();
 
     // Load this user's own course list (server-filtered to their enrolled programs)
     // before anything else, so it's already correct by the time they land on (or switch
@@ -3500,6 +3644,13 @@
     // loadCourseProgress() needs the course-item buttons loadMyCourses() renders (it calls
     // updateCourseLockState(), which walks the DOM), so it's chained to run after.
     loadMyCourses().then(loadCourseProgress);
+    // Workbook/My Chart attachments both read from the same shared index — load it first,
+    // then hydrate the two panels (order doesn't block anything visible, since neither
+    // panel is on-screen until the user switches to it).
+    loadUploadsIndex().then(() => {
+      loadWorkbookState();
+      loadMyChartTabs();
+    });
 
     const chartSelectToggleRow = document.querySelector('.chart-select-toggle');
     const chartsRowEl = document.querySelector('.charts-row');
@@ -3629,6 +3780,7 @@
       currentUserPrograms = [];
       myCourses = [];
       renderCourseListFromProgramGrid();
+      resetWorkbookAndMyChartState();
     });
   }
   updateFooterVisibility();

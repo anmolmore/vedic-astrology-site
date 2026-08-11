@@ -58,6 +58,17 @@
         <button type="button" id="addProgramBtn" class="glyph-btn">+ Add Program</button>
       </div>
 
+      <hr class="access-divider">
+
+      <p class="access-title" style="font-size:15px;">All uploads</p>
+      <p class="access-sub">Every file uploaded across every account.</p>
+      <div class="access-grid-wrap">
+        <table class="access-grid" id="adminUploadsGrid">
+          <thead><tr><th>User</th><th>File</th><th>Where</th><th>Size</th><th>Uploaded</th><th></th></tr></thead>
+          <tbody id="adminUploadsBody"></tbody>
+        </table>
+      </div>
+
       <button type="button" id="accessContinueBtn" class="glyph-btn" style="width:100%; max-width:360px; box-sizing:border-box; justify-content:center; margin-top:20px;">Continue to App ↗</button>
     </div>
   </div>
@@ -227,7 +238,7 @@
   <!-- WORKBOOK PANEL -->
   <aside class="panel workbook-panel layer-panel layer-hidden" data-layer-panel="workbook" aria-label="Workbook">
     <p class="flashcards-intro">Pick a workbook to open it in the editor on the right and type your answers in.</p>
-    <p class="flashcards-intro" style="margin-bottom:14px;">Editing as <b id="workbookUserNameLabel">You</b> · <button type="button" id="changeUserNameBtn" class="workbook-link-btn">change name</button></p>
+    <p class="flashcards-intro" style="margin-bottom:14px;">Editing as <b id="workbookUserNameLabel">You</b> · <button type="button" id="changeUserNameBtn" class="workbook-link-btn">change name</button> · <button type="button" id="clearUploadsBtn" class="workbook-link-btn">clear my uploads</button></p>
     <div class="course-list" id="workbookListEl">
       <button type="button" class="workbook-item" data-workbook-id="basic-practice-worksheet">
         <span class="course-item-text">

@@ -11,3 +11,7 @@ status = 200
 binding = "DB"
 database_name = "vedic-astrology-db"
 database_id = "3c5405f9-8b34-4bd2-bf52-b5157fe222be"
+
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "vedic-astrology-uploads"
