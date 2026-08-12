@@ -68,10 +68,25 @@ export async function onRequestDelete(context) {
   const target = await db.prepare('SELECT id FROM users WHERE username = ?').bind(username).first();
   if (!target) return jsonResponse({ error: 'User not found.' }, { status: 404 });
 
-  // D1's foreign-key enforcement isn't guaranteed on, so clean up related rows explicitly
-  // instead of relying on ON DELETE CASCADE.
+  // D1's foreign-key enforcement isn't guaranteed on, so clean up every user-scoped table
+  // explicitly instead of relying on ON DELETE CASCADE.
+  const uploadsBucket = context.env.UPLOADS;
+  const { results: uploadRows } = await db
+    .prepare('SELECT r2_key FROM uploads WHERE user_id = ?')
+    .bind(target.id)
+    .all();
+  for (const row of uploadRows || []) {
+    await uploadsBucket.delete(row.r2_key).catch(() => {});
+  }
+
   await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(target.id).run();
   await db.prepare('DELETE FROM user_programs WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM course_progress WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM uploads WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM workbook_documents WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM workbook_answers WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM mychart_tabs WHERE user_id = ?').bind(target.id).run();
+  await db.prepare('DELETE FROM chart_placements WHERE user_id = ?').bind(target.id).run();
   await db.prepare('DELETE FROM users WHERE id = ?').bind(target.id).run();
 
   return jsonResponse({ ok: true });
