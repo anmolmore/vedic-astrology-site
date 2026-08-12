@@ -60,7 +60,7 @@ export async function onRequestDelete(context) {
   if (!admin) return jsonResponse({ error: 'Forbidden.' }, { status: 403 });
 
   const username = context.params.username;
-  if (username === admin.username) {
+  if (username.toLowerCase() === admin.username.toLowerCase()) {
     return jsonResponse({ error: "You can't delete your own account." }, { status: 400 });
   }
 

@@ -17,14 +17,18 @@
     <h1 class="access-title">Sign in</h1>
     <p class="access-sub">Enter your user name and password. Don't have an account? Ask your admin.</p>
 
-    <label class="access-label" for="accessUsername">User name</label>
-    <input type="text" id="accessUsername" class="access-input" autocomplete="username" placeholder="e.g. Siva">
+    <p class="access-sub" id="accessSessionNotice" hidden>Signed in as <strong id="accessSessionUser"></strong>. Not you? <a href="#" id="accessSessionLogout">Log out</a></p>
 
-    <label class="access-label" for="accessPassword">Password</label>
-    <input type="password" id="accessPassword" class="access-input" autocomplete="current-password" placeholder="Password">
+    <div id="accessSignInFields">
+      <label class="access-label" for="accessUsername">User name</label>
+      <input type="text" id="accessUsername" class="access-input" autocomplete="username" placeholder="e.g. Siva">
 
-    <p class="access-error" id="accessError" hidden></p>
-    <button type="button" id="accessSignInBtn" class="glyph-btn" style="width:100%; max-width:360px; box-sizing:border-box; justify-content:center; margin-top:6px;">Sign In</button>
+      <label class="access-label" for="accessPassword">Password</label>
+      <input type="password" id="accessPassword" class="access-input" autocomplete="current-password" placeholder="Password">
+
+      <p class="access-error" id="accessError" hidden></p>
+      <button type="button" id="accessSignInBtn" class="glyph-btn" style="width:100%; max-width:360px; box-sizing:border-box; justify-content:center; margin-top:6px;">Sign In</button>
+    </div>
 
     <div id="manageAccessSection" hidden>
       <hr class="access-divider">

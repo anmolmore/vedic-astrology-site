@@ -1655,6 +1655,7 @@
       Object.keys(data).forEach(courseId => {
         courseProgress[courseId] = data[courseId];
         viewedCourseIds.add(courseId);
+        if(data[courseId].completed) markCourseItemCompleteUI(courseId);
       });
     } catch(e){ /* stay with whatever's already local */ }
     updateCourseLockState();
@@ -3569,7 +3570,7 @@
 
   // Removes a user account entirely
   async function removeAccessUser(username){
-    adminUsersData = adminUsersData.filter(u => u.username !== username);
+    adminUsersData = adminUsersData.filter(u => u.username.toLowerCase() !== username.toLowerCase());
     renderAccessGrid();
     await fetch(`/api/admin/users/${encodeURIComponent(username)}`, { method:'DELETE', credentials:'same-origin' });
   }
@@ -3766,27 +3767,43 @@
 
   // Logout: clears the server session, then brings the Access screen back. The next
   // sign-in re-applies that user's own panel visibility fresh via applyAccessVisibility().
+  const accessSignInFields = document.getElementById('accessSignInFields');
+  const accessSessionNotice = document.getElementById('accessSessionNotice');
+  const accessSessionUser = document.getElementById('accessSessionUser');
+  const accessSessionLogout = document.getElementById('accessSessionLogout');
+
+  function doLogout(){
+    fetch('/api/logout', { method:'POST', credentials:'same-origin' });
+    stopAllMedia();
+    if(accessScreenEl) accessScreenEl.classList.remove('access-hidden');
+    if(accessPasswordInput) accessPasswordInput.value = '';
+    if(accessUsernameInput) accessUsernameInput.value = '';
+    if(accessErrorEl) accessErrorEl.hidden = true;
+    if(manageAccessSection) manageAccessSection.hidden = true;
+    if(accessSignInFields) accessSignInFields.hidden = false;
+    if(accessSessionNotice) accessSessionNotice.hidden = true;
+    pendingAdminUser = null;
+    currentUserPrograms = [];
+    myCourses = [];
+    renderCourseListFromProgramGrid();
+    resetWorkbookAndMyChartState();
+  }
+
   const logoutBtn = document.getElementById('logoutBtn');
-  if(logoutBtn){
-    logoutBtn.addEventListener('click', () => {
-      fetch('/api/logout', { method:'POST', credentials:'same-origin' });
-      stopAllMedia();
-      if(accessScreenEl) accessScreenEl.classList.remove('access-hidden');
-      if(accessPasswordInput) accessPasswordInput.value = '';
-      if(accessUsernameInput) accessUsernameInput.value = '';
-      if(accessErrorEl) accessErrorEl.hidden = true;
-      if(manageAccessSection) manageAccessSection.hidden = true;
-      pendingAdminUser = null;
-      currentUserPrograms = [];
-      myCourses = [];
-      renderCourseListFromProgramGrid();
-      resetWorkbookAndMyChartState();
+  if(logoutBtn) logoutBtn.addEventListener('click', doLogout);
+  if(accessSessionLogout){
+    accessSessionLogout.addEventListener('click', (e) => {
+      e.preventDefault();
+      doLogout();
     });
   }
   updateFooterVisibility();
 
   // On page load, check for an existing session (the cookie persists across visits) and
-  // skip straight past the sign-in screen if one is still valid.
+  // skip straight past the sign-in screen if one is still valid. For an admin session this
+  // still lands on the Access screen (not the app), but the sign-in fields are replaced with
+  // an explicit "Signed in as ..." notice so a resumed session never looks like an unlocked
+  // admin panel requiring no login.
   (async () => {
     try{
       const res = await fetch('/api/me', { credentials:'same-origin' });
@@ -3796,6 +3813,9 @@
         pendingAdminUser = user;
         await refreshAccessGrid();
         if(manageAccessSection) manageAccessSection.hidden = false;
+        if(accessSignInFields) accessSignInFields.hidden = true;
+        if(accessSessionUser) accessSessionUser.textContent = user.username || 'admin';
+        if(accessSessionNotice) accessSessionNotice.hidden = false;
         return;
       }
       if(accessScreenEl) accessScreenEl.classList.add('access-hidden');
