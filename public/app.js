@@ -2920,7 +2920,7 @@
     if(isGenerated){
       const starter = active.sentenceStarter || SENTENCE_STARTER[active.planetName] || 'I express';
       const responses = active.responses || (active.responses = {
-        planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:''
+        planetWord:'', planetSentence:'', dualityWord:'', dualitySentence:'', modalityWord:'', modalitySentence:'', elementWord:'', elementSentence:'', fourWordsSentence:'', houseWord:'', houseSentence:'', fiveWordsSentence:''
       });
 
       // Backward compatibility: an older generated section may only have the original
@@ -2988,6 +2988,10 @@
       if(complete('houseWord')){
         lines.push(systemLine(`Using the Sentence Starter and your House word, make a sentence.`));
         lines.push(userLine('houseSentence', responses.houseSentence, 'Write your sentence…'));
+      }
+      if(complete('houseSentence')){
+        lines.push(systemLine(`Make a simple sentence using ${responses.planetSentence || starter}, ${responses.dualityWord}, ${responses.modalityWord}, ${responses.elementWord}, and ${responses.houseWord}.`));
+        lines.push(userLine('fiveWordsSentence', responses.fiveWordsSentence, 'Write your sentence…'));
       }
 
       // Newest prompt on top, oldest at the bottom: each system prompt + its answer line
