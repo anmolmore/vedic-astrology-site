@@ -223,6 +223,29 @@
 
   function savePlanetPlacements(){
     try{ localStorage.setItem(PLANET_PLACEMENTS_STORAGE_KEY, JSON.stringify(userPlacements)); } catch(e){ /* ignore */ }
+    // Best-effort sync to the signed-in user's account (D1-backed, via functions/api/placements.js)
+    // so placements follow them across devices instead of staying local-browser-only.
+    fetch('/api/placements', {
+      method: 'PUT',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ placements: userPlacements })
+    }).catch(() => { /* best-effort */ });
+  }
+
+  // Fetches the signed-in user's saved placements from the server and hydrates userPlacements
+  // with them, replacing whatever was there before (e.g. a previous user's session on this
+  // browser, or stale localStorage). Called after login/session-resume, mirroring loadCourseProgress().
+  async function loadPlanetPlacements(){
+    try{
+      const res = await fetch('/api/placements', { credentials:'same-origin' });
+      const data = res.ok ? await res.json() : {};
+      Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+      if(data && typeof data === 'object' && !Array.isArray(data)) Object.assign(userPlacements, data);
+    } catch(e){ /* stay with whatever's already local */ }
+    refreshChipStates();
+    updateAspectsAvailability();
+    render(currentAsc);
   }
 
   // Classical Parashari aspects: every planet aspects the 7th sign from itself (offset +6).
@@ -3645,6 +3668,7 @@
     // loadCourseProgress() needs the course-item buttons loadMyCourses() renders (it calls
     // updateCourseLockState(), which walks the DOM), so it's chained to run after.
     loadMyCourses().then(loadCourseProgress);
+    loadPlanetPlacements();
     // Workbook/My Chart attachments both read from the same shared index — load it first,
     // then hydrate the two panels (order doesn't block anything visible, since neither
     // panel is on-screen until the user switches to it).
@@ -3787,6 +3811,10 @@
     myCourses = [];
     renderCourseListFromProgramGrid();
     resetWorkbookAndMyChartState();
+    Object.keys(userPlacements).forEach(k => delete userPlacements[k]);
+    refreshChipStates();
+    updateAspectsAvailability();
+    render(currentAsc);
   }
 
   const logoutBtn = document.getElementById('logoutBtn');
