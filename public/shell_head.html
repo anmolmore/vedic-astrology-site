@@ -1,0 +1,2672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vedic Birth Chart Explorer</title>
+<style>
+  :root {
+    --bg: #f6f2ea;
+    --bg2: #ffffff;
+    --panel: #ffffff;
+    --panel2: #f1ebdf;
+    --line: #dcd3c4;
+    --text: #2b2435;
+    --muted: #635a74;
+    --gold: #b3822f;
+    --gold-soft: #7d5a1c;
+    --house1-fill: rgba(179,130,47,0.16);
+    --center-fill: rgba(0,0,0,0.028);
+    --bf: #2c7548;
+    --f: #2a6f9e;
+    --n: #6a6a6a;
+    --e: #a2620f;
+    --we: #b03a3a;
+    --self: #dcd3c4;
+    --net-primary: #000000;
+    --net-secondary: #5b9bd5;
+    /* Arrowhead-only colors for the network overlay's nature-coding — see
+       drawNetworkOverlay in app.js. Reuse the same green/red already used
+       for Exalted/Debilitated flags (.dg-ex/.dg-deb, the chart planet
+       labels) so "benefic influence" and "malefic influence" read with the
+       same colors everywhere in the app, not a third invented pair. */
+    --net-benefic: #1d6b46;
+    --net-malefic: #96302f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 20% 0%, #fdfbf5 0%, var(--bg) 55%);
+    color: var(--text);
+    line-height: 1.5;
+    padding-bottom: 60px;
+  }
+  header {
+    text-align: center;
+    padding: 24px 20px 12px;
+  }
+  header h1 {
+    font-size: 23px;
+    margin: 0 0 3px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    color: var(--gold-soft);
+  }
+  header p { color: var(--muted); margin: 0; font-size: 13px; }
+
+  .container { max-width: 1560px; margin: 0 auto; padding: 18px 20px 0; }
+
+  form.card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px 14px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.06);
+  }
+  /* Six columns, two rows:
+     name(2) date(1) time(1) offset(2)  /  place(2) lat(1) lon(1) style(2) */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+  .field.span2 { grid-column: span 2; }
+  @media (max-width: 1000px) {
+    .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 620px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .field.span2 { grid-column: auto; }
+  }
+  .entry-mode {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+  }
+  .entry-switch { margin-left: 0; }
+  .entry-switch button { font-size: 12.5px; padding: 6px 16px; }
+  .entry-hint { font-size: 12px; color: var(--muted); }
+  .sim-fields.hidden { display: none; }
+  /* the tokens stack down the left of the board, Lagna first */
+  .sim-tray {
+    flex: 0 0 auto; width: 146px;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px; background: var(--bg2);
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .sim-tray-label {
+    margin: 0 0 10px;
+    font-size: 11px; font-weight: 700; color: var(--gold-soft);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .sim-tokens { display: flex; flex-direction: column; gap: 5px; }
+  .sim-token {
+    font-family: inherit; font-size: 12.5px; cursor: grab;
+    display: flex; align-items: center; gap: 6px;
+    width: 100%; text-align: left;
+    padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  }
+  .sim-token .tok-at { margin-left: auto; }
+  @media (max-width: 780px) {
+    .sim-tray { width: 100%; }
+    .sim-tokens { flex-direction: row; flex-wrap: wrap; }
+    .sim-token { width: auto; }
+    .sim-token .tok-at { margin-left: 4px; }
+  }
+  .sim-token:hover { border-color: var(--gold); }
+  .sim-token .tok-sym { font-size: 13px; color: var(--gold-soft); }
+  .sim-token.asc { border-color: var(--gold); color: var(--gold-soft); font-weight: 700; }
+  .sim-token.armed {
+    background: var(--gold); border-color: var(--gold); color: #fff;
+    box-shadow: 0 0 0 3px rgba(179,130,47,0.25);
+  }
+  .sim-token.armed .tok-sym { color: #fff; }
+  .sim-token.dragging { opacity: 0.45; }
+  .sim-tokens:empty::after { content: 'All placed'; font-size: 12px; color: var(--muted); }
+
+  .sim-body { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .sim-board {
+    display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+    gap: 3px; width: 460px; max-width: 100%; flex: 0 0 auto;
+  }
+  .sim-cell {
+    min-height: 82px; padding: 5px 6px; text-align: left;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    font-family: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+  }
+  .sim-cell:hover, .sim-cell.over { border-color: var(--gold); background: rgba(179,130,47,0.07); }
+  .sim-cell.is-asc { background: var(--house1-fill); border-color: var(--gold); }
+  .sim-cell .cell-sign { font-size: 10.5px; color: var(--gold-soft); font-weight: 700; letter-spacing: 0.3px; }
+  .sim-cell .cell-house { font-size: 9.5px; color: var(--muted); font-weight: 600; }
+  .sim-cell .cell-items { display: flex; flex-wrap: wrap; gap: 3px; }
+  .sim-chip {
+    font-family: inherit; font-size: 11px; cursor: pointer;
+    padding: 1px 7px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--bg2); color: var(--text);
+  }
+  .sim-chip:hover { border-color: #b03a3a; color: #8f2f2f; }
+  .sim-chip.asc { border-color: var(--gold); color: var(--gold-soft); font-weight: 700; }
+  .sim-centre {
+    grid-column: 2 / 4; grid-row: 2 / 4;
+    background: var(--center-fill); border: 1px dashed var(--line); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; text-align: center;
+    font-size: 11.5px; color: var(--muted); padding: 10px;
+  }
+  .sim-side { flex: 1 1 260px; min-width: 240px; }
+  .sim-note { font-size: 13px; line-height: 1.6; margin: 0 0 12px; color: var(--text); }
+  .sim-note.dim { color: var(--muted); font-size: 12.5px; }
+  .sim-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sim-token.placed { background: var(--panel2); color: var(--muted); }
+  .sim-token.placed .tok-sym { color: var(--muted); }
+  .sim-token.placed.armed { background: var(--gold); color: #fff; }
+  .sim-token .tok-at { font-size: 12px; color: var(--gold-soft); }
+  .sim-token.armed .tok-at { color: #fff; }
+  .sim-cell.allowed { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(179,130,47,0.35); }
+  .sim-cell.unlikely { opacity: 0.45; }
+  .sim-warn {
+    background: rgba(176,58,58,0.10); border: 1px solid rgba(176,58,58,0.45);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 12px;
+    font-size: 12.5px; color: #8f2f2f; line-height: 1.55;
+  }
+  .sim-warn.hidden { display: none; }
+  .sim-warn ul { margin: 5px 0 0; padding-left: 18px; }
+  .na-note {
+    margin: 0 0 4px; padding: 14px 16px; font-size: 13px; line-height: 1.6; color: var(--muted);
+    background: var(--bg2); border: 1px dashed var(--line); border-radius: 10px;
+  }
+  .na-note.hidden { display: none; }
+  .sim-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+    color: #fff; background: var(--gold); border-radius: 999px; padding: 3px 11px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 3px; }
+  .field label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input, .field select {
+    background: var(--bg2);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 7px 10px;
+    color: var(--text);
+    font-size: 13.5px;
+    outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--gold); }
+  .field .hint { font-size: 10.5px; color: var(--muted); opacity: 0.85; line-height: 1.35; }
+  .field input.invalid { border-color: #b03a3a; }
+  .form-error {
+    flex: 1 1 300px;
+    background: rgba(176,58,58,0.13);
+    border: 1px solid rgba(176,58,58,0.5);
+    color: #8f2f2f;
+    border-radius: 10px;
+    padding: 11px 14px;
+    font-size: 13.5px;
+  }
+  .form-error.hidden { display: none; }
+  .form-error ul { margin: 6px 0 0; padding-left: 20px; }
+
+  .autocomplete-wrap { position: relative; }
+  /* inputs nested in the wrapper are not direct flex children of .field,
+     so they need an explicit width to fill the column */
+  .autocomplete-wrap input { width: 100%; display: block; }
+  .suggestions {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 6px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--panel2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    max-height: 260px;
+    min-width: 320px;
+    overflow-y: auto;
+    z-index: 30;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.13);
+  }
+  .suggestions.hidden { display: none; }
+  .suggestion-item {
+    padding: 9px 11px;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text);
+  }
+  .suggestion-item .s-sub { display: block; font-size: 11.5px; color: var(--muted); margin-top: 1px; }
+  .suggestion-item:hover, .suggestion-item.active { background: rgba(179,130,47,0.14); }
+  .suggestion-empty { padding: 9px 11px; font-size: 13px; color: var(--muted); }
+  .suggestion-item.profile { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .suggestion-item.profile .p-main { flex: 1; min-width: 0; }
+  .profile-del {
+    border: none; background: transparent; color: var(--muted);
+    font-size: 15px; line-height: 1; cursor: pointer; padding: 3px 6px; border-radius: 5px; flex: none;
+  }
+  .profile-del:hover { background: rgba(176,58,58,0.25); color: #8f2f2f; }
+  .geo-status { font-size: 11px; color: var(--muted); min-height: 0; margin-top: 3px; line-height: 1.35; }
+  .geo-status.ok { color: #2c7548; }
+  .geo-status.err { color: #b03a3a; }
+
+  .form-foot {
+    display: flex; align-items: center; justify-content: flex-end;
+    gap: 12px; margin-top: 12px; flex-wrap: wrap;
+  }
+  button.submit-btn {
+    background: linear-gradient(135deg, var(--gold) 0%, #9a6d24 100%);
+    color: #2b2435;
+    border: none;
+    border-radius: 999px;
+    padding: 9px 26px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+    flex: none;
+  }
+  button.submit-btn:hover { filter: brightness(1.08); }
+
+  /* once a chart exists the form folds away into a single line */
+  .form-collapsed {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 9px 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    margin-left: auto; align-self: center;
+    flex: 0 1 auto; max-width: 420px;
+  }
+  .form-collapsed.hidden { display: none; }
+  /* Birth details render as a plain vertical sequence (name, date, time +
+     zone, place — one field per line), not the old "Name · Date · Place"
+     single-row-with-separators layout. Each line is `white-space: nowrap`
+     so a longer place name never wraps onto a second line; `#fcLine` itself
+     gets `overflow-x: auto` as a safety net (the same idiom this app's data
+     tables already use via `.table-wrap`) so an unusually long line scrolls
+     within its own small strip rather than ever pushing the page itself
+     into horizontal overflow. */
+  .fc-line {
+    /* `width: 100%` matters here: the pre-chart floating `.form-collapsed`
+       and the chart's own `.chart-center-overlay .form-collapsed` (both
+       using `align-items: flex-start`/`center`, not `stretch`) size an
+       unconstrained child to its own content (shrink-to-fit) rather than
+       stretching it to fill their box — without an explicit width, an
+       unusually long line (a long place name, say) would grow this box past
+       its container's own boundary and visually spill outside it. Pinning
+       it to 100% keeps it inside that box regardless of content length, so
+       the `overflow-x: auto` below (same idiom this app's own `.table-wrap`
+       already uses for long table content) has a real, bounded box to
+       scroll within instead of never triggering. */
+    width: 100%; font-size: 13px; color: var(--muted);
+    display: flex; flex-direction: column; gap: 3px;
+    overflow-x: auto;
+  }
+  .fc-item { white-space: nowrap; }
+  .fc-line b { color: var(--gold-soft); font-size: 14px; }
+  .fc-edit {
+    font-family: inherit; font-size: 12.5px; padding: 6px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg2); color: var(--muted);
+    border-radius: 999px; flex: none;
+  }
+  .fc-edit:hover { border-color: var(--gold); color: var(--gold-soft); }
+
+  .hidden { display: none; }
+
+  section.block {
+    margin-top: 34px;
+  }
+  section.block h2 {
+    font-size: 18px;
+    color: var(--gold-soft);
+    margin: 0 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sub-note { color: var(--muted); font-size: 13px; margin: -8px 0 14px; }
+
+  /* a section heading with its own show/hide toggle button, e.g. Nakshatra &
+     Pada Details — the row itself carries the border-bottom the plain h2
+     normally would, so the nested h2 sheds its own. */
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 0 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  .section-head h2 { margin: 0; padding-bottom: 0; border-bottom: none; }
+  #nakBody.collapsed { display: none; }
+
+  /* a lighter version of .section-head for a sub-note (not an h2) paired
+     with its own show/hide toggle — no border, the sub-note keeps its own
+     type styling. */
+  .subhead-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .subhead-row.hidden { display: none; }
+  #sthanaBody.collapsed, #kalaBody.collapsed { display: none; }
+
+  /* Both charts ride in a band pinned to the top of the window, so they stay
+     on screen no matter how far the tables below are scrolled. Birth details
+     and the overlay checkboxes no longer live in a separate sidebar beside
+     the chart — birth details now sit inside the South Indian chart's own
+     blank center 2x2 (see .chart-center-overlay below), and the checkboxes
+     moved into that chart's own notes column (see .chart-notes-col) — so the
+     band is just the chart panel itself now, LEFT-ALIGNED to the screen at
+     every width (no matching right-hand spacer, no grid-centering trick, and
+     no special stacked/centered tier below a breakpoint either — it simply
+     hugs the window's left edge throughout). */
+  .chart-band {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0 -20px 0;
+    padding: 12px 20px 14px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 8px 16px -8px rgba(0,0,0,0.16);
+  }
+  .band-title {
+    margin: 0;
+    font-size: 13px; font-weight: 600; letter-spacing: 0.6px;
+    color: var(--gold-soft);
+  }
+  .chart-panel {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+  }
+  /* the D1 chart(s), left-aligned within whatever width the panel gives
+     them rather than centered — the panel as a whole hugs the left edge,
+     so its contents do too. */
+  .chart-band .charts-col {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    /* `stretch` (not `flex-start`): this is a column-direction container, so
+       align-items governs its children's WIDTH (the cross axis here), not
+       their position. `flex-start` made .charts-row shrink-wrap to its own
+       content's width instead of filling this column — so no matter what
+       flex-grow was set on anything further down (.charts-row itself,
+       #southCardD1, .side-tabwrap), it only ever redistributed space
+       *within* a row whose own outer width was still content-dependent,
+       which is what let the row's width — and so its wrap decision — keep
+       changing with whichever of Tab 2's states happened to be showing.
+       `stretch` gives .charts-row a stable, content-independent width (this
+       column's own, which itself does properly fill .chart-panel) for
+       everything below it to actually grow within. .chart-controls-row (the
+       other child here) still reads as left-aligned regardless, since its
+       own buttons don't stretch — only its now-wider empty box does, which
+       isn't visible. */
+    align-items: stretch;
+    gap: 6px;
+  }
+  .chart-band .charts-row { flex: 1 1 0; justify-content: flex-start; }
+  /* `#chartBand` (id) rather than `.chart-band` (class) here specifically to
+     out-specificity the general `.charts-row > .chart-card { flex: 1 1 0; }`
+     rule elsewhere in this file — two class selectors tie in specificity, so
+     without this the general rule's `flex-grow:1` wins by source order, and
+     in the two-card "Both" view each card is forced to split the row's
+     shrink-to-fit width evenly instead of sizing to its own content. That
+     starves the notes column's min-width against the svg's own explicit
+     width as soon as the network overlay populates it, visibly shrinking
+     the chart. `flex: 0 1 auto` (grow:0, shrink allowed, content-based
+     basis) makes each card size to its own content instead. */
+  #chartBand .chart-card { flex: 0 1 auto; padding: 8px 12px 10px; }
+  /* South specifically grows to fill whatever the row doesn't need for
+     North (in "Both" view) or the panel's own edge (in "South Indian"-only
+     view) — its side panel is the one thing in this layout meant to stretch
+     all the way to the right, so the card it lives in has to be able to
+     grow too, not just shrink-wrap to its own content like North still
+     does. Basis `0`, not `auto`: with `auto`, the card's own hypothetical
+     size (before growing) comes from its CONTENT — which used to visibly
+     change this card's width depending on which of the side panel's tabs was
+     showing (an empty dropdown has far less natural width than a full
+     Yogas list), letting the whole row's wrap decision flip depending on
+     which tab happened to be open. `0` makes the starting point ignore
+     content entirely and grow purely by ratio against its siblings, so the
+     card's width — and in turn whether the row wraps at all — no longer
+     depends on which tab, or how much is in it, at the moment it renders. */
+  #chartBand #southCardD1 { flex: 1 1 0; min-width: 0; }
+  .chart-band .chart-card h3 { margin: 0 0 4px; font-size: 11px; }
+  /* Explicit `width` (not just `max-width`) here, because `align-items:
+     flex-start` (needed for left-alignment) makes every ancestor up to
+     .charts-row shrink-to-fit rather than stretch to a definite width — so
+     the svg's `width:100%` (from the general `.chart-card svg` rule) has
+     nothing definite to resolve against and silently falls back to the
+     svg's own intrinsic size. A literal pixel width sidesteps that
+     percentage-resolution problem entirely. */
+  .chart-band .chart-card svg { width: 360px; max-width: 360px; transition: width 0.15s ease, max-width 0.15s ease; }
+  /* sections collapsed → nothing below the band to compete for room, so the
+     chart(s) grow further. */
+  .chart-band.folders-hidden .chart-card svg { width: 500px; max-width: 500px; }
+  /* the chart panel's own expand toggle — independent of (and stacks with)
+     the sections-hidden tier above, so either or both can be in effect. */
+  .chart-band.chart-expanded .chart-card svg { width: 520px; max-width: 520px; }
+  .chart-band.chart-expanded.folders-hidden .chart-card svg { width: 680px; max-width: 680px; }
+  .chart-band .chart-note { display: none; }
+  .chart-controls-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px; }
+  .chart-expand-toggle { font-size: 10.5px; padding: 3px 10px; }
+  .chart-view-switch { display: flex; gap: 5px; }
+  .chart-view-switch button {
+    font-family: inherit; font-size: 10.5px; padding: 3px 10px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg2); color: var(--muted);
+    border-radius: 999px;
+  }
+  .chart-view-switch button:hover { color: var(--text); }
+  .chart-view-switch button.on {
+    background: var(--gold); border-color: var(--gold); color: #fff; font-weight: 600;
+  }
+  /* too short a window to pin a band and still read anything under it */
+  @media (max-height: 620px) {
+    .chart-band { position: static; }
+  }
+  /* narrower desktop/tablet/mobile widths: shrink the chart tiers so
+     nothing overflows — alignment itself no longer changes at any of these
+     (no sidebar left to stack above the chart or need centering any more). */
+  @media (max-width: 1200px) {
+    .chart-panel { gap: 12px; }
+    .chart-band .chart-card svg { width: 300px; max-width: 300px; }
+    .chart-band.folders-hidden .chart-card svg { width: 360px; max-width: 360px; }
+    .chart-band.chart-expanded .chart-card svg { width: 380px; max-width: 380px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card svg { width: 460px; max-width: 460px; }
+  }
+  @media (max-width: 900px) {
+    .chart-band .chart-card svg { width: 300px; max-width: 300px; }
+    .chart-band.folders-hidden .chart-card svg { width: 360px; max-width: 360px; }
+    .chart-band.chart-expanded .chart-card svg { width: 380px; max-width: 380px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card svg { width: 460px; max-width: 460px; }
+  }
+  @media (max-width: 560px) {
+    .chart-band .chart-card svg { width: 170px; max-width: 170px; }
+    .chart-band.folders-hidden .chart-card svg { width: 190px; max-width: 190px; }
+    .chart-band.chart-expanded .chart-card svg { width: 220px; max-width: 220px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card svg { width: 260px; max-width: 260px; }
+  }
+  /* .chart-svg-inner gets the identical width tiers as the svg rules just
+     above/below, plus an explicit aspect-ratio — giving it a fully definite
+     box (both width AND height computed, not just shrink-wrapped to
+     whatever height the svg happens to render at) for the birth-details /
+     Dasha-readout overlay inside it (.chart-center-overlay, percentage-
+     positioned) to resolve against with no ambiguity. The svg itself then
+     fills that box at 100%/100% rather than carrying its own width — the ID
+     selector below is what makes that override win over the plain
+     `.chart-band .chart-card svg` rules above despite their later source
+     position, without touching those rules (North's un-wrapped svg still
+     sizes from them directly, completely unaffected). */
+  .chart-svg-inner { aspect-ratio: 1 / 1; flex-shrink: 0; }
+  .chart-band .chart-card .chart-svg-inner { width: 360px; }
+  .chart-band.folders-hidden .chart-card .chart-svg-inner { width: 500px; }
+  .chart-band.chart-expanded .chart-card .chart-svg-inner { width: 520px; }
+  .chart-band.chart-expanded.folders-hidden .chart-card .chart-svg-inner { width: 680px; }
+  @media (max-width: 1200px) {
+    .chart-band .chart-card .chart-svg-inner { width: 300px; }
+    .chart-band.folders-hidden .chart-card .chart-svg-inner { width: 360px; }
+    .chart-band.chart-expanded .chart-card .chart-svg-inner { width: 380px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card .chart-svg-inner { width: 460px; }
+  }
+  @media (max-width: 560px) {
+    .chart-band .chart-card .chart-svg-inner { width: 170px; }
+    .chart-band.folders-hidden .chart-card .chart-svg-inner { width: 190px; }
+    .chart-band.chart-expanded .chart-card .chart-svg-inner { width: 220px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card .chart-svg-inner { width: 260px; }
+  }
+  #southCardD1 .chart-svg-inner svg { display: block; width: 100%; height: 100%; }
+  /* Duality / Modality / Element as three columns, each with its header
+     above its values. Same grid as the picks and Tripod rows below
+     (.facts-cols), so Duality sits over the Chart ruler, Modality over the
+     Focal planet and Element over the House pick. */
+  .facts-lines { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px 12px; }
+  .fact-line {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+    padding: 2px;
+  }
+  .fact-cat {
+    flex: 0 0 auto;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--gold-soft);
+  }
+  .fact-items { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .fact-item { font-size: 13.5px; color: var(--text); white-space: nowrap; }
+  .fact-item.top { font-weight: 700; }
+  .fact-item.zero { color: var(--muted); }
+  .fact-item .fact-count { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: 6px; }
+  .facts-picks:not(:empty) { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .fact-pick { padding: 4px 2px 8px; }
+  .fact-pick-head { display: flex; flex-direction: column; gap: 2px; }
+  .fact-pick-name { font-size: 14px; font-weight: 700; color: var(--text); }
+  .fact-pick-why { margin: 4px 0 0; padding-left: 14px; font-size: 12.5px; color: var(--text); }
+  .fact-pick-why li { margin: 2px 0; }
+  .fact-pick-also { display: block; margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+  .facts-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 12px; margin-top: 4px; }
+  .facts-cols > .fact-pick { padding: 0; }
+  /* Ruler and focal planet in one callout: it spans the first two columns so
+     the House pick stays under Element. */
+  .facts-cols > .fact-pick.fact-pick-wide { grid-column: span 2; }
+  .facts-cols + .fact-pick { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .facts-tripod-hit { display: block; font-size: 12.5px; padding: 2px 0; }
+
+  /* ---------- tabbed detail sections ---------- */
+  .tabwrap { margin-top: 34px; }
+  .tab-toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .tab-hint { font-size: 12px; color: var(--muted); }
+  .folders-toggle {
+    font-family: inherit; font-size: 12.5px; padding: 6px 14px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg2); color: var(--muted);
+    border-radius: 999px; flex: none;
+  }
+  .folders-toggle:hover { border-color: var(--gold); color: var(--gold-soft); }
+  /* collapsed: only the toolbar (with its toggle buttons) stays on screen */
+  .tabwrap.collapsed { margin-top: 14px; }
+  .tabwrap.collapsed .tab-hint,
+  .tabwrap.collapsed .layout-toggle,
+  .tabwrap.collapsed .tabstrip-row,
+  .tabwrap.collapsed .panelbox { display: none; }
+  .tabstrip { display: flex; gap: 3px; flex-wrap: wrap; }
+  .tabstrip button {
+    font-family: inherit; font-size: 13.5px; cursor: pointer;
+    padding: 9px 18px 10px; margin-bottom: -1px;
+    background: var(--panel2); color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 9px 9px 0 0;
+  }
+  .tabstrip button:hover { color: var(--text); }
+  .tabstrip button[aria-selected="true"] {
+    background: var(--panel); color: var(--gold-soft); font-weight: 700;
+    border-bottom-color: var(--panel); padding-top: 11px;
+  }
+  .tabstrip button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .tabstrip .cnt {
+    font-size: 10.5px; color: var(--muted); background: rgba(0,0,0,0.06);
+    border-radius: 999px; padding: 0 6px; margin-left: 6px; font-weight: 600;
+  }
+  .tabstrip-row {
+    display: flex; align-items: flex-end; gap: 3px;
+    padding-left: 10px; position: relative; z-index: 2; flex-wrap: wrap;
+  }
+  .tab-add {
+    font-family: inherit; font-size: 13px; cursor: pointer;
+    padding: 8px 14px 9px; margin-bottom: -1px;
+    background: transparent; color: var(--muted);
+    border: 1px dashed var(--line);
+    border-radius: 9px 9px 0 0;
+  }
+  .tab-add:hover { border-color: var(--gold); color: var(--gold-soft); border-style: solid; }
+  .tabstrip button[draggable="true"] { cursor: grab; }
+  .tabstrip button.dragging { opacity: 0.45; cursor: grabbing; }
+  .tabstrip button.drop-before { box-shadow: -3px 0 0 var(--gold); }
+  .tabstrip button.drop-after  { box-shadow:  3px 0 0 var(--gold); }
+  .tabwrap.rail .tabstrip button.drop-before { box-shadow: 0 -3px 0 var(--gold); }
+  .tabwrap.rail .tabstrip button.drop-after  { box-shadow: 0  3px 0 var(--gold); }
+
+  .notes-head {
+    display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .notes-head label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .notes-head input {
+    display: block; margin-top: 4px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 10px; color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+  }
+  .notes-head input:focus { border-color: var(--gold); }
+  .notes-scope { font-size: 12px; color: var(--muted); flex: 1 1 auto; }
+  .notes-del {
+    font-family: inherit; font-size: 12.5px; padding: 6px 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--bg2); color: var(--muted); border-radius: 8px;
+  }
+  .notes-del:hover { border-color: #b03a3a; color: #b03a3a; }
+  .notes-area {
+    width: 100%; min-height: 320px; resize: vertical;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 14px; color: var(--text); font-size: 14px; line-height: 1.65;
+    font-family: inherit; outline: none;
+  }
+  .notes-area:focus { border-color: var(--gold); }
+  .notes-saved { font-size: 11.5px; color: var(--muted); margin-top: 6px; min-height: 15px; }
+
+  .panelbox {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 0 12px 12px 12px;
+    padding: 6px 18px 20px; position: relative; z-index: 1;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.05);
+  }
+  .panelbox section.block:first-child { margin-top: 22px; }
+
+  /* side-rail variant: same markup, tabs stacked down the right-hand edge.
+     Applies to every .tabwrap, so both folder structures can switch. */
+  .tabwrap.rail { display: grid; grid-template-columns: minmax(0, 1fr) 136px; gap: 12px; align-items: start; }
+  .tabwrap.rail .tab-toolbar { grid-column: 1 / -1; grid-row: 1; margin-bottom: 0; }
+  .tabwrap.rail .panelbox { grid-column: 1; grid-row: 2; border-radius: 12px; }
+  .tabwrap.rail .tabstrip-row {
+    grid-column: 2; grid-row: 2;
+    flex-direction: column; align-items: stretch; gap: 4px; padding: 0;
+  }
+  .tabwrap.rail .tabstrip { flex-direction: column; gap: 4px; }
+  .tabwrap.rail .tab-add { border-radius: 9px; margin: 0; text-align: left; padding: 8px 12px; }
+  .tabwrap.rail .tabstrip button {
+    margin: 0; width: 100%; text-align: left; border-radius: 9px;
+    border-color: transparent; background: transparent; padding: 8px 12px; font-size: 13px;
+  }
+  .tabwrap.rail .tabstrip button[aria-selected="true"] {
+    background: var(--panel); border-color: var(--line);
+  }
+  @media (max-width: 720px) {
+    .tabwrap.rail { grid-template-columns: 1fr; }
+    .tabwrap.rail .tabstrip-row {
+      grid-column: 1; grid-row: 2;
+      flex-direction: row; align-items: flex-end;
+    }
+    .tabwrap.rail .panelbox { grid-column: 1; grid-row: 3; }
+    .tabwrap.rail .tabstrip { flex-direction: row; flex-wrap: wrap; }
+    .tabwrap.rail .tabstrip button { width: auto; }
+  }
+
+  /* printing must not swallow three-quarters of the report */
+  @media print {
+    .tab-toolbar, .tabstrip-row { display: none !important; }
+    [role="tabpanel"][hidden] { display: block !important; }
+    .panelbox { border: none; box-shadow: none; padding: 0; border-radius: 0; }
+  }
+
+  .dasha-picker { display: flex; flex-direction: column; gap: 16px; }
+
+  .dasha-current {
+    flex: 1 1 380px; min-width: 250px;
+    background: var(--bg2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 14px; display: flex; flex-direction: column; justify-content: center;
+  }
+  .dasha-current .dc-title { font-size: 15px; color: var(--gold-soft); font-weight: 600; }
+  .dasha-current .dc-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .dc-level {
+    font-family: inherit; display: inline-flex; align-items: center; gap: 5px;
+    font-weight: 700; letter-spacing: 0.6px; font-size: 11px; cursor: pointer;
+    color: var(--gold-soft); background: rgba(179,130,47,0.16);
+    border: 1px solid rgba(179,130,47,0.35); border-radius: 999px; padding: 1px 9px 1px 10px;
+  }
+  .dc-level:hover { border-color: var(--gold); background: rgba(179,130,47,0.24); }
+  .dc-level:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .dc-level .dc-level-caret { font-size: 9px; transition: transform 0.15s ease; }
+  .dc-level[aria-expanded="false"] .dc-level-caret { transform: rotate(-90deg); }
+  .head-level { color: var(--muted); font-weight: 500; letter-spacing: 0.5px; }
+
+  .tree-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .tree-hint { font-size: 12px; color: var(--muted); }
+  .dasha-tree.hidden { display: none; }
+
+  .dasha-tree {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--bg2);
+    max-height: 360px; overflow-y: auto; padding: 6px;
+  }
+  .dt-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: 7px; cursor: pointer; font-size: 13.5px;
+  }
+  .dt-row:hover { background: rgba(0,0,0,0.045); }
+  .dt-row.sel { background: rgba(179,130,47,0.20); box-shadow: inset 0 0 0 1px rgba(179,130,47,0.55); }
+  .dt-caret {
+    width: 18px; height: 18px; flex: none; padding: 0;
+    border: none; background: transparent; color: var(--muted);
+    font-size: 9px; cursor: pointer; line-height: 1;
+  }
+  .dt-caret:hover { color: var(--gold-soft); }
+  .dt-caret.leaf { visibility: hidden; cursor: default; }
+  .dt-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dt-lvl {
+    flex: none; min-width: 30px; text-align: center;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+    border-radius: 4px; padding: 1px 5px;
+    background: rgba(0,0,0,0.05); color: var(--muted);
+  }
+  .dt-lvl-md { color: var(--gold-soft); background: rgba(179,130,47,0.16); }
+  .dt-lvl-ad { color: #74499b; background: rgba(116,73,155,0.12); }
+  .dt-lvl-pd { color: #166f61; background: rgba(22,111,97,0.12); }
+  .dt-dates { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .dt-dur { color: var(--muted); font-size: 11.5px; min-width: 74px; text-align: right; white-space: nowrap; }
+  .dt-now {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
+    color: #2c7548; background: rgba(44,117,72,0.22); border-radius: 999px;
+    padding: 1px 7px; flex: none;
+  }
+  .dt-children { margin-left: 17px; border-left: 1px solid var(--line); padding-left: 5px; }
+  .dt-children.hidden { display: none; }
+  .lvl-md > .dt-row .dt-title { color: var(--gold-soft); font-weight: 600; }
+  .lvl-ad > .dt-row .dt-title { color: var(--text); }
+  .lvl-pd > .dt-row .dt-title { color: #584e6c; }
+  @media (max-width: 700px) { .dt-dates { display: none; } }
+  .sub-head {
+    font-size: 14px; color: var(--gold-soft); font-weight: 600;
+    margin: 8px 0 -4px; letter-spacing: 0.2px;
+  }
+  td.tier-3 { color: var(--gold-soft); font-weight: 700; }
+  td.tier-2 { color: #9a6a1c; font-weight: 700; }
+  td.tier-1 { color: var(--muted); font-weight: 600; }
+  tr.row-t3 { background: rgba(179,130,47,0.13); }
+  tr.row-t2 { background: rgba(179,130,47,0.06); }
+  td.reasons { font-size: 12.5px; line-height: 1.7; }
+  td.reasons .r-md { color: #2a6595; }
+  td.reasons .r-ad { color: #74499b; }
+  td.reasons .r-pd { color: #166f61; }
+  td.reasons .r-detail { color: var(--muted); }
+  .dasha-row { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+  .dasha-stats { display: flex; gap: 12px; flex: 0 0 auto; }
+  .stat-chip {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 8px 16px;
+    min-width: 116px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .stat-chip .k {
+    font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px;
+  }
+  .stat-chip .v { font-size: 15.5px; color: var(--gold-soft); font-weight: 600; }
+  .stat-chip .s { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .stat-chip.is-now { border-color: rgba(44,117,72,0.55); background: rgba(44,117,72,0.10); }
+  .stat-chip.is-now .v { color: #22633a; }
+  @media (max-width: 620px) { .dasha-stats { width: 100%; } .stat-chip { flex: 1; } }
+
+  .detail-list { margin: 0; }
+  .dl-row {
+    display: flex; gap: 18px; align-items: baseline;
+    padding: 8px 4px; border-bottom: 1px solid var(--line);
+  }
+  .dl-row:last-child { border-bottom: none; }
+  .dl-row dt {
+    flex: 0 0 220px; margin: 0;
+    font-size: 11.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .dl-row dd { margin: 0; flex: 1 1 auto; font-size: 14.5px; color: var(--text); font-weight: 600; }
+  @media (max-width: 560px) {
+    .dl-row { flex-direction: column; gap: 2px; }
+    .dl-row dt { flex: none; }
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border-radius: 12px;
+    overflow: hidden;
+    font-size: 13.5px;
+  }
+  table th, table td {
+    padding: 5px 8px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+  }
+  table th {
+    background: var(--panel2);
+    color: var(--gold-soft);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  table td:first-child, table th:first-child { text-align: left; }
+  table tbody tr:last-child td { border-bottom: none; }
+  table tbody tr:hover { background: rgba(0,0,0,0.028); }
+  .table-wrap { overflow-x: auto; border-radius: 12px; }
+  /* Short data cells hold their width so nothing gets crushed; the long prose
+     columns (aspect lists, reasons) and all headers are free to wrap, which is
+     what keeps these tables inside the panel instead of scrolling sideways. */
+  .panelbox table th, .panelbox table td { white-space: nowrap; }
+  #shadbalaTable, #kalaTable, #sthanaTable { font-size: 12.5px; }
+  #shadbalaTable th, #shadbalaTable td,
+  #kalaTable th, #kalaTable td,
+  #sthanaTable th, #sthanaTable td { padding: 5px 6px; }
+  .panelbox table th { white-space: normal; }
+  .panelbox table td.aspects,
+  .panelbox table td.reasons { white-space: normal; }
+  #houseTable td:first-child { white-space: normal; }
+  td.retro { color: #b03a3a; font-weight: 600; }
+  tr.current-dasha { background: rgba(179,130,47,0.10); }
+  tr.current-dasha td:first-child { color: var(--gold-soft); font-weight: 700; }
+
+  /* both styles side by side; CSS order puts the chosen one first */
+  .charts-row {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .charts-row > .chart-card { flex: 1 1 0; min-width: 0; }
+  .chart-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    text-align: center;
+  }
+  .chart-card h3 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 500; }
+  .chart-card svg { width: 100%; max-width: 300px; }
+  .chart-card svg text.sign-label { fill: var(--gold-soft); }
+  .chart-card svg text.planet-label { fill: var(--text); }
+  /* Dignity flags on a chart's planet labels (Own/Moolatrikona/Exalted/
+     Debilitated) — same short codes and colors as the Planet table's `.dg`
+     chips (see dignityOf() in app.js), just as plain colored tspans rather
+     than a padded chip, since chart cells are too tight for one. */
+  .chart-card svg .planet-dg-flag { font-weight: 700; }
+  .chart-card svg .planet-retro { fill: #b03a3a; font-weight: 700; }
+  .chart-card svg .planet-dg-ex   { fill: #1d6b46; }
+  .chart-card svg .planet-dg-mt   { fill: #7d5a1c; }
+  .chart-card svg .planet-dg-lord { fill: #2a6595; }
+  .chart-card svg .planet-dg-deb  { fill: #96302f; }
+  .chart-card svg text.house-num { fill: var(--muted); opacity: 0.85; font-weight: 600; }
+  .chart-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .d9-charts .chart-card svg { max-width: 340px; }
+  .chart-card svg rect, .chart-card svg polygon { }
+  .chart-card svg .house-hit { cursor: default; }
+  .chart-card svg .house-hit:hover { fill: rgba(179,130,47,0.10); }
+
+  /* South Indian chart's two optional overlays (dispositor/aspect/exchange
+     network, Dasha activation) — their checkboxes live in the chart's own
+     controls row now, to the right of the "Expand charts" button, rather
+     than in the notes column beside the chart (which only holds the
+     sign-click narration now — see .chart-notes-col below) or a separate
+     sidebar. Kept as a compact two-line stack rather than spread across the
+     row horizontally — both labels are long enough that laying them out
+     side by side would make the whole controls row awkwardly wide, and a
+     narrow two-line block sits comfortably next to the Expand button either
+     way. */
+  .chart-toggles-col {
+    display: flex; flex-direction: column; gap: 4px; margin-left: 4px;
+  }
+  .net-toggle-row {
+    display: flex; align-items: flex-start; gap: 4px;
+    font-size: 9.5px; line-height: 1.25; color: var(--muted); margin: 0; cursor: pointer;
+    white-space: nowrap;
+  }
+  .net-toggle-row input { margin: 0; cursor: pointer; flex: 0 0 auto; }
+  /* In / Out sit on the network option's own line; greyed out while the
+     network overlay is off. */
+  .net-toggle-line { display: flex; align-items: flex-start; gap: 10px; }
+  .net-dir:has(input:disabled) { opacity: 0.45; cursor: default; }
+  .net-dir input:disabled { cursor: default; }
+  /* flex-wrap matters here: when this card is one of two side-by-side
+     (South + North "Both" view), it's often too narrow to fit the chart
+     AND the notes column on one line — rather than squeezing the chart
+     down to a sliver, the notes column (last in source order) wraps onto
+     its own full-width line below the chart. In a wide single-chart view
+     there's room for both, so they sit in one row. */
+  .chart-body-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  .chart-svg-wrap {
+    /* Column, not row: now holds the title above the chart and the Dasha
+       activation status line below it too (moved in from being direct
+       children of .chart-card, where they spanned that card's full width —
+       now much wider than just the chart, since the notes column and the
+       side-panel tabs sit to its right). `align-items: stretch` gives both
+       the same width as .chart-svg-inner (the widest, non-shrinking child),
+       so their own `text-align: center` centers them specifically over the
+       chart, not the whole card. */
+    flex: 0 0 auto; display: flex; flex-direction: column; align-items: stretch;
+  }
+  .chart-svg-title { text-align: center; } /* margin/font-size already come from .chart-band .chart-card h3 below */
+  /* Shrink-wraps exactly to the SVG's own rendered box (not the wider,
+     centered .chart-svg-wrap around it) so the center overlay below —
+     positioned by percentage — always lines up with the SVG's actual blank
+     center 2x2, regardless of how much extra room .chart-svg-wrap has. */
+  .chart-svg-inner { position: relative; }
+  /* Birth details (and, when that toggle is on, the Dasha Period readout
+     below them) now render here — an HTML layer over the SVG's own blank
+     center 2x2 — rather than beside the chart in a separate sidebar, or (for
+     the Dasha readout) as SVG-native text. 25%/50% matches the chart's own
+     4x4 grid exactly (the center block is the middle 2 of 4 rows/columns).
+     `pointer-events: none` on the wrapper lets clicks pass through its own
+     padding to whatever's under it (nothing is there — the center 2x2 has
+     no house-hit rect — but this keeps the overlay from ever silently
+     blocking clicks if that ever changes); re-enabled on its actual content
+     so the Edit button stays clickable. `overflow-y: auto` is a safety net
+     for the narrowest chart tiers, where this block is only ~85px square —
+     the same "bounded box, scrolls rather than overflows" idiom `.fc-line`
+     already uses elsewhere in this file. */
+  .chart-center-overlay {
+    position: absolute; left: 25%; top: 25%; width: 50%; height: 50%; z-index: 2;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; padding: 4px; box-sizing: border-box; overflow-y: auto;
+    pointer-events: none; text-align: center;
+  }
+  .chart-center-overlay > * { pointer-events: auto; }
+  /* Birth details' own card look (border/background/padding/shadow, from
+     the base `.form-collapsed` rule used when it floats above the submit
+     form pre-chart) is stripped here — sitting directly on the chart's own
+     center tint reads better than a second nested box floating inside it. */
+  .chart-center-overlay .form-collapsed {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    width: 100%; max-width: none; margin: 0; background: none; border: none;
+    border-radius: 0; padding: 0; box-shadow: none;
+  }
+  .chart-center-overlay .fc-line { font-size: 9px; gap: 1px; align-items: center; text-align: center; }
+  .chart-center-overlay .fc-line b { font-size: 9.5px; }
+  .chart-center-overlay .fc-edit { font-size: 9px; padding: 3px 9px; }
+  /* Every colored bit of text in the center block — birth details' bolded
+     name, the Dasha readout's title and role-colored MD/AD/PD spans — turns
+     plain grey while the network overlay is on, so it recedes behind the
+     dispositor/aspect/exchange lines instead of competing with their color
+     for attention. Specificity (3 classes, beats the 2-class rules setting
+     these colors) rather than !important, so it stays easy to extend later. */
+  .chart-center-overlay.network-muted .fc-line,
+  .chart-center-overlay.network-muted .fc-line b,
+  .chart-center-overlay.network-muted .dasha-center-readout,
+  .chart-center-overlay.network-muted .dcr-title,
+  .chart-center-overlay.network-muted .dcr-chain span,
+  .chart-center-overlay.network-muted .dcr-pct {
+    color: var(--muted);
+  }
+  /* The Dasha Period readout — role/lord chain plus %-complete and days-left
+     — moved here from SVG-native text (see drawDashaActivationOverlay in
+     app.js) specifically so it can flow in normal document order below
+     birth details, at whatever height birth details actually take, rather
+     than being pinned to fixed SVG y-coordinates that would need to shift
+     to match. Role colors match the Dasha tab's own MD/AD/PD pills. */
+  .dasha-center-readout { font-size: 8px; line-height: 1.4; color: var(--muted); margin-top: 8px; }
+  .dasha-center-readout.hidden { display: none; }
+  .dasha-center-readout .dcr-title { font-size: 9.5px; font-weight: 700; color: var(--text); }
+  .dasha-center-readout .dcr-chain { font-size: 7.5px; font-weight: 600; }
+  .dasha-center-readout .dcr-chain span { margin: 0 2px; }
+  .dasha-center-readout .dcr-md { color: var(--gold-soft); }
+  .dasha-center-readout .dcr-ad { color: #74499b; }
+  .dasha-center-readout .dcr-pd { color: #166f61; }
+  .dasha-center-readout .dcr-pct { font-size: 8.5px; font-weight: 700; color: var(--gold-soft); }
+  /* Holds just the sign-click narration now — the two overlay checkboxes
+     moved up into .chart-controls-row, beside the Expand charts button, so
+     this column only ever needs to fit #networkStatus's own text. Narrower
+     basis than before (checkbox labels needed nowrap room this text
+     doesn't) — freed-up width the side panel (.side-tabwrap, flex-grow:1,
+     the only other item competing for space in this row) absorbs directly. */
+  .chart-notes-col {
+    flex: 0 1 130px; min-width: 130px; padding-top: 0; text-align: left;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  @media (max-width: 560px) {
+    .chart-body-row { flex-direction: column; flex-wrap: nowrap; align-items: center; }
+    /* Stacks below the chart (full width) rather than being hidden, so
+       the click notes stay reachable on narrow screens — same spot the
+       old below-chart #networkStatus used to occupy. A literal pixel
+       `max-width` (not just `width: 100%`) matters here: `#chartBand
+       .chart-card` now sizes to its own content (`flex: 0 1 auto`, see
+       above) rather than being forced to split space evenly with its
+       sibling card, and a `width: 100%` descendant with no ceiling has
+       its intrinsic max-content text-wrap width (whatever a click's
+       notes paragraph prefers, unbounded) counted as this column's
+       "natural" width during that content-based sizing pass — which,
+       with two cards shown ("Both" view) at this narrowest breakpoint,
+       was inflating the South card enough to push the North card's own
+       chart below its floor and overflow the page horizontally. Capping
+       this column's width breaks that chain; the text simply wraps
+       tighter instead. */
+    .chart-notes-col { flex: 0 0 auto; width: 100%; max-width: 210px; min-width: 0; margin-top: 6px; text-align: left; }
+  }
+  .network-status { font-size: 10px; color: var(--muted); margin-top: 0; min-height: 12px; }
+
+  /* South Indian chart's own side panel — a small, fixed 2-tab "folder"
+     beside the chart and its checkboxes column. Deliberately its own scoped
+     classes rather than reusing .tabwrap/.tabstrip/.panelbox directly: that
+     system carries drag-reorder, localStorage-persisted order, and a rail-
+     layout toggle, none of which a fixed 2-tab widget needs — this copies
+     that system's visual language (rounded-top folder tabs, the active tab
+     reading as "attached" to the panel below it) without inheriting its
+     behavior. Panel content for "Yogas formed" reuses the Influence
+     Engine's own .ie-yogas/.ie-yoga-* classes as-is (renderIEYogas renders
+     into this panel too, given a second target id) rather than a parallel
+     set of side-panel-specific styles, so the two places showing the exact
+     same data always look identical. */
+  .side-tabwrap { flex: 1 1 240px; min-width: 220px; display: flex; flex-direction: column; }
+  .side-tabstrip { display: flex; gap: 3px; }
+  .side-tabstrip button {
+    font-family: inherit; font-size: 11px; cursor: pointer;
+    padding: 6px 12px 7px; margin-bottom: -1px;
+    background: var(--panel2); color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 8px 8px 0 0;
+  }
+  .side-tabstrip button:hover { color: var(--text); }
+  .side-tabstrip button[aria-selected="true"] {
+    background: var(--panel); color: var(--gold-soft); font-weight: 700;
+    border-bottom-color: var(--panel); padding-top: 7px;
+  }
+  .side-tabstrip button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  /* flex: 1 1 auto (fills whatever height .side-tabwrap doesn't spend on
+     the tabstrip above it) + min-height: 0 (the standard flexbox fix that
+     lets a flex child actually shrink below its content's natural height
+     instead of forcing the box open — without it, overflow-y here would
+     never trigger no matter how tall the content got) is what makes this
+     box automatically match the South Indian chart's own height (set on
+     .side-tabwrap itself, below) at every one of its collapsed/expanded
+     tiers, without hard-coding a separate height number for each one. */
+  .side-panelbox {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 0 10px 10px 10px; position: relative; z-index: 1;
+    padding: 10px 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "South Indian · Rashi D1" title) wants that, this reused Influence Engine content doesn't */
+  }
+  .side-tabpanel.hidden { display: none; }
+  .ie-interp-wrap { margin-top: 14px; }
+  .ie-interp-head { display: block; font-weight: 700; font-size: 12.5px; color: var(--gold-soft); margin-bottom: 4px; }
+  .ie-interp-box {
+    width: 100%; min-height: 70px; font-family: inherit; font-size: 11px; line-height: 1.4;
+    padding: 6px 8px; background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+    color: var(--text); resize: vertical; box-sizing: border-box;
+  }
+  .ie-interp-box:focus { border-color: var(--gold); outline: none; }
+  .ie-interp-saved { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+  /* Matches the South Indian chart's own .chart-svg-inner width tiers
+     exactly (both are squares — width and height are the same number
+     there), so the two sit at identical heights at every one of the
+     collapsed/expanded states this band supports, rather than only in the
+     default one. */
+  .chart-band .chart-card .side-tabwrap { height: 360px; }
+  .chart-band.folders-hidden .chart-card .side-tabwrap { height: 500px; }
+  .chart-band.chart-expanded .chart-card .side-tabwrap { height: 520px; }
+  .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 680px; }
+  @media (max-width: 1200px) {
+    .chart-band .chart-card .side-tabwrap { height: 300px; }
+    .chart-band.folders-hidden .chart-card .side-tabwrap { height: 360px; }
+    .chart-band.chart-expanded .chart-card .side-tabwrap { height: 380px; }
+    .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 460px; }
+  }
+  @media (max-width: 560px) {
+    /* Stacks below the chart at this width (full-row, own line) rather
+       than sitting beside it — matching the chart's height stops making
+       sense once they're no longer side by side, so this sizes to its own
+       content instead, same as it would if no height rule existed at all.
+       `!important` because the height tiers above it are also still "in
+       force" at this width (a narrow viewport is still ≤1200px), not
+       overridden by source order alone. */
+    .side-tabwrap { flex: 0 0 auto; width: 100%; margin-top: 6px; height: auto !important; }
+  }
+
+  .network-status strong { color: var(--f); }
+  .network-status .net-secondary-swatch { color: var(--net-secondary); font-weight: 600; }
+  .network-status .net-benefic-swatch { color: var(--net-benefic); font-weight: 600; }
+  .network-status .net-malefic-swatch { color: var(--net-malefic); font-weight: 600; }
+  .network-status .net-mixed-swatch { color: var(--gold-soft); font-weight: 600; }
+  .network-status a {
+    color: var(--f); text-decoration: none; font-weight: 600;
+    border-bottom: 1px solid rgba(42,111,158,0.5); display: inline-block; margin-top: 2px;
+  }
+  /* The click-driven notes list (one <li> per point, e.g. one per secondary
+     influence) that now renders in #networkStatus at the chart's right —
+     replaces the old single run-on sentence. Tight spacing/small bullet
+     since the side column is narrow. */
+  .network-status .net-notes-list { list-style: disc; margin: 0 0 6px; padding-left: 13px; }
+  .network-status .net-notes-list li { margin-bottom: 5px; }
+  .network-status .net-notes-list li:last-child { margin-bottom: 0; }
+  .network-status a:hover { border-bottom-color: var(--f); }
+  .chart-card svg .house-hit.net-selected { stroke: var(--f); stroke-width: 2.2; }
+  .chart-card svg .house-hit.net-dimmed { opacity: 0.32; }
+  .chart-card svg .net-edge { fill: none; }
+  /* Primary influence: the existing dispositor edge (a sign's ruling planet,
+     carried back to the sign it rules) — solid black, per the user's
+     explicit color spec. Aspect edges keep the softer --text shade since
+     they're a different relationship, conveyed by dashing rather than color. */
+  .chart-card svg .net-edge-dispositor { stroke: var(--net-primary); stroke-width: 1.3; color: var(--net-primary); }
+  .chart-card svg .net-edge-aspect { stroke: var(--text); stroke-width: 1; stroke-dasharray: 2.6 2; color: var(--text); }
+  /* Exchange (Parivartana) is itself a primary-influence relationship — the
+     same solid black as the dispositor edge, not a separate gold style —
+     just bidirectional (an arrowhead at each end, see drawNetworkOverlay)
+     since the two signs' dispositors mirror each other. */
+  .chart-card svg .net-edge-exchange { stroke: var(--net-primary); stroke-width: 1.3; color: var(--net-primary); }
+  /* Secondary influence — only drawn once a sign is clicked: the *other*
+     sign the clicked sign's dispositor also rules, carried forward to that
+     same dispositor's actual placement. Solid light-blue, distinct from the
+     primary dispositor edge's solid black. */
+  .chart-card svg .net-edge-secondary { stroke: var(--net-secondary); stroke-width: 1.6; color: var(--net-secondary); }
+  /* The line's own stroke color/style above still conveys *type* (dispositor,
+     aspect, exchange, secondary) — but the arrowhead at each line's tip no
+     longer matches it. Per a later request, the arrowhead alone is colored
+     by the *nature* of that specific influence (benefic/malefic, per the
+     Influence Engine's own DEFAULT_BENEFIC map; Rahu/Ketu as malefics) —
+     markers (netArrowBenefic/Malefic/Mixed/Neutral)
+     built in drawNetworkOverlay's <defs>, chosen per edge via
+     netNatureMarkerId() rather than netMarkerIdFor(type). Line color and
+     arrowhead color are now two independently meaningful signals, not a
+     matched pair — don't "fix" them back to matching.
+  */
+  .chart-card svg .net-label-bg { fill: var(--panel); opacity: 1; stroke: var(--line); stroke-width: 0.5; }
+  .chart-card svg .net-label-text { fill: var(--text); font-size: 6.6px; }
+
+  /* Optional South Indian chart overlay: houses activated by the Dasha tab's
+     currently-selected MD/AD/PD chain — same tier data buildActivation()
+     already computes for the "Houses Activated" table. Role colors match
+     the Dasha tree's own MD/AD/PD pills (.dt-lvl-md/ad/pd) so the chart and
+     the tab read as one system. */
+  .dasha-activation-status { font-size: 10px; color: var(--muted); margin-top: 6px; min-height: 12px; text-align: center; }
+  .dasha-activation-status strong { color: var(--gold-soft); }
+  .chart-card svg .house-hit.dasha-t1 { stroke: var(--gold); stroke-width: 1.6; }
+  .chart-card svg .house-hit.dasha-t2 { stroke: var(--gold); stroke-width: 2.2; fill: rgba(179,130,47,0.09); }
+  .chart-card svg .house-hit.dasha-t3 { stroke: var(--gold-soft); stroke-width: 2.6; fill: rgba(179,130,47,0.17); }
+  /* Transparent by request — no backing box behind the per-house MD/AD/PD
+     label stack; the rect is still drawn (see drawDashaActivationOverlay)
+     so this class stays available if legibility over a busy cell ever
+     needs revisiting, but it paints nothing for now. */
+  .chart-card svg .dasha-label-bg { fill: none; }
+  .chart-card svg .dasha-label-md { fill: var(--gold-soft); font-size: 7px; font-weight: 600; }
+  .chart-card svg .dasha-label-ad { fill: #74499b; font-size: 7px; font-weight: 600; }
+  .chart-card svg .dasha-label-pd { fill: #166f61; font-size: 7px; font-weight: 600; }
+
+  /* Chart hover tooltip: Planet narrative(s) first, then the House narrative —
+     both reusing the exact Compounded-paragraph text from the interpretation chains.
+     Sections lay out as columns so more text grows the tooltip sideways rather
+     than into one long vertical read. */
+  .chart-tooltip {
+    position: fixed;
+    z-index: 500;
+    max-width: min(760px, 92vw);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text);
+    pointer-events: none;
+    text-align: left;
+  }
+  .chart-tooltip.hidden { display: none; }
+  .chart-tooltip .ct-body {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 24px;
+  }
+  .chart-tooltip .ct-section {
+    flex: 1 1 220px; min-width: 200px; max-width: 320px;
+    padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line);
+  }
+  .chart-tooltip .ct-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .chart-tooltip .ct-sub {
+    font-size: 12px; font-weight: 700; color: var(--gold-soft);
+    margin: 0 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
+  }
+  .chart-tooltip .ct-verdict { margin: 5px 0 0; }
+  .chart-tooltip .ct-verdict .bf-badge { margin-left: 0; }
+  .chart-tooltip .ct-sub .ct-stat { margin: 5px 0 0; padding-top: 0; border-top: none; }
+  .chart-tooltip .ct-line { margin: 0 0 4px; }
+  .chart-tooltip .ct-line b { color: var(--text); font-weight: 700; }
+  .chart-tooltip .ct-rel { margin: 6px 0 0; color: var(--muted); }
+  .chart-tooltip .ct-rel b { font-weight: 700; } /* every tier reads bold here, not just bf/we */
+  .chart-tooltip .ct-stat {
+    margin: 6px 0 0; padding-top: 6px; border-top: 1px dashed var(--line);
+    font-weight: 700; color: var(--f);
+  }
+  .chart-tooltip .ct-yoga {
+    margin: 6px 0 0; color: var(--gold-soft);
+  }
+  .chart-tooltip .ct-yoga b { font-weight: 700; }
+  .chart-tooltip .narrative-list, .research-a .narrative-list { margin: 0 0 2px; padding-left: 18px; }
+  .chart-tooltip .narrative-list li, .research-a .narrative-list li { margin-bottom: 5px; }
+  .chart-tooltip .narrative-list li:last-child, .research-a .narrative-list li:last-child { margin-bottom: 0; }
+  .chart-tooltip mark, .research-a mark { padding: 0 2px; border-radius: 3px; font-weight: 700; }
+  .chart-tooltip mark.hl-yoga, .research-a mark.hl-yoga { background: rgba(179,130,47,0.20); color: var(--gold-soft); }
+  .chart-tooltip mark.hl-dignity, .research-a mark.hl-dignity { background: rgba(42,111,158,0.16); color: var(--f); }
+  .chart-tooltip mark.hl-axis, .research-a mark.hl-axis { background: rgba(44,117,72,0.16); color: var(--bf); }
+
+  /* ---- Research tab: prompt + latest answer pinned above a locally
+     scrolling history list, so asking a new question never requires
+     scrolling the page to find the input again. ---- */
+  .research-form { display: flex; gap: 10px; align-items: flex-end; margin: 0 0 14px; }
+  .research-textarea {
+    flex: 1 1 auto; resize: vertical; min-height: 44px; font: inherit;
+    padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); color: var(--text);
+  }
+  .research-textarea:focus { outline: 2px solid var(--gold-soft); outline-offset: 1px; }
+  .research-ask-btn { flex: 0 0 auto; align-self: stretch; }
+  .research-latest {
+    border: 1px solid var(--gold-soft); border-radius: 10px;
+    padding: 14px 16px; background: var(--panel);
+  }
+  .research-latest.hidden { display: none; }
+  .research-qa .research-q-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin: 0 0 10px; }
+  .research-qa .research-q { font-weight: 700; font-size: 14px; margin: 0; }
+  .research-delete-btn {
+    flex: 0 0 auto; border: none; background: transparent; color: var(--muted);
+    font-size: 13px; line-height: 1; cursor: pointer; padding: 3px 7px;
+    border-radius: 6px;
+  }
+  .research-delete-btn:hover { background: var(--panel2); color: var(--we); }
+  .research-block { margin: 0 0 12px; }
+  .research-block:last-child { margin-bottom: 0; }
+  .research-block-head {
+    font-size: 11.5px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.4px; margin: 0 0 4px;
+  }
+  .research-a p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.6; }
+  .research-a p:last-child { margin-bottom: 0; }
+  .research-block.research-generic {
+    border-left: 2px solid var(--line); padding-left: 10px;
+  }
+  .research-block.research-generic p { color: var(--muted); font-style: italic; }
+  .research-generic-tag {
+    margin: 0 0 10px; font-size: 11.5px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .research-history { margin-top: 18px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+  .research-history:empty { margin-top: 0; }
+  .research-history .research-qa {
+    opacity: .82; padding: 12px 14px; margin-bottom: 10px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--bg2);
+  }
+  .research-history .research-qa:hover { opacity: 1; }
+  .research-history .research-qa:last-child { margin-bottom: 0; }
+  @media (max-width: 560px) {
+    .research-form { flex-direction: column; align-items: stretch; }
+  }
+
+  td.rel-cell { font-weight: 700; }
+  td.rel-bf { color: var(--bf); }
+  td.rel-f { color: var(--f); }
+  td.rel-n { color: var(--n); }
+  td.rel-e { color: var(--e); }
+  td.rel-we { color: var(--we); }
+  td.rel-self { color: var(--muted); font-weight: 400; }
+
+  td.pct-cell { position: relative; min-width: 92px; }
+  .pct-bar {
+    position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px;
+    background: rgba(0,0,0,0.10); border-radius: 2px; overflow: hidden;
+  }
+  .pct-bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
+  .pct-bar i.strong { background: var(--bf); }
+  .pct-bar i.weak { background: var(--we); }
+  td.pct-strong { color: #2c7548; font-weight: 600; }
+  td.pct-weak { color: #b03a3a; font-weight: 600; }
+  td.total-cell { color: var(--gold-soft); font-weight: 600; }
+  td.min-yes { color: var(--bf); font-weight: 700; }
+  td.min-no { color: var(--muted); }
+  td.dim { color: var(--muted); }
+  th.col-left, td.col-left { text-align: left; }
+  td.aspects { font-size: 12.5px; line-height: 1.55; }
+  .retro-flag { color: #b03a3a; font-size: 11px; font-weight: 700; margin-left: 3px; }
+  /* paired relationship lists — both columns share the exact line metrics so
+     line N in "Natural reln" and line N in "Temp reln" refer to the same pair */
+  td.rel-lines { font-size: 12.5px; line-height: 1.75; white-space: nowrap; vertical-align: top; }
+  td.rel-lines .pair-key { color: var(--muted); }
+  td.rel-lines .r-bf { color: var(--bf); font-weight: 700; }
+  td.rel-lines .r-friend { color: var(--f); }
+  td.rel-lines .r-neutral { color: var(--n); }
+  td.rel-lines .r-enemy { color: var(--e); }
+  td.rel-lines .r-we { color: var(--we); font-weight: 700; }
+  td.rel-lines .r-none { color: var(--muted); opacity: 0.65; }
+  /* the house cell prints its sign once, after the occupants */
+  #houseTable .hs-sign { margin-left: 6px; font-size: 11.5px; color: var(--muted); }
+  #houseTable .hs-empty { color: var(--muted); }
+
+  /* planet cell carries its own sign and house; aspect targets carry theirs */
+  .gr-where { margin-left: 6px; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+  td.aspects .asp-item { display: inline-block; margin-right: 14px; white-space: nowrap; }
+  td.aspects .asp-item:last-child { margin-right: 0; }
+  td.aspects .asp-where { margin-left: 5px; font-size: 11.5px; color: var(--muted); }
+  td.aspects .asp-no {
+    margin-left: 5px; font-size: 10.5px; color: var(--muted);
+    background: rgba(0,0,0,0.05); border-radius: 999px; padding: 0 6px;
+  }
+  td.aspects .asp-item.asp-none { color: var(--muted); }
+
+  /* relationship dignity — the panchadha tier toward the sign lord */
+  td.reldig { font-size: 12.5px; white-space: nowrap; }
+  td.reldig .rd-lord {
+    display: inline-block; margin-left: 6px; font-size: 11px; color: var(--muted);
+    background: rgba(0,0,0,0.05); border-radius: 999px; padding: 0 6px;
+  }
+  /* color only (weight untouched) also matches a bare <b> — reused for the
+     chart hover tooltip's compound-relationship line, whose own rule below
+     (.ct-rel b) forces bold on every tier regardless of this table's
+     per-tier weights, so the tooltip's "in bold" requirement doesn't quietly
+     change the Planet table's existing Dignity-column look. */
+  td.reldig-bf,   b.reldig-bf   { color: var(--bf); font-weight: 700; }
+  td.reldig-f,    b.reldig-f    { color: var(--f); font-weight: 600; }
+  td.reldig-n,    b.reldig-n    { color: var(--n); }
+  td.reldig-e,    b.reldig-e    { color: var(--e); font-weight: 600; }
+  td.reldig-we,   b.reldig-we   { color: var(--we); font-weight: 700; }
+  td.reldig-self, b.reldig-self { color: var(--gold-soft); font-weight: 700; }
+
+  td.dignity { font-weight: 700; font-size: 12px; letter-spacing: 0.3px; }
+  .dg { display: inline-block; padding: 1px 6px; border-radius: 5px; margin: 0 1px; }
+  .name-dg-flag { margin-left: 5px; font-size: 11px; }
+  .dg-ex   { color: #1d6b46; background: rgba(44,117,72,0.14); }
+  .dg-mt   { color: #7d5a1c; background: rgba(179,130,47,0.18); }
+  .dg-lord { color: #2a6595; background: rgba(42,101,149,0.13); }
+  .dg-deb  { color: #96302f; background: rgba(176,58,58,0.13); }
+  .yu-win  { color: #1d6b46; background: rgba(44,117,72,0.14); }
+  .yu-lose { color: #96302f; background: rgba(176,58,58,0.13); }
+
+  /* Avastha combo cell (Jagrat/Swapna/Sushupti + Baladi) — Influence Engine
+     research item A2/§7.1. Same three-tier color logic as the Dignity/
+     reldig columns (green=strong, muted=middling, red=weak) rather than a
+     fourth new palette. */
+  .avastha-combo { font-size: 12px; white-space: nowrap; }
+  .av-jss { font-weight: 700; }
+  .av-jss-jagrat   { color: #1d6b46; }
+  .av-jss-swapna   { color: var(--muted); }
+  .av-jss-sushupti { color: #96302f; }
+  .av-baladi { color: var(--muted); font-size: 11px; }
+  .av-deeptadi { color: var(--muted); font-size: 11px; }
+
+  /* Viparita Raja Yoga panel (Strength tab) — Influence Engine research. */
+  .vry-panel { display: flex; flex-direction: column; gap: 8px; }
+  .vry-item { padding: 10px 12px; border-radius: 8px; background: rgba(179,130,47,0.08); border: 1px solid rgba(179,130,47,0.22); font-size: 13px; line-height: 1.5; }
+  .vry-item .vry-name { font-weight: 700; color: var(--gold-soft); margin-right: 6px; }
+  .vry-item .vry-extended { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .vry-empty { color: var(--muted); font-size: 13px; }
+
+  /* ---- Influence Engine tab ---- */
+  /* Bala framework: the House ↔ Planet picker and its grids. */
+  .bf-picker { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; flex-wrap: wrap; }
+  .bf-picker label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; color: var(--muted); }
+  .bf-picker select { background: var(--bg2); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; color: var(--text); font-size: 13.5px; outline: none; min-width: 220px; }
+  .bf-picker select:focus { border-color: var(--gold); }
+  .bf-content { margin-bottom: 24px; }
+  #bfPeriod { margin: -6px 0 14px; }
+  .bf-block { margin-bottom: 28px; }
+  .bf-block-head { font-size: 16px; font-weight: 700; color: var(--gold-soft); margin: 0 0 4px; }
+  .bf-summary { font-size: 13px; margin: 0 0 12px; }
+  .bf-narrative { border: 1px solid rgba(128,128,128,0.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .bf-narrative p { font-size: 13.5px; line-height: 1.55; margin: 0 0 6px; }
+  .bf-narrative p:last-child { margin-bottom: 0; }
+  .bf-narrative-label { font-weight: 700; display: block; }
+  /* At most two columns, each at least 320px; auto-fill keeps the second
+     column when only the house narrative is shown, so it stays the same width. */
+  .bf-narratives { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(320px, calc((100% - 14px) / 2)), 1fr)); gap: 14px; align-items: start; margin-bottom: 14px; }
+  .bf-narratives .bf-narrative { margin-bottom: 0; }
+  .bf-narrative .bf-lines { margin: 0 0 8px; font-size: 13.5px; }
+  #chartSide2Content .bf-narrative .bf-lines { font-size: 12.5px; }
+  .bf-narrative .bf-lines p { margin: 0; }
+  .bf-narrative .bf-lines p.bf-item { padding-left: 12px; }
+  /* Planet narrative: one empty line after the Helping and the Hurting lists. */
+  .bf-narrative-planet .bf-lines.bf-help, .bf-narrative-planet .bf-lines.bf-hurt { margin-bottom: 1.5em; }
+  /* ...and one empty line between its verdict lines (up to the helping / hurting tally and any period line) and the lists below. */
+  .bf-narrative-planet > div.bf-lines:first-of-type { margin-top: 1.5em; }
+  .bf-narrative .bf-help { color: #1d6b46; }
+  .bf-narrative .bf-hurt { color: #96302f; }
+  .bf-narrative-green { border-left: 4px solid #1d6b46; }
+  .bf-narrative-amber { border-left: 4px solid #b3822f; }
+  .bf-narrative-red { border-left: 4px solid #96302f; }
+  .bf-badge { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; vertical-align: middle; }
+  .bf-badge-green { background: #1d6b46; }
+  .bf-badge-amber { background: #b3822f; }
+  .bf-badge-red { background: #96302f; }
+  .bf-narrative p.bf-basis { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
+  .bf-sbtree { container-type: inline-size; margin: 8px 0 10px; font-size: 12.5px; }
+  .bf-sbtree-tools { display: flex; gap: 12px; margin-bottom: 4px; }
+  .bf-sbtree button { background: none; border: none; padding: 0; font: inherit; cursor: pointer; box-shadow: none; }
+  .bf-sbtree-link { color: var(--f); font-size: 12px; }
+  .bf-sbtree-link:hover { text-decoration: underline; }
+  .bf-sbtree-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 40px 116px; column-gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .bf-sbtree-head { color: var(--muted); font-size: 11.5px; }
+  .bf-sbtree-top { font-weight: 700; }
+  .bf-sbtree-name { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bf-sbtree-tog { display: inline-block; width: 14px; flex: none; color: var(--muted); text-align: center; }
+  .bf-sbtree-strong { font-weight: 600; }
+  .bf-sbtree-muted { color: var(--muted); font-weight: 400; }
+  .bf-sbtree-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bf-sbtree-pct { display: flex; align-items: center; gap: 6px; font-weight: 400; }
+  .bf-sbtree-pct .bf-sbtree-num { min-width: 36px; }
+  .bf-sbtree-track { position: relative; flex: 1; height: 6px; background: var(--line); border-radius: 3px; }
+  .bf-sbtree-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+  .bf-sbtree-ok { background: var(--net-benefic); }
+  .bf-sbtree-low { background: var(--net-malefic); }
+  .bf-sbtree-tick { position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--text); }
+  @container (max-width: 380px) {
+    .bf-sbtree-row { grid-template-columns: minmax(0, 1fr) 58px 96px; }
+    .bf-sbtree-max { display: none; }
+  }
+  .bf-narrative p.bf-basis + p:not(.bf-basis) { margin-top: 10px; }
+  .bf-narrative p.bf-help { color: #1d6b46; }
+  /* Ishta / Kashta under the number: muted while dormant, the yogas' active colour in the planet's own period. */
+  .bf-narrative p.bf-ishta-active { color: #1d6b46; font-weight: 600; }
+  .bf-narrative p.bf-hurt { color: #96302f; }
+  .bf-picker select { min-width: 420px; }
+  .bf-group-head { font-size: 13.5px; font-weight: 700; margin: 14px 0 6px; }
+  table.bf-table { font-size: 12.5px; line-height: 1.5; table-layout: fixed; min-width: 760px; }
+  table.bf-table th, table.bf-table td { text-align: left; vertical-align: top; white-space: normal; overflow-wrap: break-word; }
+  table.bf-table td.bf-value { text-align: right; font-weight: 600; color: var(--gold-soft); white-space: nowrap; }
+  table.bf-table th.bf-value { text-align: right; }
+  table.bf-table td.bf-comp { font-weight: 600; }
+  table.bf-table td.bf-dim { font-weight: 600; }
+  table.bf-table td.bf-note { color: var(--muted); }
+  .side-tab2-select { width: 100%; background: var(--bg2); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; color: var(--text); font-size: 12.5px; outline: none; margin-bottom: 10px; }
+  .side-tab2-select:focus { border-color: var(--gold); }
+  #chartSide2Content .bf-narrative { padding: 10px 12px; }
+  #chartSide2Content .bf-block-head { font-size: 14px; }
+  #chartSide2Content .bf-narrative p { font-size: 12.5px; }
+  .ie-yogas { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
+  .ie-yoga-category { font-size: 14px; font-weight: 700; color: var(--gold-soft); margin: 16px 0 4px; padding-top: 10px; border-top: 1px solid rgba(128,128,128,0.2); }
+  .ie-yoga-category:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .ie-yoga-category-note { display: block; font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-bottom: 6px; }
+  .ie-yoga-group { font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--muted); margin: 10px 0 2px; }
+  .ie-yoga-item { font-size: 13px; line-height: 1.5; padding: 4px 0; border-bottom: 1px dashed var(--border, rgba(128,128,128,0.2)); }
+  .ie-yoga-title { font-weight: 700; color: var(--gold-soft); margin-right: 6px; }
+  .ie-yoga-timing { display: block; font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  /* A yoga whose planet is a lord of the dasha period in view. */
+  .ie-yoga-active, .ie-yoga-active .ie-yoga-title, .ie-yoga-active .ie-yoga-timing { color: #1d6b46; }
+  .ie-yoga-active-swatch { color: #1d6b46; font-weight: 700; }
+
+  .ie-tripod { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .ie-tripod-col { border: 1px solid rgba(128,128,128,0.2); border-radius: 8px; padding: 10px 12px; }
+  .ie-tripod-head { font-weight: 700; margin-bottom: 6px; }
+  .ie-tripod-empty { color: var(--muted); font-size: 12.5px; }
+  .ie-tripod-hit { font-size: 12.5px; padding: 2px 0; }
+  .ie-good { color: #1d6b46; }
+  .ie-bad { color: #96302f; }
+  .ie-neutral { color: var(--muted); }
+
+  /* Dispositor Chains (Influence Framework §5) */
+  .ie-chains { display: flex; flex-direction: column; gap: 2px; margin-bottom: 20px; }
+  .ie-chain-row {
+    display: flex; gap: 10px; align-items: baseline; font-size: 12.5px; line-height: 1.6;
+    padding: 3px 0; border-bottom: 1px dashed rgba(128,128,128,0.15);
+  }
+  .ie-chain-name { font-weight: 700; color: var(--gold-soft); flex: 0 0 90px; }
+  .ie-chain-path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--text); }
+
+  /* ---- Influence Framework tab (design documentation, not chart-computed) ---- */
+  .if-intro { font-size: 13.5px; line-height: 1.65; margin: 0 0 22px; }
+  .if-section { margin: 30px 0 0; }
+  .if-section:first-of-type { margin-top: 0; }
+  .if-section h3 { font-size: 15.5px; color: var(--gold-soft); margin: 0 0 4px; }
+  .if-section-sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
+  .if-section h4 { font-size: 13px; margin: 16px 0 6px; color: var(--text); }
+  .if-p { font-size: 13.5px; line-height: 1.65; margin: 0 0 10px; }
+  .if-status { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 2px 8px; border-radius: 999px; margin-right: 8px; vertical-align: 2px; }
+  .if-status-existing { background: rgba(66,99,154,0.14); color: #42639a; }
+  .if-status-open { background: rgba(179,130,47,0.18); color: #7d5a1c; }
+  .if-level-points { margin: 7px 0 0; padding-left: 16px; font-size: 12.5px; line-height: 1.55; color: var(--text); }
+  .if-level-points li { margin-bottom: 4px; }
+  .if-formula { font-family: Cambria, 'Times New Roman', Georgia, serif; font-size: 13.5px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 11px 15px; margin: 8px 0 14px; overflow-x: auto; }
+  .if-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: 1px; }
+  .if-swatch-green { background: #1d6b46; }
+  .if-swatch-amber { background: #b3822f; }
+  .if-swatch-red { background: #96302f; }
+  .if-open-list { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; line-height: 1.65; }
+  .if-open-list li { margin-bottom: 7px; }
+  .if-gap-table td, .if-gap-table th { font-size: 12.5px; white-space: normal; }
+  .if-gap-table td.if-gap-yes { color: #96302f; }
+  .if-gap-table td.if-gap-no { color: #1d6b46; }
+  td.yang, span.yang { color: #9a6a1c; font-weight: 600; }
+  td.yin, span.yin { color: #42639a; font-weight: 600; }
+  td.mod-cardinal, span.mod-cardinal { color: #b0593a; font-weight: 600; }
+  td.mod-fixed, span.mod-fixed       { color: #2b7357; font-weight: 600; }
+  td.mod-mutable, span.mod-mutable   { color: #67449a; font-weight: 600; }
+  td.elem-fire, span.elem-fire   { color: #b0402a; font-weight: 600; }
+  td.elem-earth, span.elem-earth { color: #57722a; font-weight: 600; }
+  td.elem-air, span.elem-air     { color: #33769e; font-weight: 600; }
+  td.elem-water, span.elem-water { color: #137673; font-weight: 600; }
+  td.sign-combo .sign-combo-sep { color: var(--muted); font-weight: 400; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; font-size: 12.5px; color: var(--muted); }
+  .legend span.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 50px;
+    padding: 0 20px;
+    line-height: 1.7;
+  }
+  footer a { color: var(--gold-soft); }
+
+  @media (max-width: 640px) {
+    .charts-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <form class="card" id="birthForm" novalidate>
+    <div class="entry-mode">
+      <div class="mode-switch entry-switch" role="group" aria-label="Chart source">
+        <button type="button" data-entry="birth" class="on">Birth Chart</button>
+        <button type="button" data-entry="sim">Simulation Chart</button>
+      </div>
+      <span class="entry-hint" id="entryHint">Enter a date, time and place.</span>
+    </div>
+    <div class="form-grid" id="birthFields">
+      <div class="field span2">
+        <label for="nameInput">Name</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="nameInput" placeholder="e.g. Dhanya" autocomplete="off">
+          <ul class="suggestions hidden" id="nameSuggestions"></ul>
+        </div>
+        <span class="hint" id="profileHint">Saved on generate — retype a name to recall it</span>
+      </div>
+      <div class="field">
+        <label for="dateInput">Date of birth</label>
+        <input type="date" id="dateInput" required>
+      </div>
+      <div class="field">
+        <label for="timeInput">Time of birth</label>
+        <input type="time" id="timeInput" step="60" title="Leave blank to use 12:00 noon">
+      </div>
+      <div class="field span2">
+        <label for="offsetInput">UTC offset at birth</label>
+        <select id="offsetInput"></select>
+      </div>
+      <div class="field span2">
+        <label for="placeInput">Birth place</label>
+        <div class="autocomplete-wrap">
+          <input type="text" id="placeInput" placeholder="Start typing a city name…" autocomplete="off">
+          <ul class="suggestions hidden" id="placeSuggestions"></ul>
+        </div>
+        <div class="geo-status" id="geoStatus"></div>
+      </div>
+      <div class="field">
+        <label for="latInput">Latitude</label>
+        <input type="text" inputmode="decimal" id="latInput" placeholder="e.g. 13.0827 or 13°04'58&quot;N" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="lonInput">Longitude</label>
+        <input type="text" inputmode="decimal" id="lonInput" placeholder="e.g. 80.2707 or 80°16'15&quot;E" autocomplete="off">
+      </div>
+      <div class="field span2">
+        <label for="chartStyleInput">Chart style</label>
+        <select id="chartStyleInput">
+          <option value="south" selected>South Indian</option>
+          <option value="north">North Indian</option>
+        </select>
+      </div>
+      <div class="field span2">
+        <label for="nodeTypeInput">Rahu / Ketu node</label>
+        <select id="nodeTypeInput" title="Mean Node: a smoothed long-term average position. True Node: the Moon's actual instantaneous node, which oscillates around the mean by up to roughly ±1.5°. Most Parashari practitioners use the Mean Node; both are offered here.">
+          <option value="mean" selected>Mean Node</option>
+          <option value="true">True Node</option>
+        </select>
+      </div>
+    </div>
+    <div class="sim-fields hidden" id="simFields">
+      <p class="sim-tray-label" id="simTrayLabel">Drag and drop</p>
+      <div class="sim-body">
+        <div class="sim-tray">
+          <div class="sim-tokens" id="simTokens"></div>
+        </div>
+        <div class="sim-board" id="simBoard" aria-label="Sign board"></div>
+        <div class="sim-side">
+          <p class="sim-note" id="simStatus"></p>
+          <p class="sim-note dim" id="simHelp">
+            Signs are fixed, exactly as in the South Indian chart. The Lagna decides which sign
+            becomes the 1st house. Rahu and Ketu always sit opposite each other, so placing one
+            places the other.
+          </p>
+          <div class="sim-warn hidden" id="simWarn"></div>
+          <div class="sim-actions">
+            <button type="button" class="fc-edit" id="simClear">Clear all</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-foot" id="formFoot">
+      <div class="form-error hidden" id="formError"></div>
+      <button type="button" class="submit-btn" id="generateBtn">Generate Chart</button>
+    </div>
+  </form>
+
+  <div id="results" class="hidden">
+
+    <div class="chart-band" id="chartBand">
+      <h1 class="band-title">✦ Vedic Birth Chart Explorer ✦</h1>
+      <div class="chart-panel" id="chartPanel">
+        <div class="charts-col" id="chartsColD1">
+          <div class="chart-controls-row">
+            <div class="chart-view-switch" id="chartViewSwitch" role="group" aria-label="Which chart to show">
+              <button type="button" data-view="south">South Indian</button>
+              <button type="button" data-view="north">North Indian</button>
+              <button type="button" data-view="both" class="on">Both</button>
+            </div>
+            <button type="button" id="chartExpandToggle" class="folders-toggle chart-expand-toggle" aria-pressed="false">Expand charts</button>
+            <div class="chart-toggles-col">
+              <div class="net-toggle-line">
+                <label class="net-toggle-row"><input type="checkbox" id="networkToggle"> Dispositor &amp; aspect network</label>
+                <label class="net-toggle-row net-dir" title="Show influences coming into the selected sign(s)"><input type="checkbox" id="networkInToggle" disabled> In</label>
+                <label class="net-toggle-row net-dir" title="Show influences going out of the selected sign(s)"><input type="checkbox" id="networkOutToggle" disabled> Out</label>
+              </div>
+              <label class="net-toggle-row"><input type="checkbox" id="dashaActivationToggle"> Dasha &amp; House activation</label>
+            </div>
+          </div>
+          <div class="charts-row" id="chartsRowD1">
+            <div class="chart-card" id="southCardD1">
+              <div class="chart-body-row">
+                <div class="chart-svg-wrap">
+                  <h3 class="chart-svg-title">South Indian · Rashi D1</h3>
+                  <div class="chart-svg-inner">
+                    <svg id="southChartD1" viewBox="0 0 320 320"></svg>
+                    <div class="chart-center-overlay" id="chartCenterOverlay">
+                      <div class="form-collapsed hidden" id="formCollapsed">
+                        <div class="fc-line" id="fcLine"></div>
+                        <button type="button" class="fc-edit" id="editDetailsBtn">Edit details</button>
+                      </div>
+                      <div class="dasha-center-readout hidden" id="dashaCenterReadout"></div>
+                    </div>
+                  </div>
+                  <div class="dasha-activation-status hidden" id="dashaActivationStatus"></div>
+                </div>
+                <div class="chart-notes-col">
+                  <div class="network-status hidden" id="networkStatus"></div>
+                </div>
+                <div class="side-tabwrap" id="chartSideTabs">
+                  <div class="side-tabstrip" id="chartSideTabstrip" role="tablist" aria-label="South Indian chart side panel">
+                    <button type="button" role="tab" id="sideTab-facts" aria-controls="sidePanel-facts" aria-selected="true">Facts</button>
+                    <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false">Yogas formed</button>
+                    <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false">Influences</button>
+                  </div>
+                  <div class="side-panelbox">
+                    <div class="side-tabpanel" role="tabpanel" id="sidePanel-facts" aria-labelledby="sideTab-facts">
+                      <p class="sub-note">Tallies across the nine planets as listed in Planetary Positions. The Lagna is not counted.</p>
+                      <div class="facts-lines" id="factsGrid"></div>
+                      <div class="facts-picks" id="factsPicks"></div>
+                    </div>
+                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-yogas" aria-labelledby="sideTab-yogas">
+                      <div class="ie-yogas" id="ieYogasPanelSide"></div>
+                    </div>
+                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-2" aria-labelledby="sideTab-2">
+                      <p class="na-note hidden" id="chartSide2Note">Not available — these narratives need Shadbala and Bhava Bala, which a placed chart doesn't have.</p>
+                      <select id="chartSide2Select" class="side-tab2-select" aria-label="House and planet"></select>
+                      <div id="chartSide2Content"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="chart-note">Signs are fixed; H1–H12 mark the houses from the Lagna.</div>
+            </div>
+            <div class="chart-card" id="northCardD1">
+              <h3>North Indian · Rashi D1</h3>
+              <svg id="northChartD1" viewBox="0 0 300 300"></svg>
+              <div class="chart-note">Houses are fixed (H1–H12, anti-clockwise from top); the glyph is the rashi.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+        <div class="tabwrap" id="tabWrap">
+          <div class="tab-toolbar">
+            <button type="button" id="foldersToggleBtn" class="folders-toggle" aria-expanded="true">Hide sections</button>
+            <span class="tab-hint">Drag a tab to reorder · ← → to move between them</span>
+            <button type="button" id="layoutToggleBtn" class="folders-toggle layout-toggle" aria-pressed="false">Side rail</button>
+          </div>
+          <div class="tabstrip-row">
+          <div class="tabstrip" role="tablist" aria-label="Chart detail sections">
+            <button role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true">Birth Details</button>
+            <button role="tab" id="tab-planets" aria-controls="panel-planets" aria-selected="false" tabindex="-1">Planets</button>
+            <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Navamsa (D9)</button>
+            <button role="tab" id="tab-houses" aria-controls="panel-houses" aria-selected="false" tabindex="-1">Houses</button>
+            <button role="tab" id="tab-strength" aria-controls="panel-strength" aria-selected="false" tabindex="-1">Strength</button>
+            <button role="tab" id="tab-relations" aria-controls="panel-relations" aria-selected="false" tabindex="-1">Relationships</button>
+            <button role="tab" id="tab2-dashas" aria-controls="panel2-dashas" aria-selected="false" tabindex="-1">Dashas</button>
+            <button role="tab" id="tab2-influence" aria-controls="panel2-influence" aria-selected="false" tabindex="-1">Influence Engine</button>
+            <button role="tab" id="tab2-framework" aria-controls="panel2-framework" aria-selected="false" tabindex="-1">Influence Framework</button>
+            <button role="tab" id="tab2-research" aria-controls="panel2-research" aria-selected="false" tabindex="-1">Research</button>
+          </div>
+            <button type="button" id="addTabBtn" class="tab-add" title="Add a tab of your own">+ Add tab</button>
+          </div>
+          <div class="panelbox">
+          <div role="tabpanel" id="panel-summary" aria-labelledby="tab-summary">
+    <section class="block">
+      <h2>Birth Details</h2>
+      <dl class="detail-list" id="summaryGrid"></dl>
+    </section>
+          </div>
+          <div role="tabpanel" id="panel-planets" aria-labelledby="tab-planets" hidden>
+    <section class="block">
+      <h2>Planetary Positions</h2>
+      <p class="sub-note"><strong>Natural reln</strong> and <strong>Compound reln</strong> show this row's relationship toward any planet conjunct with it (sharing its sign), line for line — e.g. if Sun and Mars share a sign, the Sun row reads Sun→Mars and the Mars row reads Mars→Sun, each read from the maitri table with <strong>this row's planet first</strong>, so the two directions can (and often do) differ. A row with no conjunct planet shows "—". <strong>Compound</strong> is the panchadha (five-fold) tier — naisargika folded together with tatkalika (co-tenants always share the 1st from each other, which tatkalika scores as an enemy) — running Best Friend → Friend → Neutral → Enemy → Worst Enemy.</p>
+      <div class="table-wrap">
+        <table id="planetTable">
+          <thead><tr>
+            <th>Planet (Sign, House)</th><th>Ownership</th><th>Dignity</th><th>Sign (Duality, Modality, Element)</th><th>Avastha</th><th>Shadbala %</th><th>Degrees</th><th>Declination</th><th class="col-left">Natural reln</th><th class="col-left">Compound reln</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="block">
+      <div class="section-head">
+        <h2>Nakshatra &amp; Pada Details</h2>
+        <button type="button" id="nakToggleBtn" class="folders-toggle" aria-expanded="true">Hide</button>
+      </div>
+      <div id="nakBody">
+        <p class="na-note hidden" id="naNak">Nakshatra and pada come from a planet’s exact degree, which a placement by sign does not carry.</p>
+        <div class="table-wrap">
+          <table id="nakshatraTable">
+            <thead><tr><th>Point</th><th>Nakshatra</th><th>Pada</th><th>Nakshatra Lord</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+          </div>
+          <div role="tabpanel" id="panel-navamsa" aria-labelledby="tab-navamsa" hidden>
+    <section class="block">
+      <h2>Navamsa Chart (D9 — Marriage &amp; Dharma)</h2>
+      <p class="na-note hidden" id="naD9">The Navamsa divides each sign into nine parts by exact degree, which a placement by sign does not carry.</p>
+      <div class="charts-row d9-charts" id="navamsaCharts">
+        <div class="chart-card">
+          <h3>South Indian · Navamsa D9</h3>
+          <svg id="southChartD9" viewBox="0 0 320 320"></svg>
+          <div class="chart-note">Signs are fixed; H1–H12 mark the houses from the Navamsa Lagna.</div>
+        </div>
+        <div class="chart-card">
+          <h3>North Indian · Navamsa D9</h3>
+          <svg id="northChartD9" viewBox="0 0 300 300"></svg>
+          <div class="chart-note">Houses are fixed (H1–H12, anti-clockwise from top); the glyph is the rashi.</div>
+        </div>
+      </div>
+    </section>
+          </div>
+          <div role="tabpanel" id="panel-houses" aria-labelledby="tab-houses" hidden>
+    <section class="block">
+      <h2>House Positions</h2>
+      <p class="sub-note"><strong>Karakas</strong> are each house's classical natural significators (naisargika karaka) — the planet(s) whose own domain the house belongs to regardless of this chart's specific placements, e.g. Jupiter for the 5th and 9th, Venus for the 7th. Relationship columns list every directed pair of planets sharing a house, line for line, including pairs involving Rahu or Ketu — the nodes take on Saturn's and Mars's naisargika temperament respectively, a common convention. Each value is read from the maitri table with the <strong>first planet as the row and the second as the column</strong> — so <strong>A→B</strong> is how A regards B, and neither column is symmetric. <strong>Compound</strong> is the panchadha (five-fold) tier: naisargika folded together with tatkalika, running Best Friend → Friend → Neutral → Enemy → Worst Enemy. Note that co-tenants share a sign, which is the 1st from each other, and tatkalika scores the 1st as an enemy in every chart — so the compound tier here always sits one band below the natural one.</p>
+      <div class="table-wrap">
+        <table id="houseTable">
+          <thead><tr>
+            <th class="col-left">House (Planets, Sign)</th>
+            <th class="col-left">Class</th>
+            <th class="col-left">Karakas</th>
+            <th class="col-left">Natural reln</th>
+            <th class="col-left">Compound reln</th>
+            <th class="col-left">Aspected by Planet (Sign, House)</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+          </div>
+          <div role="tabpanel" id="panel-strength" aria-labelledby="tab-strength" hidden>
+    <section class="block">
+      <h2>Shadbala — Six-Fold Planetary Strength</h2>
+      <p class="sub-note">All values in Virupas (60 Virupas = 1 Rūpa). A planet meets its minimum when % ≥ 100.</p>
+      <p class="na-note hidden" id="naShad">Shadbala needs exact degrees and the moment of birth — sunrise, weekday, lunar phase and real planetary motion. None of that exists for a placed chart.</p>
+      <div class="table-wrap">
+        <table id="shadbalaTable">
+          <thead><tr>
+            <th>Body</th><th>Total</th><th>%</th><th>Sthana</th><th>Dig</th><th>Kala</th><th>Chesta</th>
+            <th>Naisargika</th><th>Drik</th><th>Rūpa</th><th>Min</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span><strong>Sthana</strong> positional</span>
+        <span><strong>Dig</strong> directional</span>
+        <span><strong>Kala</strong> temporal</span>
+        <span><strong>Chesta</strong> motional</span>
+        <span><strong>Naisargika</strong> natural</span>
+        <span><strong>Drik</strong> aspectual</span>
+      </div>
+
+
+      <div class="subhead-row" id="sthanaHeadRow" style="margin-top:24px;">
+        <p class="sub-note" style="margin:0;">Sthana Bala breakdown (positional strength components)</p>
+        <button type="button" id="sthanaToggleBtn" class="folders-toggle" aria-expanded="true">Hide</button>
+      </div>
+      <div id="sthanaBody">
+        <div class="table-wrap">
+          <table id="sthanaTable">
+            <thead><tr>
+              <th>Body</th><th>Total</th><th>Uchcha</th><th>Saptavargaja</th><th>Ojhayugma</th><th>Kendradi</th><th>Drekkana</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subhead-row" id="kalaHeadRow" style="margin-top:24px;">
+        <p class="sub-note" style="margin:0;">Kala Bala breakdown (temporal strength components)</p>
+        <button type="button" id="kalaToggleBtn" class="folders-toggle" aria-expanded="true">Hide</button>
+      </div>
+      <div id="kalaBody">
+        <div class="table-wrap">
+          <table id="kalaTable">
+            <thead><tr>
+              <th>Body</th><th>Total</th><th>Nathonnata</th><th>Paksha</th><th>Tribhaga</th><th>Abda</th>
+              <th>Masa</th><th>Vara</th><th>Hora</th><th>Ayana</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="legend" id="kalaContext"></div>
+      </div>
+
+      <p class="sub-note" style="margin-top:24px;">Bhava Bala — house strength, combining the strength of each house's own ruling planet, the type of sign on its cusp, the aspects landing on it, the planets occupying it, and how its sign rises</p>
+      <p class="na-note hidden" id="naBhava">Bhava Bala needs Shadbala first, which itself needs exact degrees and the moment of birth. None of that exists for a placed chart.</p>
+      <div class="table-wrap">
+        <table id="bhavaBalaTable">
+          <thead><tr>
+            <th>House</th><th>Total</th><th>Rūpa</th><th>Sign</th><th>Lord</th><th>Bhavadhipati</th><th>Bhava Dig</th><th>Bhava Drishti</th><th>Planets in</th><th>Day-Night</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="sub-note">Bhavadhipati Bala is the house lord's full Shadbala — the dominant term, by classical convention. Cusps are equal houses from the Midheaven. Bhava Dig Bala goes by the type of sign on the cusp: human signs are weakest at the 7th cusp, quadruped signs at the 4th, insect signs (Cancer, Scorpio) at the 1st and watery signs at the 10th — the arc from that weakest cusp ÷ 3. Bhava Drishti Bala is the net aspect strength landing on the cusp (benefics add, malefics subtract), using the same Parashara sphuta-drishti method as planetary Drik Bala. Planets in: +60 for each of Jupiter or Mercury in the house, −60 for each of the Sun, Mars or Saturn (B.V. Raman). Day-Night: +15 for a Sirshodaya sign in a day birth or a Prishtodaya sign in a night birth (B.V. Raman).</p>
+
+      <p class="sub-note" style="margin-top:24px;">Viparita Raja Yoga — a dusthana (6th/8th/12th) lord posited in another dusthana, which classically neutralises its own affliction into an unlikely source of strength (Influence Engine research)</p>
+      <div id="vryPanel" class="vry-panel"></div>
+    </section>
+          </div>
+          <div role="tabpanel" id="panel-relations" aria-labelledby="tab-relations" hidden>
+    <section class="block">
+      <h2>Planetary Relationships</h2>
+      <p class="sub-note">Naisargika Maitri (natural / permanent relationship between the nine grahas — Rahu follows Saturn's temperament and Ketu follows Mars's, a common convention for the nodes, except that both nodes and the Sun and Moon are mutual enemies)</p>
+      <div class="table-wrap">
+        <table id="naturalTable">
+          <thead><tr><th>Planet</th><th>Friends</th><th>Neutral</th><th>Enemies</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="sub-note" style="margin-top:24px;">Panchadha Maitri (five-fold relationship: natural combined with temporary position in this chart) — read row → column</p>
+      <div class="table-wrap">
+        <table id="panchadhaTable">
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--bf)"></span>BF = Best Friend</span>
+        <span><span class="dot" style="background:var(--f)"></span>F = Friend</span>
+        <span><span class="dot" style="background:var(--n)"></span>N = Neutral</span>
+        <span><span class="dot" style="background:var(--e)"></span>E = Enemy</span>
+        <span><span class="dot" style="background:var(--we)"></span>WE = Worst Enemy</span>
+      </div>
+    </section>
+          </div>
+        <div role="tabpanel" id="panel2-dashas" aria-labelledby="tab2-dashas" hidden>
+  <section class="block">
+    <h2>Dasha Period Explorer</h2>
+    <p class="sub-note">The 120-year Vimshottari cycle as a tree: <strong>Mahadasha → Antardasha → Pratyantardasha</strong>. Click any row to read that level; click the arrow to expand it. Opens on the combination running today, marked <span class="dt-now">now</span>.</p>
+    <p class="na-note hidden" id="naDasha">Vimshottari dasha is measured from the Moon’s exact degree and counted from a birth date. A placed chart has neither.</p>
+    <div class="dasha-picker">
+      <div class="dasha-row">
+        <div class="dasha-current" id="dashaCurrent"></div>
+        <div class="dasha-stats" id="dashaStats"></div>
+      </div>
+      <div class="tree-bar">
+        <span class="tree-hint" id="treeHint"></span>
+      </div>
+      <div class="dasha-tree" id="dashaTree" role="tree"></div>
+      <h3 class="sub-head" id="activationHead">Houses Activated in This Period</h3>
+      <div class="table-wrap">
+        <table id="activationTable">
+          <thead><tr>
+            <th>House</th><th>Sign</th><th>Occupants</th><th>Activated by</th><th class="col-left">Reason</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <p class="sub-note" id="activationNote"></p>
+    </div>
+  </section>
+        </div>
+        <div role="tabpanel" id="panel2-influence" aria-labelledby="tab2-influence" hidden>
+    <section class="block">
+      <h2>Influence Engine</h2>
+      <p class="sub-note">Pick a House ↔ Planet combination. For the planet, every Shadbala component is shown with the qualitative dimension it measures, this chart's actual condition and the arithmetic behind the number, followed by the reading factors Shadbala leaves out. The same is then shown for the house through Bhava Bala. An empty house shows the house part only. Each planet and house carries a verdict: the number (Strong, Adequate or Weak) crossed with the factors the number leaves out (Supported, Mixed or Afflicted), shown as a green, amber or red badge. Heavy factors weigh 2 and light ones 1; the weight is shown in brackets after each. A planet's number is graded against its classical Shadbala requirement. Bhava Bala has no classical minimum, so a house is graded against this app's own benchmark: its lord's required Shadbala plus 30 Virupas.</p>
+      <p class="na-note hidden" id="bfNote">Not available — this framework needs Shadbala and Bhava Bala, which need exact degrees and the moment of birth. A placed chart has neither.</p>
+      <div class="bf-picker">
+        <label for="bfSelect">House ↔ Planet</label>
+        <select id="bfSelect"></select>
+      </div>
+      <p class="sub-note" id="bfPeriod"></p>
+      <div id="bfContent" class="bf-content"></div>
+
+
+      <h3>Yogas at a glance</h3>
+      <div id="ieYogasPanel" class="ie-yogas"></div>
+
+      <h3>Tripod impact — Body / Soul / Mind</h3>
+      <div id="ieTripodPanel" class="ie-tripod"></div>
+
+      <h3>Dispositor chains</h3>
+      <p class="sub-note">Purely descriptive — walks each planet to its dispositor, then to that planet's own dispositor, and so on to self-rule or a loop. Never feeds back into the verdicts above.</p>
+      <div id="ieDispositorPanel" class="ie-chains"></div>
+
+    </section>
+        </div>
+        <div role="tabpanel" id="panel2-framework" aria-labelledby="tab2-framework" hidden>
+    <section class="block">
+      <h2>Influence Framework</h2>
+      <p class="if-intro">The Influence Engine tab reads each planet and each house in two ways: by the number
+      Shadbala or Bhava Bala gives it, and by the reading factors that number leaves out. This tab documents how
+      that is done: what the tab shows, how the verdict and its colour are reached, which factors are weighed and
+      by how much, how yogas are scored only in their dasha, and what each bala does and does not measure. Every
+      item is <span class="if-status if-status-existing">Implemented</span> unless marked
+      <span class="if-status if-status-open">Open</span>. For a specific chart's verdicts, see the Influence
+      Engine tab itself.</p>
+
+      <p class="if-p"><b>A note on the BPHS citations below:</b> chapter numbers and names follow
+      <em>Brihat Parasara Hora Sastra</em>, tr. Girish Chand Sharma (Sagar Publications, 2006, two volumes) —
+      cross-checked against that edition's own published table of contents rather than assumed. Chapter
+      numbering is <em>not</em> standardized across published editions: the same "Yoga Karakas" material that
+      is Chapter 36 here is Chapter 34 in the R. Santhanam translation and Chapter 35 in at least one other, so
+      a citation below won't line up chapter-for-chapter with a different edition on your shelf. Treat these as
+      accurate for the Sharma/Sagar edition specifically, not as universal verse-level references. Where this
+      project builds something classical texts don't describe verbatim — the verdict matrix, the factor
+      weights, the house benchmark, the Dispositor Chain's multi-hop walk —
+      that's said plainly rather than attached to a chapter it doesn't have.</p>
+
+      <div class="if-section">
+        <h3>What the Influence Engine tab shows</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the tab's main content</p>
+        <p class="if-p">The tab has one dropdown with an entry for every planet, labelled by the house it sits in
+        ("House 10 ↔ Sun"), and an entry for every house nothing occupies ("House 3 (empty)"). Each entry shows a
+        coloured dot and a verdict for the house and, where there is one, the planet.</p>
+        <p class="if-p">Choosing an entry shows, in this order:</p>
+        <ol class="if-open-list">
+          <li><b>The planet's Shadbala narrative</b> — its verdict, what its number rests on, and the factors the
+          number leaves out, split into helping and hurting, each with its weight in brackets.</li>
+          <li><b>The house's Bhava Bala narrative</b> — the same for the house.</li>
+          <li><b>Shadbala, qualitative and quantitative</b> — a grid for each of the six balas. Each row gives the
+          qualitative dimension, the chart's actual condition, the calculation, the Virupas, and the component on
+          the right.</li>
+          <li><b>The planet's reading factors not covered by Shadbala or Bhava Bala.</b></li>
+          <li><b>Bhava Bala, qualitative and quantitative</b> — a grid for each of its five components.</li>
+          <li><b>House-reading factors Bhava Bala doesn't cover.</b></li>
+        </ol>
+        <p class="if-p">An empty house shows only the house parts. Rahu and Ketu have no Shadbala, so their entry
+        shows a narrative built from the uncounted factors alone. A hand-placed chart has no Shadbala at all, so the
+        dropdown is disabled for it.</p>
+        <p class="if-p">The South Indian chart's <b>Influences</b> side tab carries the same dropdown and shows only
+        the two narratives for the chosen entry, followed by a notes box for that entry. It follows the dasha period
+        in view in the same way.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>The verdict — two axes, three colours</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the badge on each narrative, the dot in the dropdown, and the network arrowheads</p>
+        <p class="if-p">Shadbala and Bhava Bala give a number. A reading also weighs things the number never sees:
+        which houses a planet rules, its state in the navamsa, combustion, avasthas, its dispositor. The two can
+        disagree, so the verdict keeps them apart and then crosses them.</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>By the number</th><th>By the uncounted factors</th><th>Verdict</th><th>Colour</th></tr></thead>
+            <tbody>
+              <tr><td>Strong</td><td>Supported or Mixed</td><td>Strong</td><td><span class="if-swatch if-swatch-green"></span>Green</td></tr>
+              <tr><td>Strong</td><td>Afflicted</td><td>Strong but afflicted</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
+              <tr><td>Adequate</td><td>Supported</td><td>Adequate, supported</td><td><span class="if-swatch if-swatch-green"></span>Green</td></tr>
+              <tr><td>Adequate</td><td>Mixed</td><td>Adequate</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
+              <tr><td>Adequate</td><td>Afflicted</td><td>Adequate but afflicted</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
+              <tr><td>Weak</td><td>Supported</td><td>Weak but supported</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
+              <tr><td>Weak</td><td>Mixed or Afflicted</td><td>Weak</td><td><span class="if-swatch if-swatch-red"></span>Red</td></tr>
+              <tr><td>None (Rahu, Ketu)</td><td>Supported / Mixed / Afflicted</td><td>Supported / Mixed / Afflicted</td><td>Green / Amber / Red</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">The matrix, the weights and the cut-offs below are this project's own construction. No
+        classical text gives them.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Axis 1 — the number</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span></p>
+        <h4>Planets</h4>
+        <p class="if-p">A planet is graded on its Shadbala total against the classical minimum for that planet:
+        Sun 6.5 rupas, Moon 6.0, Mars 5.0, Mercury 7.0, Jupiter 6.5, Venus 5.5, Saturn 5.0.</p>
+        <p class="if-formula">Strong: 1.25× the requirement or more &nbsp;·&nbsp; Adequate: 1.0× to 1.25× &nbsp;·&nbsp; Weak: below 1.0×</p>
+        <p class="if-p">The ratio is graded as displayed, to two decimals. Rahu and Ketu have no Shadbala, so they
+        have no number and their verdict comes from the second axis alone.</p>
+        <p class="if-p">A planet's rank out of seven goes by the same ratio, not by its raw total, as Parashara's
+        Light's "Relative Rank" does. Ranking by total would favour the planets with high requirements: Mercury
+        needs 7 rupas and Mars 5, so Mercury can hold more Virupas than Mars and still be the weaker of the two
+        against its own minimum.</p>
+        <h4>Houses</h4>
+        <p class="if-p">Bhava Bala has no classical minimum. Ranking the twelve houses would call four of them Weak
+        in every chart, however healthy they are, so a house is graded against a benchmark instead:</p>
+        <p class="if-formula">House benchmark = the lord's required Shadbala (in Virupas) + 30</p>
+        <p class="if-p">The 30 is the midpoint of Bhava Digbala (0 to 60). Aspects, occupation and the day-night
+        factor are taken as neutral. The same cut-offs apply as for planets. The house's rank out of twelve is still
+        shown after its ratio as context ("Adequate (1.03× its benchmark), Rank 9 of 12"), as a planet's rank out of
+        seven is.</p>
+        <p class="if-p">A known side effect: a house ruled by Mars or Saturn has a low benchmark, because those
+        planets have the lowest requirements. Such a house can grade Strong by the number even when its lord is in
+        poor condition; the second axis is what catches that.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Axis 2 — the factors the number leaves out</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span></p>
+        <p class="if-p">Each uncounted factor either helps or hurts, and weighs 2 (heavy) or 1 (light). The helping
+        points and the hurting points are added up separately.</p>
+        <p class="if-formula">Supported: helping leads by 2 or more &nbsp;·&nbsp; Afflicted: hurting leads by 2 or more &nbsp;·&nbsp; Mixed: otherwise</p>
+        <h4>Planet factors</h4>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Factor</th><th>Helps or hurts</th><th>Weight</th></tr></thead>
+            <tbody>
+              <tr><td>It is the lagna lord</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>It rules a Trikona (5th or 9th)</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>It rules a Dusthana (6th, 8th or 12th)</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>Exalted in D9</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>Debilitated in D9</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>Combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>Viparita Raja Yoga (Harsha, Sarala, Vimala)</td><td class="if-gap-no">Helps</td><td>2 when active, 0 when dormant</td></tr>
+              <tr><td>Neecha Bhanga</td><td class="if-gap-no">Helps</td><td>2 when active, 1 when dormant</td></tr>
+              <tr><td>It sits in the 5th or 9th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>It sits in a Dusthana (unless an exception below applies)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>A natural malefic in the 3rd, 6th or 11th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Ketu in the 12th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Saturn in the 8th (longevity note)</td><td class="if-gap-no">Helps</td><td>0</td></tr>
+              <tr><td>Vargottama</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Yuva avastha</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Bala or Mrita avastha</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>It shares its sign with a natural malefic (not listed when it is combust)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>Its dispositor is exalted, in Moolatrikona or in its own sign</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Its dispositor is debilitated</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>Its dispositor sits in a Kendra or Trikona</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Its dispositor sits in a Dusthana</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>Rahu or Ketu: it is a yogakaraka (in a Kendra or Trikona, linked with the lord of the other)</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>Rahu or Ketu: its proxy planet (Saturn for Rahu, Mars for Ketu) is the yogakaraka for the lagna</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>Rahu or Ketu: its proxy planet is a functional benefic for the lagna</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Rahu in the 10th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Rahu or Ketu: its dasha periods turn auspicious</td><td class="if-gap-no">Helps</td><td>1 when active, 0 when dormant</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h4>House factors</h4>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Factor</th><th>Helps or hurts</th><th>Weight</th></tr></thead>
+            <tbody>
+              <tr><td>Its lord is also the lagna lord</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>Its lord is debilitated</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>Its lord is combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>An occupant is exalted</td><td class="if-gap-no">Helps</td><td>2</td></tr>
+              <tr><td>An occupant is debilitated</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>An occupant is combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>An occupant rules a Dusthana (other than this house)</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
+              <tr><td>Its lord sits in the 5th or 9th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Its lord sits in a Dusthana</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>Its lord is in the 6th, 8th or 12th counted from the house</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>A karaka of the house sits in it</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Benefics flank it on both sides (Shubha Kartari)</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Malefics flank it on both sides (Papa Kartari)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>An occupant has its full directional strength in this house</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>A natural malefic occupies it, and it is an Upachaya house (3rd, 6th, 10th or 11th), each</td><td class="if-gap-no">Helps</td><td>1</td></tr>
+              <tr><td>Rahu or Ketu occupies it, and it is not an Upachaya house (each)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+              <tr><td>Rahu or Ketu aspects it (each)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">House factors are all standing conditions. None of them depends on the dasha period.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Malefics that do well in difficult houses</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> in the planet verdicts</p>
+        <p class="if-p">Four classical exceptions replace the plain "sits in a Dusthana" penalty. In each, the
+        planet's nature stays malefic; it is the results that turn favourable.</p>
+        <ol class="if-open-list">
+          <li><b>A natural malefic in the 3rd, 6th or 11th.</b> Malefics do well in the Upachaya (growth) houses.
+          The 6th is both a Dusthana and an Upachaya, so a malefic there is read as overcoming enemies, debt and
+          illness. Rahu and Ketu are always counted as natural malefics.</li>
+          <li><b>Saturn in the 8th.</b> Saturn signifies longevity and the 8th is the house of longevity. This helps
+          longevity only, so the penalty is dropped and a note is shown with no points.</li>
+          <li><b>Ketu in the 12th.</b> Ketu signifies liberation and the 12th is the house of liberation. The
+          reading is spiritual and not material. The textual root is the Karakamsa teaching; applying it to the
+          12th from the lagna is a common extension and not the literal text.</li>
+          <li><b>Viparita Raja Yoga.</b> A lord of the 6th, 8th or 12th placed in another of those houses cancels
+          its own harm. Phaladeepika names the three forms Harsha, Sarala and Vimala. This is about lordship, not
+          about being a natural malefic.</li>
+        </ol>
+        <h4>When Rahu's and Ketu's own results turn favourable</h4>
+        <p class="if-p">Rahu and Ketu stay natural malefics, so their aspects and conjunctions count against
+        whatever they touch. The results a node itself gives can still turn good under these conditions, each a
+        helping factor in the node's verdict:</p>
+        <ol class="if-open-list">
+          <li><b>Yogakaraka.</b> A node in a Kendra linked with a Trikona lord, or in a Trikona linked with a
+          Kendra lord, becomes a yogakaraka (BPHS, Yoga Karakas chapter). The link is a conjunction, an aspect
+          either way, or an exchange. Weight 2.</li>
+          <li><b>Shanivat Rahu, Kujavat Ketu.</b> Rahu behaves like Saturn and Ketu like Mars. Where that planet
+          is the yogakaraka for the lagna the node inherits the role (weight 2); where it is a functional
+          benefic without a Dusthana lordship, weight 1. This is classical commentary, not a BPHS verse.</li>
+          <li><b>Rahu in an Upachaya house</b> (BPHS Ch. 55 v.3). The 3rd, 6th and 11th are covered by the first
+          exception above; Rahu in the 10th adds weight 1.</li>
+          <li><b>Auspicious dasha periods</b> (BPHS Ch. 57 v.16 for Ketu; Ch. 59 v.45 and Ch. 55 for Rahu). A
+          node's own periods turn auspicious when it is exalted, in its own sign (Aquarius for Rahu, Scorpio for
+          Ketu, per Ch. 50 v.42), joined or aspected by a natural benefic, in a natural friend's sign, or
+          conjoined with the yogakaraka. Because this speaks of the node's periods, it scores 1 only while the
+          node is a lord of the period in view, and is listed as dormant otherwise.</li>
+        </ol>
+        <p class="if-p"><span class="if-status if-status-open">Open</span> This app treats Rahu as co-lord of
+        Aquarius and Virgo, and Ketu as co-lord of Scorpio and Pisces. A node can therefore be credited with a
+        Viparita Raja Yoga, or with being the lagna lord, which the classical single-lord reading would not give
+        it.</p>
+        <h4>The same rule on the house side</h4>
+        <p class="if-p">A natural malefic sitting in an Upachaya house helps that house too, with weight 1 for each
+        such occupant, and Rahu or Ketu there is not counted as hurting it. For houses the 10th is included along
+        with the 3rd, 6th and 11th. A planet in the 10th already has its Kendra placement counted in its own
+        Shadbala, which is why the planet-side exception leaves the 10th out; a house has no such credit, and the
+        occupation factor has already taken 60 Virupas from it for each of the Sun, Mars or Saturn. The Saturn,
+        Ketu and Viparita Raja Yoga exceptions remain planet-only.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Yogas score only in their dasha</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the verdicts and the network arrowheads follow the period selected on the Dashas tab</p>
+        <p class="if-p">A yoga is a promise in the birth chart. Its results are delivered mainly in the Mahadasha,
+        Antardasha or Pratyantardasha of the planet that forms it. Every other factor in the verdict is a standing
+        condition that holds at all times.</p>
+        <ul class="if-open-list">
+          <li><b>The period in view</b> is whatever is selected in the Dashas tab's tree. When a chart is generated
+          the tree opens on the deepest period running today, so the first verdicts are "as of today".</li>
+          <li><b>A planet is active</b> when it is the MD, AD or PD lord of the period in view. Selecting only a
+          Mahadasha makes just that one lord active.</li>
+          <li><b>Viparita Raja Yoga</b> scores 2 when the planet is active and 0 when it is dormant. It stays
+          listed either way, marked "active" or "dormant until its dasha".</li>
+          <li><b>A node's auspicious dasha periods</b> score 1 when Rahu or Ketu is active and 0 when it is
+          dormant.</li>
+          <li><b>Ishta and Kashta Bala</b> say whether a planet's own periods lean auspicious or difficult. They
+          are shown, not scored: a line right under the planet's Shadbala ratio reads, for example,
+          "Ishta (50.6) &gt; Kashta (9.4)". The line is muted while the planet is dormant and turns the yogas'
+          green while it is an MD, AD or PD lord of the period in view; its tooltip names the lean (auspicious or
+          difficult when one leads by 10 Virupas) and the period. Rahu and Ketu have no Ishta or Kashta
+          Bala.</li>
+          <li><b>Neecha Bhanga</b> is part condition and part yoga. The cancelled weakness always scores 1; the
+          Raja Yoga adds a second point only when the planet is active.</li>
+          <li><b>Selecting another period</b> recomputes every verdict on the Influence Engine tab, updates the
+          dropdown, and recolours the network arrowheads. The line above the narratives names the period in
+          view.</li>
+        </ul>
+        <p class="if-p">A planet's badge is therefore a reading for the period in view, not a fixed grade of the
+        birth chart. With no dasha available, every yoga is scored as dormant.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>How the narrative sentences are chosen</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span></p>
+        <p class="if-p">The planet narrative names a component as a source of strength when it scores 45 of its 60
+        Virupas or more, and as something holding the planet back when it scores 15 or less. This covers Uchcha,
+        Dig, Natonnata, Paksha, Ayana and Chesta Bala. A few are named on their own terms: a Moolatrikona or own
+        sign in the rasi, a Kendra placement, being lord of the third of the day, and being lord of the birth year,
+        month, weekday or hora. Drik Bala is named at +20 or more, or −10 or less, with the planet whose aspect
+        contributes most.</p>
+        <p class="if-p">The house narrative states the total, the ratio to the benchmark, the lord's contribution,
+        the sign-type score, the net of aspects with the largest single contributor, and the occupation and
+        day-night factors when they are not zero.</p>
+        <p class="if-p">Each sentence is shown on its own line.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>What each Shadbala component measures, and what it misses</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> as the grids under each planet</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Bala</th><th>Component</th><th>Qualitative dimension it measures</th><th>What it leaves out</th></tr></thead>
+            <tbody>
+              <tr><td>Sthana</td><td>Uchcha</td><td>Exaltation and debilitation, by distance from the exact degree</td><td>The divisional charts; Neecha Bhanga</td></tr>
+              <tr><td>Sthana</td><td>Saptavargaja</td><td>Moolatrikona and own sign; the relationship to the sign lord in seven vargas; the dignity basis of Av3 and Av9</td><td>The dispositor's own state; exaltation or debilitation in a varga; the Vikala and Kopa states</td></tr>
+              <tr><td>Sthana</td><td>Ojha-Yugma</td><td>Odd or even sign and navamsa against the planet's gender</td><td>—</td></tr>
+              <tr><td>Sthana</td><td>Kendradi</td><td>Kendra, Panaphara or Apoklima placement</td><td>Trikona, Dusthana and Maraka status</td></tr>
+              <tr><td>Sthana</td><td>Drekkana</td><td>The decanate against the planet's gender</td><td>—</td></tr>
+              <tr><td>Dig</td><td>Dig</td><td>Directional strength by house</td><td>—</td></tr>
+              <tr><td>Kala</td><td>Natonnata</td><td>Day or night birth</td><td>—</td></tr>
+              <tr><td>Kala</td><td>Paksha</td><td>Waxing or waning Moon</td><td>—</td></tr>
+              <tr><td>Kala</td><td>Tribhaga</td><td>The third of the day or night</td><td>—</td></tr>
+              <tr><td>Kala</td><td>Abda, Masa, Vara, Hora</td><td>Lords of the year, month, weekday and hora</td><td>—</td></tr>
+              <tr><td>Kala</td><td>Ayana</td><td>North or south of the equator, by tropical longitude</td><td>The planet's own latitude</td></tr>
+              <tr><td>Kala</td><td>Yuddha</td><td>Planetary war between co-tenants within 1°</td><td>The co-tenants' compound relationship. This app flags a war but does not move Virupas for it.</td></tr>
+              <tr><td>Chesta</td><td>Chesta</td><td>Retrograde, stationary or direct motion</td><td>—</td></tr>
+              <tr><td>Naisargika</td><td>Naisargika</td><td>Natural luminosity, a fixed scale</td><td>—</td></tr>
+              <tr><td>Drik</td><td>Drik</td><td>Aspects received, benefic minus malefic</td><td>The aspecting planet's own state; conjunctions; Rahu and Ketu</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">The avasthas follow Parashara's Light, matching all nine of its values for the Siva chart.
+        <b>Av3 (Jagradadi)</b> goes by the natural relationship to the sign lord: own sign or exaltation Jagrat, a
+        natural friend's or neutral's sign Swapna, a natural enemy's sign or debilitation Sushupti. <b>Av9
+        (Deeptadi)</b> goes by the compound relationship, with debilitation as Khala; the reference does not apply
+        Vikala or Kopa. <b>Av12 (Shayanadi)</b> is (nakshatra number × planet number × navamsa within the sign) + the
+        Moon's nakshatra number + ghatis since sunrise + the lagna's sign number, modulo 12. <b>Av5 (Baladi)</b> is
+        the usual six-degree bands, reversed in even signs; the reference calls the 12°–18° band of an odd sign
+        "Adolescent".</p>
+        <p class="if-p">Shadbala ignores lordship altogether, along with combustion, the Baladi (Av5) and Shayanadi
+        (Av12) avasthas, the nakshatra, and the nodes. Those are the rows of the "not covered" grid under each
+        planet, and the source of the uncounted factors above.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>What each Bhava Bala component measures, and what it misses</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> checked against Parashara's Light 9.0 for the Siva chart</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Component</th><th>How it is computed</th><th>What it leaves out</th></tr></thead>
+            <tbody>
+              <tr><td>Bhavadhipati Bala</td><td>The full Shadbala total of the house lord</td><td>The lord's placement counted from its own house; its functional nature</td></tr>
+              <tr><td>Bhava Digbala</td><td>By the type of sign on the cusp. Human signs (Gemini, Virgo, Libra, Aquarius, first half of Sagittarius) are weakest at the 7th cusp; quadruped signs (Aries, Taurus, Leo, second half of Sagittarius, first half of Capricorn) at the 4th; insect signs (Cancer, Scorpio) at the 1st; watery signs (Pisces, second half of Capricorn) at the 10th. The arc from that weakest cusp ÷ 3.</td><td>Movable, fixed or dual quality; the element</td></tr>
+              <tr><td>Bhava Drishti Bala</td><td>Parashara's sphuta drishti onto the cusp. Benefics add and malefics subtract; Jupiter and Mercury count in full, the rest ÷ 4.</td><td>The aspecting planet's dignity and lordship; Rahu and Ketu</td></tr>
+              <tr><td>Occupation (B.V. Raman)</td><td>+60 for each of Jupiter or Mercury in the house's sign; −60 for each of the Sun, Mars or Saturn</td><td>The Moon, Venus, Rahu and Ketu; every occupant's dignity</td></tr>
+              <tr><td>Day-Night (B.V. Raman)</td><td>+15 for a Sirshodaya sign in a day birth or a Prishtodaya sign in a night birth</td><td>Pisces (Ubhayodaya) gains only at twilight, which is not modelled</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">Cusps are equal houses from the Midheaven: the 10th cusp is the Midheaven and the others are
+        30° apart. If the Midheaven does not fall in the 10th sign from the lagna, cusps are taken as equal houses
+        from the ascendant degree instead. Occupation goes by sign, not by cusp.</p>
+        <p class="if-p">Against Parashara's Light for the Siva chart, Bhava Digbala, Occupation and Day-Night match
+        on all twelve houses, and Bhava Drishti matches to about 1 Virupa on eleven.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Network arrowheads</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> on the South Indian chart's dispositor and aspect network</p>
+        <p class="if-p">An arrowhead takes the colour of the verdict of the planet driving that edge: green, gold
+        for amber, or red. The edge's tooltip names the verdict. Because yogas score only in their dasha, the
+        arrowheads change when another period is selected on the Dashas tab. The line's own colour still shows the
+        type of relationship.</p>
+        <p class="if-p">A hand-placed chart has no Shadbala, so its arrowheads keep the earlier colouring: natural
+        benefic or malefic, adjusted for Trikona or Dusthana lordship and for co-tenants.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Known gaps</h3>
+        <ol class="if-open-list">
+          <li><span class="if-status if-status-open">Open</span> <b>Chesta Bala</b> is fitted to Parashara's
+          Light, not derived from a known rule. Over fifteen reference dates Mars, Jupiter, Venus and Saturn agree
+          to about 1 Virupa; Mercury is typically within 3–4 and at worst about 7. See the Shadbala section
+          below.</li>
+          <li><span class="if-status if-status-open">Open</span> <b>Bhava Drishti on the 12th house</b> of the Siva
+          chart reads 15.7 against Parashara's Light's 22. The difference would close if Mars had no special aspect
+          between 60° and 90°; one data point is not enough to change the aspect table.</li>
+          <li><span class="if-status if-status-open">Open</span> <b>Ashtakavarga points</b> and a house's condition in
+          the divisional charts are not computed.</li>
+          <li><span class="if-status if-status-open">Open</span> <b>Counting from the karaka</b>, such as the 10th
+          from the Sun, is not among the house factors.</li>
+          <li><span class="if-status if-status-open">Open</span> <b>The house benchmark, the verdict matrix and the
+          weights</b> are this project's own. They are named constants in the code and can be tuned.</li>
+        </ol>
+      </div>
+
+      <div class="if-section">
+        <h3>The one-hop rule — why this stays acyclic</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> as a settled design rule, followed by the verdicts above and the Dispositor Chain below</p>
+        <p class="if-p">The clean version of "a planet's tone depends on its dispositor's tone" breaks
+        whenever two planets are in mutual exchange — each is the other's dispositor, so a verdict that
+        depended on another planet's already-finished verdict would have no base case there: it's a
+        two-planet loop, not a tree.</p>
+        <p class="if-p">The fix, now applied everywhere this app reasons about influence flowing between
+        planets: every verdict pulls only <em>raw</em> facts, one hop out — never another planet's
+        synthesized verdict. The uncounted factors above keep to this: a planet is scored on its dispositor's
+        dignity and house, never on its dispositor's verdict. It is also why the Dispositor Chain below is
+        purely descriptive and does not feed back into a score.</p>
+        <p class="if-p">The same rule governs the arrowheads of a hand-placed chart, which has no Shadbala to
+        grade. There the arrow tone reads the driving planet's natural benefic or malefic status, its
+        functional lordship (Trikona pulls toward benefic, Dusthana toward malefic, per BPHS Ch. 36, Yoga
+        Karakas) and the nature of any co-tenant, with a split read shown as a gold arrowhead.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Dispositor Chain</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> — its own panel on the Influence Engine tab</p>
+        <p class="if-p">Classical texts describe a bhava lord's placement one hop at a time (BPHS Ch. 27,
+        Effects of the Bhava Lords)
+        — nothing in BPHS chains that reasoning across multiple hops the way this does. The Dispositor Chain
+        is this project's own extension, built from that classical one-hop fact: it follows a planet from its
+        occupied sign to that sign's lord, then to <em>that</em> planet's occupied sign, and so on — stopping
+        when a planet is reached that rules its own sign, or when a planet already seen in the walk turns up
+        again, reported as a loop rather than an error. Per the one-hop rule above, it never feeds back into a
+        planet's own numeric tone/capacity score — it's read-only, descriptive context.</p>
+        <p class="if-p">The walk uses classical single-lordship (BPHS's SIGN_LORDS) rather than this app's own
+        Rahu/Ketu co-lordship convention — a co-lordship reading would let each node claim two "own" signs,
+        ending a walk through them prematurely in a way the classical reading doesn't. That also means Rahu
+        and Ketu can only ever be a chain's <em>starting</em> planet, never a link partway through: SIGN_LORDS
+        has no entry mapping to either node, since neither classically rules a sign of its own, so a chain can
+        begin at a node but can never arrive back at one mid-walk.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Ishta/Kashta Bala — the missing Tone number</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> for all seven grahas</p>
+        <p class="if-p">Every tone read in this framework before this was qualitative. Ishta Bala ("auspicious
+        strength") and Kashta Bala ("distress strength") are a classical, <em>computed</em> pair of numbers
+        (BPHS Ch. 30, Ishta and Kashta Balas — 0–60 virupas each, roughly complementary) that fill that gap: Shadbala measures how much
+        power a planet has; Ishta/Kashta measures whether that power tends to express as ease or as friction.</p>
+        <div class="if-formula">
+          Ishta Bala&nbsp; = &nbsp;(Uchcha Bala + Cheshta) ÷ 2<br>
+          Kashta Bala&nbsp; = &nbsp;60 − Ishta Bala
+        </div>
+        <p class="if-p"><span class="if-status if-status-existing">Fixed</span> These follow Parashara's Light,
+        whose seven values for the Siva chart pin the arithmetic down: Ishta is the plain average of Uchcha Bala
+        and a Cheshta figure, and Kashta is what is left of 60. The Cheshta figure is the planet's Chesta Bala,
+        with one exception: for the Sun it is the classical Chesta Kendra, its tropical longitude plus 90°
+        (folded to 0–180°), divided by 3. For the Moon it is its Paksha Bala. The textbook geometric-mean form,
+        √(Uchcha × Cheshta), which this app used before, does not reproduce the reference (it gives the Moon 14.3
+        where the reference has 25.28).</p>
+        <p class="if-p">The reference's Ishta and Kashta values are known for that one chart only, so the Sun's
+        exception rests on a single figure. For Mars, Mercury, Jupiter, Venus and Saturn the result also inherits
+        whatever error remains in their fitted Chesta Bala, halved.</p>
+        <p class="if-p">On the Influence Engine tab they appear under each planet's number, active in the planet's
+        own periods and dormant otherwise; they do not change its verdict. See "Yogas score only in their dasha"
+        above.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Dasha timing — dependent vs. independent yogas</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> every yoga on the Influence Engine's Yogas panel now carries a trigger note</p>
+        <p class="if-p">BPHS doesn't use the terms "dasha-dependent" or "dasha-independent" itself, but it
+        draws exactly this distinction through how different yoga chapters describe their own timing. Two
+        chapters state the opposite of each other outright:</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Chapter</th><th>What it says about timing</th></tr></thead>
+            <tbody>
+              <tr><td>Ch. 37, Nabhasha Yogas</td><td>"Ancestors say that the results due to said (Nabhasha) Yogas will be felt throughout, in all the Dasha periods."</td></tr>
+              <tr><td>Ch. 43, Combinations for Wealth</td><td>"...There is no doubt that these grahas will give wealth during their Dasha periods."</td></tr>
+              <tr><td>Ch. 44, Combinations for Penury</td><td>"A grah associated with one of the lords of Ari, Randhra, and Vyaya Bhava... will in its Dasha periods cause harm to the native's financial aspects."</td></tr>
+              <tr><td>Ch. 46, Maraka (Killer) Planets</td><td>"The major and sub periods of these grahas will bring death on the native... The Dasha of a grah which is an exclusive malefic may also cause death." Closes by pointing to "the chapter related to Dashas" elsewhere in the text.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">The test this yields: a yoga built from an overall chart-shape or count pattern
+        (Nabhasha's 32 combinations, based on how all seven grahas distribute across the houses) is
+        dasha-<em>independent</em> — always running, per Ch. 37's own words. A yoga built from a relationship
+        between one or two <em>specifically named</em> planets — Wealth and Penury's lord-based combinations,
+        Maraka's killer-planet logic — is dasha-<em>dependent</em>: read in the Dasha/Antardasha of the
+        planet(s) that form it.</p>
+        <p class="if-p">Raja Yogas (Ch. 41) and Yogas for Royal Association (Ch. 42) are treated as
+        dasha-dependent by the same test — both are named-lord relationships, the same shape as Wealth and
+        Penury — but neither chapter carries its own explicit "during their Dasha" closing line the way
+        Ch. 43/44 do. That's an extension by analogy, not a direct quote for those two chapters specifically.</p>
+        <p class="if-p"><b>An honest finding, not a design choice:</b> every planet-based yoga this app detects
+        but one — Viparita Raja Yoga, Raja Yoga, Dhana Yoga, Gajakesari Yoga, the other conjunction yogas
+        (Budhaditya, Chandra-Mangala), Neecha Bhanga Yoga, and Parivartana — reduces to one or two specifically
+        named planets. None is a whole-chart distribution pattern the way Nabhasha Yogas are, so by the test
+        above, all of these are dasha-dependent. The remaining one,
+        Pancha Mahapurusha Yoga, also reduces to one named planet — but doesn't fit either bucket cleanly,
+        which is why it gets a third, Hybrid classification below rather than being forced into "dependent."</p>
+        <p class="if-p"><span class="if-status if-status-existing">Implemented</span> <b>Nabhasha Yogas
+        (dasha-independent)</b> — all four of BPHS's groups (32 yogas), from how the seven grahas (Rahu/Ketu
+        excluded) are distributed:</p>
+        <ol class="if-open-list">
+          <li><b>Ashraya</b> (sign quality): all seven in movable signs — Rajju; fixed — Musala; dual — Nala.</li>
+          <li><b>Dala</b> (kendras): natural benefics in three kendras and no natural malefic in any kendra —
+          Mala (Srik); natural malefics in three kendras and no natural benefic in any — Sarpa. The Moon's
+          nature follows its phase, as in Shadbala.</li>
+          <li><b>Sankhya</b> (count of occupied signs): 7 Vallaki, 6 Daama, 5 Pasha, 4 Kedara, 3 Shula,
+          2 Yuga, 1 Gola. Exactly one always applies; BPHS treats it as the fallback when no other Nabhasha
+          Yoga forms, and the Yogas panel says so when another one is present.</li>
+          <li><b>Akriti</b> (20 shapes by the houses occupied, counted from the Lagna — same definitions as
+          Varahamihira's Brihat Jataka): Gada (two adjacent kendras), Shakata (1st and 7th), Vihaga (4th and
+          10th), Shringataka (1, 5, 9), Hala (another trine set), Vajra and Yava (benefics and malefics split
+          between the 1st/7th and 4th/10th), Kamala (all four kendras), Vapi (all panapharas or all apoklimas),
+          Yupa / Shara / Shakti / Danda (four houses from the 1st / 4th / 7th / 10th), Nauka / Kuta / Chhatra /
+          Chapa (seven houses from the 1st / 4th / 7th / 10th), Ardha Chandra (seven houses from a non-kendra),
+          Chakra (six alternate houses from the 1st) and Samudra (from the 2nd). "All planets in houses X" is
+          read as all seven confined to those houses <i>and</i> every one of them occupied — the usual
+          reading, which also keeps the shapes from overlapping. Vajra and Yava are the specific benefic/malefic
+          forms of Kamala, so they replace it when they apply — though as Varahamihira himself noted, they
+          can't physically occur (they need Venus or Mercury 90° from the Sun).</li>
+        </ol>
+        <p class="if-p">Checked two ways: every Akriti shape detected correctly on a constructed placement,
+        and a random sample of about 160,000 real charts (1900–2100) never produced two Akriti yogas at once.
+        Akriti yogas are rare in practice — about 1 chart in 100 has one, mostly Yupa, Shara, Shakti or Danda
+        — because Mercury and Venus never stray far from the Sun, which rules out most spread-out shapes.</p>
+
+        <h4>The trigger mechanic (Ch. 46's own worked logic)</h4>
+        <p class="if-p">Ch. 46 is the one place BPHS actually walks through trigger logic in verse rather
+        than just stating a result, so this app's trigger computation follows that chapter's own mechanic
+        rather than inventing a separate one:</p>
+        <ol class="if-level-points">
+          <li><b>Primary trigger</b> — the yoga-forming planet's own Dasha/Antardasha ("the major and sub
+          periods of these grahas").</li>
+          <li><b>Secondary trigger</b> — a planet tied to the primary planet by conjunction or aspect
+          (sambandha) picks up the same triggering power. Ch. 46's own example: "If Rahu or Ketu are placed
+          in Tanu, Yuvati, Randhra, or Vyaya Bhava, or happen to be in the 7th from a Marak lord, or are
+          placed with such a grah, they acquire powers of killing in their major or sub periods."</li>
+          <li><b>Suppression</b> — a benefic tie can neutralise the trigger: "He will not, however, do so if
+          Rahu receives a drishti from, or is yuti with a benefic." This app surfaces every sambandha-tied
+          planet as a secondary-trigger <em>candidate</em> rather than silently applying this exception —
+          Ch. 46 states it for Rahu/Ketu specifically; generalising it to every planet is this project's own
+          extension, not a direct quote, so it's left for the reader to weigh rather than baked into the
+          computation as an automatic filter.</li>
+        </ol>
+        <p class="if-p">Every yoga on the Influence Engine's Yogas panel now names its primary trigger
+        planet(s) and lists every co-tenant or aspecting planet as a secondary-trigger candidate, computed
+        by this exact mechanic — not a second, invented hierarchy.</p>
+
+        <h4>A third category: Hybrid (Pancha Mahapurusha Yoga)</h4>
+        <p class="if-p"><span class="if-status if-status-existing">Implemented</span> — five yogas, one per
+        graha (excluding the luminaries and nodes): Ruchaka (Mars), Bhadra (Mercury), Hamsa (Jupiter), Malavya
+        (Venus), and Sasa (Saturn), each exalted or in its own sign, standing in a Kendra (1st/4th/7th/10th)
+        from the Lagna. These don't sort cleanly into either of the two buckets above: they reduce to one
+        specifically named planet (so not a whole-chart Nabhasha-style pattern — not independent), but the
+        planet's own strong placement is a standing condition from birth, not something waiting on a
+        dasha to exist at all. This app resolves that by tagging them <b>Hybrid</b>: a permanent baseline
+        trait, present continuously, with its peak material expression additionally timed to that planet's
+        own Dasha/Antardasha via the same Ch. 46 mechanic every dasha-dependent yoga already uses. The Yogas
+        panel's Hybrid category sits between Dasha-Independent and Dasha-Dependent for exactly this reason —
+        it borrows a property from each side rather than belonging fully to either.</p>
+        <p class="if-p"><b>No chapter is cited for Pancha Mahapurusha Yoga</b> — this is deliberate, not an
+        oversight. A document reviewed while building this named "Ch. 36" for it; that citation doesn't hold
+        up. Ch. 36 in this edition is confirmed as <em>Yoga Karakas</em> — Pancha Mahapurusha Yoga isn't there. That document's citations turned out to match a
+        different, more widely-circulated translation's numbering (R. Santhanam's) while being labeled as
+        this project's edition — a useful reminder that a citation attached to the right-sounding author and
+        publisher still needs checking against that specific edition's own table of contents, not just
+        against the general shape of the material. Until this project verifies which chapter actually covers
+        it in the Sagar/Sharma edition specifically, this tab says so plainly rather than repeating an
+        unverified number.</p>
+
+        <h4>Yoga Bhanga — when a dasha-dependent yoga's delivery is suspended</h4>
+        <p class="if-p"><span class="if-status if-status-existing">Implemented</span> — every yoga's trigger
+        computation now also checks whether the yoga-forming planet's own condition might suspend the yoga's
+        positive delivery during the very period that would otherwise trigger it, rather than presenting every
+        dasha window as equally likely to deliver. Two checks, both reusing facts this app already computes
+        elsewhere rather than adding a new one:</p>
+        <ol class="if-level-points">
+          <li><b>Uncancelled debilitation</b> — the yoga-forming planet is debilitated, and Neecha Bhanga
+          (the same cancellation check the planet verdict and the Neecha Bhanga Yoga scan use) doesn't rescue it.</li>
+          <li><b>Sub-minimum Shadbala</b> — the same classical minimum the planet verdict grades against,
+          read here as a caution on delivery rather than a score.</li>
+        </ol>
+        <p class="if-p">When either holds, the yoga's trigger note adds a "Yoga Bhanga caution" naming which
+        check fired, rather than silently listing the dasha window as if it were guaranteed to deliver. This
+        is this project's own extension of Ch. 46's trigger mechanic to a second, related question (not just
+        <em>when</em> does a yoga fire, but <em>whether</em> its own condition lets it fire cleanly) — worth
+        stating plainly rather than presenting as a direct quote, the same way the benefic-suppression
+        exception above is.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Shadbala — Six-Fold Planetary Strength</h3>
+        <p class="if-section-sub">The Strength tab's own numbers, cross-checked component by component
+        against a reference implementation (Parashara's Light 9.0) for Siva's chart — what that check found
+        and fixed, and what's still open, below</p>
+        <p class="if-p">BPHS Ch. 29 (Evaluation of Strengths) lays out six independent sources of strength for
+        each of the seven classical grahas — Sthana (positional), Dig (directional), Kala (temporal), Chesta
+        (motional), Naisargika (natural), and Drik (aspectual) — summed into one Virupa total (60 Virupas = 1
+        Rupa). A planet above its own prescribed minimum is read as strong enough to deliver its promised
+        results in full; below it, results tend to arrive late, partially, or with more effort than the
+        placement alone would suggest — this is exactly what the planet verdict's first axis and the Yoga
+        Bhanga "sub-minimum Shadbala" caution above both read directly.</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Planet</th><th>Minimum required</th></tr></thead>
+            <tbody>
+              <tr><td>Sun</td><td>6.5 Rupas</td></tr>
+              <tr><td>Moon</td><td>6.0 Rupas</td></tr>
+              <tr><td>Mars</td><td>5.0 Rupas</td></tr>
+              <tr><td>Mercury</td><td>7.0 Rupas</td></tr>
+              <tr><td>Jupiter</td><td>6.5 Rupas</td></tr>
+              <tr><td>Venus</td><td>5.5 Rupas</td></tr>
+              <tr><td>Saturn</td><td>5.0 Rupas</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>1. Sthana Bala (positional) — five sub-components</h4>
+        <ol class="if-level-points">
+          <li><b>Uchcha Bala</b> — degree-distance from the exact debilitation point, divided by 3; maximum
+          at exact exaltation.</li>
+          <li><b>Saptavargaja Bala</b> — dignity value summed across seven divisional charts (D1/D2/D3/D7/D9/
+          D12/D30). <span class="if-status if-status-existing">Fixed</span> — used to read exactly 15, 30 and
+          45 Virupas high for the Sun, Moon and Mercury. The cause: a planet in its Moolatrikona sign was
+          given the Moolatrikona score (45) in <i>every</i> divisional chart, but Moolatrikona is a degree band
+          inside one sign, so it only exists in the Rasi (D1). In the other six vargas that sign now scores
+          like any other — 30 if it's the planet's own sign (Sun in a D2 Leo, Mercury in a D3/D12/D30 Virgo),
+          otherwise by the planet's relationship to the sign's lord (Moon in a D12 Taurus → Venus, a friend,
+          15). The same applies in the D1 when the planet is in that sign but outside the band. All seven
+          planets now match the reference exactly, and with them the whole of Sthana Bala.</li>
+          <li><b>Ojhayugma Bala</b> — odd/even sign and navamsa placement, scored by whether the planet's own
+          gender (Moon/Venus favor even; the rest favor odd) matches.</li>
+          <li><b>Kendradi Bala</b> — full strength in a Kendra (1/4/7/10), half in a Panaphara (2/5/8/11), a
+          quarter in an Apoklima (3/6/9/12).</li>
+          <li><b>Drekkana Bala</b> — <span class="if-status if-status-existing">Fixed</span> male grahas
+          (Sun/Mars/Jupiter) are strong in a sign's 1st decan, female (Moon/Venus) in the 2nd, neuter
+          (Mercury/Saturn) in the 3rd. Female and neuter were swapped here until checked directly against the
+          reference's actual numbers rather than a description of the rule.</li>
+        </ol>
+
+        <h4>2. Dig Bala (directional)</h4>
+        <p class="if-p">Degree-distance from each planet's own point of maximum directional strength —
+        Sun/Mars weakest at the IC, Jupiter/Mercury weakest at the Descendant, Moon/Venus weakest at the MC,
+        Saturn weakest at the Ascendant — computed from the chart's own true Ascendant/Midheaven, not a
+        whole-sign approximation. Matched the reference closely with no changes needed.</p>
+
+        <h4>3. Kala Bala (temporal) — up to nine sub-components</h4>
+        <ol class="if-level-points">
+          <li><b>Nathonnata Bala</b> — day/night strength from the Sun's hour angle.</li>
+          <li><b>Paksha Bala</b> — lunar-fortnight strength. <span class="if-status if-status-existing">Fixed</span>
+          Moon no longer doubles this figure — checked against the reference, Moon uses the exact same formula
+          as any other benefic that fortnight; its own doubled lunar significance belongs to Ishta/Kashta
+          Bala's Paksha input, not here.</li>
+          <li><b>Tribhaga Bala</b> — which third of the day or night the moment falls in.</li>
+          <li><b>Abda / Masa / Vara / Hora Bala</b> — year/month/weekday/hour lordship.
+          <span class="if-status if-status-existing">Fixed</span> — the year (Abda) lord used to be the
+          weekday of the most recent solar Aries ingress, which gave Mars for Siva's chart where the reference
+          has Jupiter. Year and month lords now come from the Ahargana — the day count from the start of the
+          Kali Yuga (counted inclusively from Ujjain midnight, day 1 being the Friday it began). The year lord
+          is the weekday lord of the day the current 360-day year began; the month lord, of the day the current
+          30-day month began. This reproduces the reference's year, month and weekday lords together (Jupiter,
+          Moon, Mars) — two independent matches beyond the weekday, though from one chart only.</li>
+          <li><b>Ayana Bala</b> — strength from being north or south of the equator.
+          <span class="if-status if-status-existing">Fixed</span> The formula is 30 × (1 ± sin L), where L is the
+          planet's tropical longitude: the classical (24° ± kranti) ÷ 48 with the kranti taken from the longitude
+          alone, so the planet's own latitude plays no part. The Sun, Mars, Jupiter and Venus gain in the north,
+          the Moon and Saturn in the south, and Mercury on either side; the Sun is not doubled. This matches the
+          reference to the second decimal for all seven planets on fifteen dates. The earlier form used each
+          planet's true declination, which read the Moon up to 5 Virupas off and a southern Mercury as 0 where
+          the reference gives about 59.</li>
+        </ol>
+
+        <h4>4. Chesta Bala (motional)</h4>
+        <p class="if-p"><span class="if-status if-status-existing">Fixed</span> Sun and Moon used to return
+        zero here outright — the ordinary seeghrochcha-distance formula genuinely has nothing to measure for
+        either (Sun's apparent motion is too uniform to register as "effort"; Moon has no seeghrochcha at
+        all). Checked against the reference, the classical convention isn't zero — Sun's Chesta Bala equals
+        its own Ayana Bala, Moon's equals its own Paksha Bala, both already computed for Kala Bala just above.</p>
+        <p class="if-p"><span class="if-status if-status-existing">Fitted</span> For the other five planets the
+        formulas are empirical. They were fitted to Parashara's Light's Chesta Bala on fifteen dates between March
+        1970 and August 1971, chosen to cover conjunctions, stations, retrogrades and oppositions of all five.
+        Each gives a Chesta Kendra, which is divided by 3:</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Planet</th><th>Chesta Kendra</th><th>Typical error</th><th>Worst of 15</th></tr></thead>
+            <tbody>
+              <tr><td>Mars</td><td>The angle between the Sun and Mars's heliocentric longitude</td><td>1.2</td><td>3.3</td></tr>
+              <tr><td>Jupiter, Saturn</td><td>The same angle × max(1, 1.18 + 0.58 × v ÷ vmax), where v is the daily motion and vmax the top direct speed (0.2415° and 0.129° a day). The factor is 1.76 at top direct speed, 1.18 at a station and 1 in deep retrograde.</td><td>0.6</td><td>1.4</td></tr>
+              <tr><td>Venus</td><td>Its mean longitude minus the mean Sun, plus 0.45 × (its true longitude minus the mean Sun)</td><td>0.5</td><td>1.2</td></tr>
+              <tr><td>Mercury</td><td>Its mean longitude minus the mean Sun, plus 1.6 × its elongation from the Sun</td><td>3.5</td><td>6.6</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">Errors are in Virupas. The earlier formula (the arc between a planet and its
+        seeghrochcha) was off by 6 to 17 on the same dates.</p>
+        <p class="if-p"><span class="if-status if-status-open">Open</span> These are not the textbook rule. The
+        classical Chesta Kendra, seeghrochcha minus the average of mean and true longitude, does not reproduce the
+        reference with modern mean elements, with B.V. Raman's tables or with Surya Siddhanta mean longitudes; the
+        mean longitude it would need does not move uniformly from date to date. What Parashara's Light actually
+        computes is still unknown, so the Jupiter and Saturn speed factor and the Mercury and Venus coefficients
+        are curve fits. Mercury is the weakest: its orbit is eccentric enough that a fit on mean longitude alone
+        leaves errors of several Virupas.</p>
+
+        <h4>5. Naisargika Bala (natural)</h4>
+        <p class="if-p">Fixed, chart-independent constants — Sun 60, Moon 51.43, Venus 42.85, Jupiter 34.28,
+        Mercury 25.71, Mars 17.14, Saturn 8.57 Virupas, in that ranking order every chart shares. Matched the
+        reference exactly.</p>
+
+        <h4>6. Drik Bala (aspectual)</h4>
+        <p class="if-p"><span class="if-status if-status-existing">Fixed</span> — was the largest gap in
+        Shadbala (every planet well below the reference, one with its sign flipped). Checked against the
+        reference's detailed breakdown for Siva's chart, all seven planets now match to rounding (largest
+        difference 0.01 Virupa). Three separate problems, each confirmed by the numbers rather than assumed:</p>
+        <ul class="if-open-list">
+          <li><b>The graded aspect curve was wrong between 120° and 180°.</b> The classical curve falls as
+          150 − a over 120–150° and rises as 2 × (a − 150) over 150–180°; the old formula instead kept
+          rising gently from 30 to 60 across that whole span. The Moon's reference figure — which depends on
+          four aspects in exactly that range — only matches with the classical version.</li>
+          <li><b>Jupiter's and Mercury's aspects count in full.</b> Everything else is quartered (benefics
+          added, malefics subtracted), but these two are added whole — the "divide by 4" suspicion above was
+          half right.</li>
+          <li><b>Special aspects are graded by angle, not a flat 60 by house.</b> Mars (4th/8th), Jupiter
+          (5th/9th) and Saturn (3rd/10th) each get their own curve inside their special angle ranges, peaking
+          at 60 on the exact aspect. The old version gave a flat 60 to any planet in the special house by
+          sign count, however far off the exact angle. Five of the twelve special ranges are confirmed by
+          this chart (Mars 90–120°, Jupiter 210–240° and 240–270°, Saturn 30–60° and 60–90°); the other
+          seven follow the same shape but still need a second reference chart that exercises them.</li>
+        </ul>
+        <p class="if-p">Bhava Bala's aspect term (Bhava Drishti) uses the same curve and weighting, so it
+        changed too — that part isn't checked against a reference yet. Mercury is still always treated as a
+        benefic here; the classical rule makes it malefic when conjoined with a malefic, which doesn't arise
+        in Siva's chart.</p>
+
+        <p class="if-p">Everything marked <span class="if-status if-status-existing">Fixed</span> above was
+        found by comparing this app's own detailed Shadbala breakdown, component by component, against
+        Parashara's Light 9.0's for the exact same chart — not by re-reading a description of the classical
+        rule and guessing where this implementation might diverge from it. Four real bugs turned up this way
+        and are fixed as of this pass: Chesta Bala silently zeroing for Sun and Moon, Moon's Paksha Bala
+        doubled when it shouldn't be, Sun's Ayana Bala doubled the same way, and the Drekkana Bala's
+        female/neuter decan assignments swapped. Five more genuine gaps turned up in the same comparison.
+        Drik Bala (the biggest of them), Saptavargaja Bala and the Abda (year) lord are now fixed (above);
+        Ayana Bala is fixed too, from a fifteen-date comparison. One is still marked
+        <span class="if-status if-status-open">Open</span>: Chesta Bala for the five non-luminary planets, which
+        is fitted to the reference and not derived.</p>
+      </div>
+    </section>
+        </div>
+        <div role="tabpanel" id="panel2-research" aria-labelledby="tab2-research" hidden>
+    <section class="block">
+      <h2>Research</h2>
+      <p class="sub-note">Ask a question about this chart. Answers draw first on what's already been computed above — planets, houses, yogas, timing, strength, nakshatras — and fall back to general Jyotish reference material only when nothing here matches.</p>
+
+      <div class="research-pinned">
+        <form id="researchForm" class="research-form">
+          <textarea id="researchInput" class="research-textarea" rows="2"
+            placeholder="e.g. What does this chart say about my career? Is there a Raja Yoga? When is my next Saturn period?"></textarea>
+          <button type="submit" class="fc-edit research-ask-btn">Ask</button>
+        </form>
+        <div class="research-latest hidden" id="researchLatest"></div>
+      </div>
+
+      <div class="research-history" id="researchHistory"></div>
+    </section>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<footer>
+  Calculations run entirely in your browser using <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a> (MIT-licensed, JPL-derived ephemeris) for planetary positions, with the Lahiri (Chitrapaksha) ayanamsa and classical Parashari rules for houses, nakshatras, Vimshottari dasha, and planetary relationships. Rahu/Ketu use the mean lunar node by default, with a True Node option in the birth-details form. Ayanamsa is computed with a standard precession-rate approximation (accurate to a fraction of an arc-minute across the 1900–2050 range) — cross-checked against Swiss Ephemeris (Lahiri) to within ~0.02°.<br>
+  Shadbala follows the Parashari method (Sthana/Dig/Kala/Chesta/Naisargika/Drik) — see the Influence
+  Framework tab for the full breakdown, what's been checked against a reference implementation, and what's
+  still open. Graha Yuddha (planetary war, orb &lt;1° among Mars/Mercury/Jupiter/Venus/Saturn) is detected
+  and flagged in the Strength tab and planet interpretations, but — per classical convention — is not folded
+  into the Shadbala totals themselves. Rahu/Ketu's natural relationships follow the common convention of Rahu
+  as Saturn's analog and Ketu as Mars's.<br>
+  Birth-place lookup uses OpenStreetMap Nominatim. No birth data leaves your browser except the place-name search.<br>
+  For entertainment and self-study — not a substitute for consultation with a qualified Jyotishi.
+</footer>
+
