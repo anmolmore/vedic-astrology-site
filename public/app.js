@@ -1245,17 +1245,12 @@
     // classical relationship — some *other* sign's ruler also serving
     // elsewhere — so none of it is dropped; it just can no longer inflate a
     // single sign's own count beyond what that sign's own click shows.
-    // `perSign` only needs the explicitly-selected signs' own breakdowns
-    // (for the status line below), not all 12, even when this ran across
-    // all 12 to build the edge set.
     var consolidated = !selectedList.length;
     var scanList = consolidated ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : selectedList;
-    var visibleEdges = [], secondaryEdges = [], perSign = {};
+    var visibleEdges = [], secondaryEdges = [];
     scanList.forEach(function (sign) {
       var info = connectionsForSign(sign, allEdges, result);
-      if (!consolidated) perSign[sign] = info;
       var dir = networkDirEdges(info, sign, result);
-      if (!consolidated) { info.cntIn = dir.cntIn; info.cntOut = dir.cntOut; }
       visibleEdges = visibleEdges.concat(dir.inEdges, dir.outEdges);
       secondaryEdges = secondaryEdges.concat(dir.secondary);
     });
@@ -1583,98 +1578,11 @@
       rect.classList.toggle('net-dimmed', selectedList.length > 0 && !involved[sIdx]);
     });
 
+    // The chart speaks for itself: no text panel beside it, selected or not.
     var statusEl = document.getElementById('networkStatus');
     if (statusEl) {
-      statusEl.classList.remove('hidden');
-      if (selectedList.length === 1) {
-        // Now rendered as a list — one point per line — since this sits in
-        // the narrow column beside the chart rather than as a paragraph
-        // below it. First point is the connection count (in + out), then one
-        // further point per secondary-influence note (there can be more
-        // than one lord contributing a secondary line into the same sign).
-        var sign = selectedList[0];
-        var info = perSign[sign];
-        var nIn = info.cntIn, nOut = info.cntOut;
-        var signName = SIGNS[sign];
-        var points = [];
-        if (!networkShowIn && !networkShowOut) {
-          points.push('Tick <strong>In</strong> or <strong>Out</strong> to show connections for <strong>' + signName + '</strong>.');
-        } else if (networkShowIn && networkShowOut) {
-          if (nIn || nOut) {
-            points.push('Showing ' + nIn + ' connection' + (nIn === 1 ? '' : 's') + ' into, and ' + nOut +
-              ' out of, <strong>' + signName + '</strong>.');
-          } else {
-            points.push('Nothing converges into or out of <strong>' + signName + '</strong>.');
-          }
-        } else if (networkShowIn) {
-          points.push(nIn ? 'Showing ' + nIn + ' connection' + (nIn === 1 ? '' : 's') + ' into <strong>' + signName + '</strong>.'
-            : 'Nothing comes into <strong>' + signName + '</strong>.');
-        } else {
-          points.push(nOut ? 'Showing ' + nOut + ' connection' + (nOut === 1 ? '' : 's') + ' out of <strong>' + signName + '</strong>.'
-            : 'Nothing goes out of <strong>' + signName + '</strong>.');
-        }
-        if (networkShowIn) info.secondaryNotes.forEach(function (sn) {
-          points.push('<span class="net-secondary-swatch">Light blue</span>: ' + sn.lord +
-            ' also rules ' + sn.others.map(function (o) { return SIGNS[o]; }).join(', ') +
-            ', placed in ' + SIGNS[sn.lordSign] + '.');
-        });
-        statusEl.innerHTML = '<ul class="net-notes-list">' +
-          points.map(function (pt) { return '<li>' + pt + '</li>'; }).join('') +
-          '</ul>' +
-          '<a href="#" id="networkShowAll">Show all</a>';
-      } else if (selectedList.length > 1) {
-        // Multiple independently-selected signs: one list point per sign for
-        // its own connection count (in + out), plus one further point per
-        // secondary-influence note on that sign (prefixed with the sign name
-        // so it's clear which sign each point belongs to once flattened
-        // into a single list).
-        var points2 = [];
-        selectedList.forEach(function (sign) {
-          var info2 = perSign[sign];
-          var cntIn = info2.cntIn, cntOut = info2.cntOut;
-          var cnt = [];
-          if (networkShowIn) cnt.push(cntIn + ' in');
-          if (networkShowOut) cnt.push(cntOut + ' out');
-          points2.push('<strong>' + SIGNS[sign] + '</strong>: ' + (cnt.length ? cnt.join(', ') : 'tick In or Out') + '.');
-          if (networkShowIn) info2.secondaryNotes.forEach(function (sn) {
-            points2.push('<span class="net-secondary-swatch">Light blue</span> (' + SIGNS[sign] + '): ' +
-              sn.lord + ' also rules ' + sn.others.map(function (o) { return SIGNS[o]; }).join(', ') +
-              ', placed in ' + SIGNS[sn.lordSign] + '.');
-          });
-        });
-        statusEl.innerHTML = '<ul class="net-notes-list">' +
-          points2.map(function (pt) { return '<li>' + pt + '</li>'; }).join('') +
-          '</ul>' +
-          '<a href="#" id="networkShowAll">Show all</a>';
-      } else {
-        statusEl.innerHTML = 'Click a sign to isolate the connections converging into it, and going out ' +
-          'of it — every dispositor, aspect, and exchange edge that touches it either way. ' +
-          '<span class="net-secondary-swatch">Light blue</span> lines show secondary influence — ' +
-          'every two-sign ruler’s other owned sign, connected to where that ruler itself stands. ' +
-          (sb && sb.results
-            ? 'Arrowheads are colored by the driving planet’s verdict on the Influence Engine tab — its ' +
-              'Shadbala number crossed with the factors the number leaves out, with yogas counted only ' +
-              'for the lords of the dasha period selected on the Dashas tab' +
-              (bfDashaOpts().periodLabel ? ' (now ' + bfDashaOpts().periodLabel + ')' : '') + ': ' +
-              '<span class="net-benefic-swatch">green</span> for Strong or supported, ' +
-              '<span class="net-mixed-swatch">gold</span> for Adequate, Mixed or strong but afflicted, ' +
-              '<span class="net-malefic-swatch">red</span> for Weak or Afflicted'
-            : 'Arrowheads are colored by the driving planet’s overall influence tone — natural benefic/' +
-              'malefic, widened by its own functional lordship (Trikona/Dusthana) and any co-tenant taint: ' +
-              '<span class="net-benefic-swatch">green</span> leans benefic, ' +
-              '<span class="net-malefic-swatch">red</span> leans malefic, ' +
-              '<span class="net-mixed-swatch">gold</span> for a genuinely split read (e.g. a planet that is ' +
-              'both a Trikona and a Dusthana lord at once)') +
-          ' — independent of the line color, which still shows the relationship type.';
-      }
-      var showAllLink = document.getElementById('networkShowAll');
-      if (showAllLink) {
-        showAllLink.addEventListener('click', function (ev) {
-          ev.preventDefault();
-          networkSelectedSigns = {};
-          renderSouthChart(svgId, result, useNavamsa, sb);
-        });
-      }
+      statusEl.classList.add('hidden');
+      statusEl.innerHTML = '';
     }
   }
 
@@ -2681,9 +2589,15 @@
       }
       nameCell.appendChild(tog);
       nameCell.appendChild(spanText(node.n, depth < 2 ? 'bf-sbtree-strong' : ''));
-      if (node.note) nameCell.appendChild(spanText(' · ' + node.note, 'bf-sbtree-muted'));
+      if (node.note && node.noteBelow) {
+        nameCell.className += ' bf-sbtree-wrap';
+        nameCell.appendChild(spanText(node.note, 'bf-sbtree-muted bf-sbtree-note'));
+      } else if (node.note) nameCell.appendChild(spanText(' · ' + node.note, 'bf-sbtree-muted'));
       row.appendChild(nameCell);
-      row.appendChild(spanText(fmt(node.v), 'bf-sbtree-num'));
+      // A Drik row also shows the raw aspect value, before weighting, in brackets.
+      var num = spanText(fmt(node.v), 'bf-sbtree-num');
+      if (node.raw != null) num.insertBefore(spanText('(' + fmt(node.raw) + ') ', 'bf-sbtree-muted bf-sbtree-raw'), num.firstChild);
+      row.appendChild(num);
       row.appendChild(spanText(node.max ? String(node.max) : '—', 'bf-sbtree-num bf-sbtree-max bf-sbtree-muted'));
       var pct = document.createElement('div');
       pct.className = 'bf-sbtree-pct';

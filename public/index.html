@@ -901,7 +901,10 @@
      down to a sliver, the notes column (last in source order) wraps onto
      its own full-width line below the chart. In a wide single-chart view
      there's room for both, so they sit in one row. */
-  .chart-body-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  /* stretch: the side panel runs the full height of the chart column beside
+     it (title through chart), so their bottom borders line up. */
+  .chart-body-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+  .chart-body-row > .chart-svg-wrap { align-self: flex-start; }
   .chart-svg-wrap {
     /* Column, not row: now holds the title above the chart and the Dasha
        activation status line below it too (moved in from being direct
@@ -990,6 +993,9 @@
     flex: 0 1 130px; min-width: 130px; padding-top: 0; text-align: left;
     display: flex; flex-direction: column; gap: 10px;
   }
+  /* No notes are shown beside the chart now, so the empty column gives its
+     width back to the side panel. */
+  .chart-notes-col:has(> .network-status.hidden) { display: none; }
   @media (max-width: 560px) {
     .chart-body-row { flex-direction: column; flex-wrap: nowrap; align-items: center; }
     /* Stacks below the chart (full width) rather than being hidden, so
@@ -1043,13 +1049,14 @@
      lets a flex child actually shrink below its content's natural height
      instead of forcing the box open — without it, overflow-y here would
      never trigger no matter how tall the content got) is what makes this
-     box automatically match the South Indian chart's own height (set on
-     .side-tabwrap itself, below) at every one of its collapsed/expanded
-     tiers, without hard-coding a separate height number for each one. */
+     box fill the side panel, which stretches to the chart column's height. */
   .side-panelbox {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 0 10px 10px 10px; position: relative; z-index: 1;
     padding: 10px 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    /* contain: size keeps the panel's content from setting the row's height,
+       so the chart column alone decides it. */
+    contain: size;
     text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "South Indian · Rashi D1" title) wants that, this reused Influence Engine content doesn't */
   }
   .side-tabpanel.hidden { display: none; }
@@ -1062,21 +1069,9 @@
   }
   .ie-interp-box:focus { border-color: var(--gold); outline: none; }
   .ie-interp-saved { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
-  /* Matches the South Indian chart's own .chart-svg-inner width tiers
-     exactly (both are squares — width and height are the same number
-     there), so the two sit at identical heights at every one of the
-     collapsed/expanded states this band supports, rather than only in the
-     default one. */
-  .chart-band .chart-card .side-tabwrap { height: 360px; }
-  .chart-band.folders-hidden .chart-card .side-tabwrap { height: 500px; }
-  .chart-band.chart-expanded .chart-card .side-tabwrap { height: 520px; }
-  .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 680px; }
-  @media (max-width: 1200px) {
-    .chart-band .chart-card .side-tabwrap { height: 300px; }
-    .chart-band.folders-hidden .chart-card .side-tabwrap { height: 360px; }
-    .chart-band.chart-expanded .chart-card .side-tabwrap { height: 380px; }
-    .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 460px; }
-  }
+  /* If the row wraps and the side panel drops below the chart, it keeps a
+     usable height of its own. */
+  .chart-band .chart-card .side-tabwrap { min-height: 300px; }
   @media (max-width: 560px) {
     /* Stacks below the chart at this width (full-row, own line) rather
        than sitting beside it — matching the chart's height stops making
@@ -1086,6 +1081,7 @@
        force" at this width (a narrow viewport is still ≤1200px), not
        overridden by source order alone. */
     .side-tabwrap { flex: 0 0 auto; width: 100%; margin-top: 6px; height: auto !important; }
+    .side-panelbox { contain: none; }
   }
 
   .network-status strong { color: var(--f); }
@@ -1405,14 +1401,17 @@
   .bf-sbtree button { background: none; border: none; padding: 0; font: inherit; cursor: pointer; box-shadow: none; }
   .bf-sbtree-link { color: var(--f); font-size: 12px; }
   .bf-sbtree-link:hover { text-decoration: underline; }
-  .bf-sbtree-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 40px 116px; column-gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .bf-sbtree-row { display: grid; grid-template-columns: minmax(0, 1fr) 108px 40px 116px; column-gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
   .bf-sbtree-head { color: var(--muted); font-size: 11.5px; }
   .bf-sbtree-top { font-weight: 700; }
   .bf-sbtree-name { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bf-sbtree-tog { display: inline-block; width: 14px; flex: none; color: var(--muted); text-align: center; }
   .bf-sbtree-strong { font-weight: 600; }
   .bf-sbtree-muted { color: var(--muted); font-weight: 400; }
+  .bf-sbtree-name.bf-sbtree-wrap { flex-wrap: wrap; white-space: normal; }
+  .bf-sbtree-note { flex-basis: 100%; padding-left: 18px; font-size: 11.5px; }
   .bf-sbtree-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bf-sbtree-raw { font-size: 11.5px; }
   .bf-sbtree-pct { display: flex; align-items: center; gap: 6px; font-weight: 400; }
   .bf-sbtree-pct .bf-sbtree-num { min-width: 36px; }
   .bf-sbtree-track { position: relative; flex: 1; height: 6px; background: var(--line); border-radius: 3px; }
@@ -7113,6 +7112,31 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       return 'Angle ' + n1(d.angle) + '° gives an aspect value of ' + n2(Math.abs(d.value)) + '; ' +
         (full ? 'counted in full' : '÷ 4') + ' = ' + signed(d.weighted);
     }
+    // Compound (panchadha) relation of one planet toward another, as a word.
+    var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
+    function relWord(from, to) {
+      var rel = result.relationships[from] && result.relationships[from][to];
+      return (rel && REL_WORD[rel.panchadha]) || '';
+    }
+    // How an aspecting planet stands toward the sign it aspects: its own
+    // dignity there first, else its compound relation to the sign's lord.
+    // Interpretive only — neither Drik nor Bhava Drishti scores it.
+    function signRelation(from, signIdx) {
+      if (S.EXALT[from] != null) {
+        var ex = Math.floor(S.EXALT[from] / 30);
+        if (ex === signIdx) return 'Exaltation sign';
+        if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
+      }
+      if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
+      if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
+      var word = relWord(from, E2.SIGN_LORDS[signIdx]);
+      return word ? word + '’s sign' : '';
+    }
+    // For an aspect on a planet: how the aspecting planet regards the planet
+    // itself, then the sign it falls in.
+    function aspectRelation(from, to) {
+      return [relWord(from, to), signRelation(from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
+    }
 
     var longitudes = {};
     sb.grahas.forEach(function (g) { longitudes[g] = result.planets[g].longitude; });
@@ -7161,7 +7185,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           { n: 'Chesta (motional)', v: r.chesta, min: SB_MIN.chesta[name], max: 60 },
           { n: 'Naisargika (natural)', v: r.naisargika, max: 60 },
           { n: 'Drik (aspectual)', v: r.drik, c: (r.drikDetail || []).map(function (d) {
-            return { n: 'From ' + d.from, v: d.weighted };
+            return { n: 'From ' + d.from, v: d.weighted, raw: d.value, note: aspectRelation(d.from, name), noteBelow: true };
           }) }
         ]
       };
@@ -7200,6 +7224,10 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           tenantsOf(signIdx, other).some(function (n) { return n !== a.planet; });
       });
     }
+    // Rising type of each sign (as in Bhava Bala) and each planet's age of
+    // maturity (graha paka), as commonly cited in the Parashari tradition.
+    var SIRSHODAYA_SIGNS = [2, 4, 5, 6, 7, 10], PRISHTODAYA_SIGNS = [0, 1, 3, 8, 9];
+    var MATURITY_AGE = { Jupiter: 16, Sun: 22, Moon: 24, Venus: 25, Mars: 28, Mercury: 32, Saturn: 36, Rahu: 42, Ketu: 48 };
     var AV5_SHARE = { Bala: 'about a quarter of its results', Kumara: 'about half of its results', Yuva: 'its full results',
       Vriddha: 'very little of its results', Mrita: 'almost none of its results' };
     var CARRY_IN = [{ label: 'Input', width: '16%' }, { label: 'What it brings', width: '38%' },
@@ -7363,6 +7391,27 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           'Redirect the end result: the hardship it carries turns into gain, after it has been endured.'
         ]);
       }
+
+      // Timing of results. Within its periods: by how its sign rises (head-first
+      // early, hind-first late, Pisces throughout) and by its drekkana (1st
+      // early, 2nd middle, 3rd late). Over a life: its age of maturity.
+      var riseKind = SIRSHODAYA_SIGNS.indexOf(p.signIndex) >= 0 ? 'early' : PRISHTODAYA_SIGNS.indexOf(p.signIndex) >= 0 ? 'late' : 'middle';
+      var riseText = p.sign + (riseKind === 'early' ? ' rises head-first (Sirshodaya)' : riseKind === 'late' ? ' rises hind-first (Prishtodaya)' : ' rises both ways (Ubhayodaya)');
+      // Without a degree (e.g. a divisional placement) only the sign speaks.
+      var hasDeg = typeof p.degree === 'number' && isFinite(p.degree);
+      var dk = hasDeg ? Math.min(2, Math.floor(p.degree / 10)) : -1;
+      var dkKind = hasDeg ? ['early', 'middle', 'late'][dk] : null;
+      var whenText = !hasDeg ? cap(riseKind) + ' in its periods by its sign.'
+        : riseKind === dkKind ? cap(riseKind) + ' in its periods: both point to the ' + { early: 'start', middle: 'middle', late: 'end' }[riseKind] + ' of its MD, AD and PD.'
+        : 'Spread through its periods: ' + riseKind + ' by its sign, ' + dkKind + ' by its drekkana.';
+      var mAge = MATURITY_AGE[name];
+      var birthYear = ctx.sunrise ? ctx.sunrise.getFullYear() : null;
+      filterRows.push([
+        'Timing of results',
+        riseText + (hasDeg ? ', and ' + fl(p.longitude).replace(p.sign + ' ', '') + ' is in its ' + ord(dk + 1) + ' drekkana' : '') +
+          '. It matures at age ' + mAge + (birthYear ? ' (around ' + (birthYear + mAge) + ').' : '.'),
+        whenText + ' Its full results come from age ' + mAge + '.'
+      ]);
 
       // ---- 3. Delivery ----
       var outShort = [];
@@ -7602,7 +7651,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         (r.drikDetail || []).forEach(function (d) {
           drik.push({
             dim: 'Aspect from ' + d.from,
-            cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its own state is not scored.',
+            cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its own state is not scored.' +
+              (aspectRelation(d.from, name) ? ' ' + aspectRelation(d.from, name) + ': read but not scored.' : ''),
             calc: aspectCalc(d), value: '', comp: 'Drik Bala'
           });
         });
@@ -7878,7 +7928,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     var dri = [];
     bb.drishtiDetail.forEach(function (d) {
       dri.push({ dim: 'Aspect from ' + d.from,
-        cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its dignity and lordship are not scored.',
+        cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its dignity and lordship are not scored.' +
+          (signRelation(d.from, signIdx) ? ' ' + signRelation(d.from, signIdx) + ': read but not scored.' : ''),
         calc: aspectCalc(d), value: '', comp: 'Bhava Drishti Bala' });
     });
     dri.push({ dim: 'Net of aspects on the cusp',
@@ -8017,7 +8068,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         ] },
         { n: 'Bhava Digbala (' + E2.SIGNS[signIdx] + ' on the cusp)', v: bb.dig, max: 60 },
         { n: 'Bhava Drishti (aspects on the cusp)', v: bb.drishti, c: bb.drishtiDetail.map(function (d) {
-          return { n: 'From ' + d.from, v: d.weighted };
+          var rel = signRelation(d.from, signIdx);
+          return { n: 'From ' + d.from, v: d.weighted, raw: d.value, note: rel, noteBelow: true };
         }) },
         { n: 'Occupation (Raman)', v: bb.occupation, c: bb.occupationDetail.map(function (o) {
           return { n: o.planet, v: o.value };
@@ -9321,17 +9373,12 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     // classical relationship — some *other* sign's ruler also serving
     // elsewhere — so none of it is dropped; it just can no longer inflate a
     // single sign's own count beyond what that sign's own click shows.
-    // `perSign` only needs the explicitly-selected signs' own breakdowns
-    // (for the status line below), not all 12, even when this ran across
-    // all 12 to build the edge set.
     var consolidated = !selectedList.length;
     var scanList = consolidated ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : selectedList;
-    var visibleEdges = [], secondaryEdges = [], perSign = {};
+    var visibleEdges = [], secondaryEdges = [];
     scanList.forEach(function (sign) {
       var info = connectionsForSign(sign, allEdges, result);
-      if (!consolidated) perSign[sign] = info;
       var dir = networkDirEdges(info, sign, result);
-      if (!consolidated) { info.cntIn = dir.cntIn; info.cntOut = dir.cntOut; }
       visibleEdges = visibleEdges.concat(dir.inEdges, dir.outEdges);
       secondaryEdges = secondaryEdges.concat(dir.secondary);
     });
@@ -9659,98 +9706,11 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       rect.classList.toggle('net-dimmed', selectedList.length > 0 && !involved[sIdx]);
     });
 
+    // The chart speaks for itself: no text panel beside it, selected or not.
     var statusEl = document.getElementById('networkStatus');
     if (statusEl) {
-      statusEl.classList.remove('hidden');
-      if (selectedList.length === 1) {
-        // Now rendered as a list — one point per line — since this sits in
-        // the narrow column beside the chart rather than as a paragraph
-        // below it. First point is the connection count (in + out), then one
-        // further point per secondary-influence note (there can be more
-        // than one lord contributing a secondary line into the same sign).
-        var sign = selectedList[0];
-        var info = perSign[sign];
-        var nIn = info.cntIn, nOut = info.cntOut;
-        var signName = SIGNS[sign];
-        var points = [];
-        if (!networkShowIn && !networkShowOut) {
-          points.push('Tick <strong>In</strong> or <strong>Out</strong> to show connections for <strong>' + signName + '</strong>.');
-        } else if (networkShowIn && networkShowOut) {
-          if (nIn || nOut) {
-            points.push('Showing ' + nIn + ' connection' + (nIn === 1 ? '' : 's') + ' into, and ' + nOut +
-              ' out of, <strong>' + signName + '</strong>.');
-          } else {
-            points.push('Nothing converges into or out of <strong>' + signName + '</strong>.');
-          }
-        } else if (networkShowIn) {
-          points.push(nIn ? 'Showing ' + nIn + ' connection' + (nIn === 1 ? '' : 's') + ' into <strong>' + signName + '</strong>.'
-            : 'Nothing comes into <strong>' + signName + '</strong>.');
-        } else {
-          points.push(nOut ? 'Showing ' + nOut + ' connection' + (nOut === 1 ? '' : 's') + ' out of <strong>' + signName + '</strong>.'
-            : 'Nothing goes out of <strong>' + signName + '</strong>.');
-        }
-        if (networkShowIn) info.secondaryNotes.forEach(function (sn) {
-          points.push('<span class="net-secondary-swatch">Light blue</span>: ' + sn.lord +
-            ' also rules ' + sn.others.map(function (o) { return SIGNS[o]; }).join(', ') +
-            ', placed in ' + SIGNS[sn.lordSign] + '.');
-        });
-        statusEl.innerHTML = '<ul class="net-notes-list">' +
-          points.map(function (pt) { return '<li>' + pt + '</li>'; }).join('') +
-          '</ul>' +
-          '<a href="#" id="networkShowAll">Show all</a>';
-      } else if (selectedList.length > 1) {
-        // Multiple independently-selected signs: one list point per sign for
-        // its own connection count (in + out), plus one further point per
-        // secondary-influence note on that sign (prefixed with the sign name
-        // so it's clear which sign each point belongs to once flattened
-        // into a single list).
-        var points2 = [];
-        selectedList.forEach(function (sign) {
-          var info2 = perSign[sign];
-          var cntIn = info2.cntIn, cntOut = info2.cntOut;
-          var cnt = [];
-          if (networkShowIn) cnt.push(cntIn + ' in');
-          if (networkShowOut) cnt.push(cntOut + ' out');
-          points2.push('<strong>' + SIGNS[sign] + '</strong>: ' + (cnt.length ? cnt.join(', ') : 'tick In or Out') + '.');
-          if (networkShowIn) info2.secondaryNotes.forEach(function (sn) {
-            points2.push('<span class="net-secondary-swatch">Light blue</span> (' + SIGNS[sign] + '): ' +
-              sn.lord + ' also rules ' + sn.others.map(function (o) { return SIGNS[o]; }).join(', ') +
-              ', placed in ' + SIGNS[sn.lordSign] + '.');
-          });
-        });
-        statusEl.innerHTML = '<ul class="net-notes-list">' +
-          points2.map(function (pt) { return '<li>' + pt + '</li>'; }).join('') +
-          '</ul>' +
-          '<a href="#" id="networkShowAll">Show all</a>';
-      } else {
-        statusEl.innerHTML = 'Click a sign to isolate the connections converging into it, and going out ' +
-          'of it — every dispositor, aspect, and exchange edge that touches it either way. ' +
-          '<span class="net-secondary-swatch">Light blue</span> lines show secondary influence — ' +
-          'every two-sign ruler’s other owned sign, connected to where that ruler itself stands. ' +
-          (sb && sb.results
-            ? 'Arrowheads are colored by the driving planet’s verdict on the Influence Engine tab — its ' +
-              'Shadbala number crossed with the factors the number leaves out, with yogas counted only ' +
-              'for the lords of the dasha period selected on the Dashas tab' +
-              (bfDashaOpts().periodLabel ? ' (now ' + bfDashaOpts().periodLabel + ')' : '') + ': ' +
-              '<span class="net-benefic-swatch">green</span> for Strong or supported, ' +
-              '<span class="net-mixed-swatch">gold</span> for Adequate, Mixed or strong but afflicted, ' +
-              '<span class="net-malefic-swatch">red</span> for Weak or Afflicted'
-            : 'Arrowheads are colored by the driving planet’s overall influence tone — natural benefic/' +
-              'malefic, widened by its own functional lordship (Trikona/Dusthana) and any co-tenant taint: ' +
-              '<span class="net-benefic-swatch">green</span> leans benefic, ' +
-              '<span class="net-malefic-swatch">red</span> leans malefic, ' +
-              '<span class="net-mixed-swatch">gold</span> for a genuinely split read (e.g. a planet that is ' +
-              'both a Trikona and a Dusthana lord at once)') +
-          ' — independent of the line color, which still shows the relationship type.';
-      }
-      var showAllLink = document.getElementById('networkShowAll');
-      if (showAllLink) {
-        showAllLink.addEventListener('click', function (ev) {
-          ev.preventDefault();
-          networkSelectedSigns = {};
-          renderSouthChart(svgId, result, useNavamsa, sb);
-        });
-      }
+      statusEl.classList.add('hidden');
+      statusEl.innerHTML = '';
     }
   }
 
@@ -10757,9 +10717,15 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       }
       nameCell.appendChild(tog);
       nameCell.appendChild(spanText(node.n, depth < 2 ? 'bf-sbtree-strong' : ''));
-      if (node.note) nameCell.appendChild(spanText(' · ' + node.note, 'bf-sbtree-muted'));
+      if (node.note && node.noteBelow) {
+        nameCell.className += ' bf-sbtree-wrap';
+        nameCell.appendChild(spanText(node.note, 'bf-sbtree-muted bf-sbtree-note'));
+      } else if (node.note) nameCell.appendChild(spanText(' · ' + node.note, 'bf-sbtree-muted'));
       row.appendChild(nameCell);
-      row.appendChild(spanText(fmt(node.v), 'bf-sbtree-num'));
+      // A Drik row also shows the raw aspect value, before weighting, in brackets.
+      var num = spanText(fmt(node.v), 'bf-sbtree-num');
+      if (node.raw != null) num.insertBefore(spanText('(' + fmt(node.raw) + ') ', 'bf-sbtree-muted bf-sbtree-raw'), num.firstChild);
+      row.appendChild(num);
       row.appendChild(spanText(node.max ? String(node.max) : '—', 'bf-sbtree-num bf-sbtree-max bf-sbtree-muted'));
       var pct = document.createElement('div');
       pct.className = 'bf-sbtree-pct';

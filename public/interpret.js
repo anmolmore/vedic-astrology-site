@@ -2890,6 +2890,31 @@
       return 'Angle ' + n1(d.angle) + '° gives an aspect value of ' + n2(Math.abs(d.value)) + '; ' +
         (full ? 'counted in full' : '÷ 4') + ' = ' + signed(d.weighted);
     }
+    // Compound (panchadha) relation of one planet toward another, as a word.
+    var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
+    function relWord(from, to) {
+      var rel = result.relationships[from] && result.relationships[from][to];
+      return (rel && REL_WORD[rel.panchadha]) || '';
+    }
+    // How an aspecting planet stands toward the sign it aspects: its own
+    // dignity there first, else its compound relation to the sign's lord.
+    // Interpretive only — neither Drik nor Bhava Drishti scores it.
+    function signRelation(from, signIdx) {
+      if (S.EXALT[from] != null) {
+        var ex = Math.floor(S.EXALT[from] / 30);
+        if (ex === signIdx) return 'Exaltation sign';
+        if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
+      }
+      if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
+      if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
+      var word = relWord(from, E2.SIGN_LORDS[signIdx]);
+      return word ? word + '’s sign' : '';
+    }
+    // For an aspect on a planet: how the aspecting planet regards the planet
+    // itself, then the sign it falls in.
+    function aspectRelation(from, to) {
+      return [relWord(from, to), signRelation(from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
+    }
 
     var longitudes = {};
     sb.grahas.forEach(function (g) { longitudes[g] = result.planets[g].longitude; });
@@ -2938,7 +2963,7 @@
           { n: 'Chesta (motional)', v: r.chesta, min: SB_MIN.chesta[name], max: 60 },
           { n: 'Naisargika (natural)', v: r.naisargika, max: 60 },
           { n: 'Drik (aspectual)', v: r.drik, c: (r.drikDetail || []).map(function (d) {
-            return { n: 'From ' + d.from, v: d.weighted };
+            return { n: 'From ' + d.from, v: d.weighted, raw: d.value, note: aspectRelation(d.from, name), noteBelow: true };
           }) }
         ]
       };
@@ -2977,6 +3002,10 @@
           tenantsOf(signIdx, other).some(function (n) { return n !== a.planet; });
       });
     }
+    // Rising type of each sign (as in Bhava Bala) and each planet's age of
+    // maturity (graha paka), as commonly cited in the Parashari tradition.
+    var SIRSHODAYA_SIGNS = [2, 4, 5, 6, 7, 10], PRISHTODAYA_SIGNS = [0, 1, 3, 8, 9];
+    var MATURITY_AGE = { Jupiter: 16, Sun: 22, Moon: 24, Venus: 25, Mars: 28, Mercury: 32, Saturn: 36, Rahu: 42, Ketu: 48 };
     var AV5_SHARE = { Bala: 'about a quarter of its results', Kumara: 'about half of its results', Yuva: 'its full results',
       Vriddha: 'very little of its results', Mrita: 'almost none of its results' };
     var CARRY_IN = [{ label: 'Input', width: '16%' }, { label: 'What it brings', width: '38%' },
@@ -3140,6 +3169,27 @@
           'Redirect the end result: the hardship it carries turns into gain, after it has been endured.'
         ]);
       }
+
+      // Timing of results. Within its periods: by how its sign rises (head-first
+      // early, hind-first late, Pisces throughout) and by its drekkana (1st
+      // early, 2nd middle, 3rd late). Over a life: its age of maturity.
+      var riseKind = SIRSHODAYA_SIGNS.indexOf(p.signIndex) >= 0 ? 'early' : PRISHTODAYA_SIGNS.indexOf(p.signIndex) >= 0 ? 'late' : 'middle';
+      var riseText = p.sign + (riseKind === 'early' ? ' rises head-first (Sirshodaya)' : riseKind === 'late' ? ' rises hind-first (Prishtodaya)' : ' rises both ways (Ubhayodaya)');
+      // Without a degree (e.g. a divisional placement) only the sign speaks.
+      var hasDeg = typeof p.degree === 'number' && isFinite(p.degree);
+      var dk = hasDeg ? Math.min(2, Math.floor(p.degree / 10)) : -1;
+      var dkKind = hasDeg ? ['early', 'middle', 'late'][dk] : null;
+      var whenText = !hasDeg ? cap(riseKind) + ' in its periods by its sign.'
+        : riseKind === dkKind ? cap(riseKind) + ' in its periods: both point to the ' + { early: 'start', middle: 'middle', late: 'end' }[riseKind] + ' of its MD, AD and PD.'
+        : 'Spread through its periods: ' + riseKind + ' by its sign, ' + dkKind + ' by its drekkana.';
+      var mAge = MATURITY_AGE[name];
+      var birthYear = ctx.sunrise ? ctx.sunrise.getFullYear() : null;
+      filterRows.push([
+        'Timing of results',
+        riseText + (hasDeg ? ', and ' + fl(p.longitude).replace(p.sign + ' ', '') + ' is in its ' + ord(dk + 1) + ' drekkana' : '') +
+          '. It matures at age ' + mAge + (birthYear ? ' (around ' + (birthYear + mAge) + ').' : '.'),
+        whenText + ' Its full results come from age ' + mAge + '.'
+      ]);
 
       // ---- 3. Delivery ----
       var outShort = [];
@@ -3379,7 +3429,8 @@
         (r.drikDetail || []).forEach(function (d) {
           drik.push({
             dim: 'Aspect from ' + d.from,
-            cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its own state is not scored.',
+            cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its own state is not scored.' +
+              (aspectRelation(d.from, name) ? ' ' + aspectRelation(d.from, name) + ': read but not scored.' : ''),
             calc: aspectCalc(d), value: '', comp: 'Drik Bala'
           });
         });
@@ -3655,7 +3706,8 @@
     var dri = [];
     bb.drishtiDetail.forEach(function (d) {
       dri.push({ dim: 'Aspect from ' + d.from,
-        cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its dignity and lordship are not scored.',
+        cond: cap(stateOf(d.from)) + '. Counts as a ' + (d.value >= 0 ? 'benefic' : 'malefic') + '; its dignity and lordship are not scored.' +
+          (signRelation(d.from, signIdx) ? ' ' + signRelation(d.from, signIdx) + ': read but not scored.' : ''),
         calc: aspectCalc(d), value: '', comp: 'Bhava Drishti Bala' });
     });
     dri.push({ dim: 'Net of aspects on the cusp',
@@ -3794,7 +3846,8 @@
         ] },
         { n: 'Bhava Digbala (' + E2.SIGNS[signIdx] + ' on the cusp)', v: bb.dig, max: 60 },
         { n: 'Bhava Drishti (aspects on the cusp)', v: bb.drishti, c: bb.drishtiDetail.map(function (d) {
-          return { n: 'From ' + d.from, v: d.weighted };
+          var rel = signRelation(d.from, signIdx);
+          return { n: 'From ' + d.from, v: d.weighted, raw: d.value, note: rel, noteBelow: true };
         }) },
         { n: 'Occupation (Raman)', v: bb.occupation, c: bb.occupationDetail.map(function (o) {
           return { n: o.planet, v: o.value };

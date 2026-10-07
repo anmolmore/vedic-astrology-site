@@ -901,7 +901,10 @@
      down to a sliver, the notes column (last in source order) wraps onto
      its own full-width line below the chart. In a wide single-chart view
      there's room for both, so they sit in one row. */
-  .chart-body-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+  /* stretch: the side panel runs the full height of the chart column beside
+     it (title through chart), so their bottom borders line up. */
+  .chart-body-row { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+  .chart-body-row > .chart-svg-wrap { align-self: flex-start; }
   .chart-svg-wrap {
     /* Column, not row: now holds the title above the chart and the Dasha
        activation status line below it too (moved in from being direct
@@ -990,6 +993,9 @@
     flex: 0 1 130px; min-width: 130px; padding-top: 0; text-align: left;
     display: flex; flex-direction: column; gap: 10px;
   }
+  /* No notes are shown beside the chart now, so the empty column gives its
+     width back to the side panel. */
+  .chart-notes-col:has(> .network-status.hidden) { display: none; }
   @media (max-width: 560px) {
     .chart-body-row { flex-direction: column; flex-wrap: nowrap; align-items: center; }
     /* Stacks below the chart (full width) rather than being hidden, so
@@ -1043,13 +1049,14 @@
      lets a flex child actually shrink below its content's natural height
      instead of forcing the box open — without it, overflow-y here would
      never trigger no matter how tall the content got) is what makes this
-     box automatically match the South Indian chart's own height (set on
-     .side-tabwrap itself, below) at every one of its collapsed/expanded
-     tiers, without hard-coding a separate height number for each one. */
+     box fill the side panel, which stretches to the chart column's height. */
   .side-panelbox {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 0 10px 10px 10px; position: relative; z-index: 1;
     padding: 10px 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    /* contain: size keeps the panel's content from setting the row's height,
+       so the chart column alone decides it. */
+    contain: size;
     text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "South Indian · Rashi D1" title) wants that, this reused Influence Engine content doesn't */
   }
   .side-tabpanel.hidden { display: none; }
@@ -1062,21 +1069,9 @@
   }
   .ie-interp-box:focus { border-color: var(--gold); outline: none; }
   .ie-interp-saved { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
-  /* Matches the South Indian chart's own .chart-svg-inner width tiers
-     exactly (both are squares — width and height are the same number
-     there), so the two sit at identical heights at every one of the
-     collapsed/expanded states this band supports, rather than only in the
-     default one. */
-  .chart-band .chart-card .side-tabwrap { height: 360px; }
-  .chart-band.folders-hidden .chart-card .side-tabwrap { height: 500px; }
-  .chart-band.chart-expanded .chart-card .side-tabwrap { height: 520px; }
-  .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 680px; }
-  @media (max-width: 1200px) {
-    .chart-band .chart-card .side-tabwrap { height: 300px; }
-    .chart-band.folders-hidden .chart-card .side-tabwrap { height: 360px; }
-    .chart-band.chart-expanded .chart-card .side-tabwrap { height: 380px; }
-    .chart-band.chart-expanded.folders-hidden .chart-card .side-tabwrap { height: 460px; }
-  }
+  /* If the row wraps and the side panel drops below the chart, it keeps a
+     usable height of its own. */
+  .chart-band .chart-card .side-tabwrap { min-height: 300px; }
   @media (max-width: 560px) {
     /* Stacks below the chart at this width (full-row, own line) rather
        than sitting beside it — matching the chart's height stops making
@@ -1086,6 +1081,7 @@
        force" at this width (a narrow viewport is still ≤1200px), not
        overridden by source order alone. */
     .side-tabwrap { flex: 0 0 auto; width: 100%; margin-top: 6px; height: auto !important; }
+    .side-panelbox { contain: none; }
   }
 
   .network-status strong { color: var(--f); }
@@ -1405,14 +1401,17 @@
   .bf-sbtree button { background: none; border: none; padding: 0; font: inherit; cursor: pointer; box-shadow: none; }
   .bf-sbtree-link { color: var(--f); font-size: 12px; }
   .bf-sbtree-link:hover { text-decoration: underline; }
-  .bf-sbtree-row { display: grid; grid-template-columns: minmax(0, 1fr) 64px 40px 116px; column-gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .bf-sbtree-row { display: grid; grid-template-columns: minmax(0, 1fr) 108px 40px 116px; column-gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
   .bf-sbtree-head { color: var(--muted); font-size: 11.5px; }
   .bf-sbtree-top { font-weight: 700; }
   .bf-sbtree-name { display: flex; align-items: center; gap: 4px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bf-sbtree-tog { display: inline-block; width: 14px; flex: none; color: var(--muted); text-align: center; }
   .bf-sbtree-strong { font-weight: 600; }
   .bf-sbtree-muted { color: var(--muted); font-weight: 400; }
+  .bf-sbtree-name.bf-sbtree-wrap { flex-wrap: wrap; white-space: normal; }
+  .bf-sbtree-note { flex-basis: 100%; padding-left: 18px; font-size: 11.5px; }
   .bf-sbtree-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bf-sbtree-raw { font-size: 11.5px; }
   .bf-sbtree-pct { display: flex; align-items: center; gap: 6px; font-weight: 400; }
   .bf-sbtree-pct .bf-sbtree-num { min-width: 36px; }
   .bf-sbtree-track { position: relative; flex: 1; height: 6px; background: var(--line); border-radius: 3px; }
