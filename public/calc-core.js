@@ -147,6 +147,57 @@
     return (s * 9 + part) % 12;
   }
 
+  // The Shodashavarga — BPHS's sixteen divisional charts, in order of division.
+  var VARGAS = [
+    { n: 1, name: 'Rashi', use: 'The whole life' },
+    { n: 2, name: 'Hora', use: 'Wealth' },
+    { n: 3, name: 'Drekkana', use: 'Siblings, courage' },
+    { n: 4, name: 'Chaturthamsha', use: 'Property, home, fortune' },
+    { n: 7, name: 'Saptamsha', use: 'Children' },
+    { n: 9, name: 'Navamsha', use: 'Marriage, dharma' },
+    { n: 10, name: 'Dashamsha', use: 'Career' },
+    { n: 12, name: 'Dvadashamsha', use: 'Parents' },
+    { n: 16, name: 'Shodashamsha', use: 'Vehicles, comforts' },
+    { n: 20, name: 'Vimshamsha', use: 'Spiritual practice' },
+    { n: 24, name: 'Chaturvimshamsha', use: 'Education, learning' },
+    { n: 27, name: 'Saptavimshamsha', use: 'Strengths, weaknesses' },
+    { n: 30, name: 'Trimshamsha', use: 'Misfortunes, illness' },
+    { n: 40, name: 'Khavedamsha', use: 'Maternal lineage' },
+    { n: 45, name: 'Akshavedamsha', use: 'Paternal lineage, character' },
+    { n: 60, name: 'Shashtiamsha', use: 'Past karma' }
+  ];
+
+  // Sign a longitude falls in for the D-n chart, by the Parashari (BPHS)
+  // rules. Odd signs are Aries, Gemini…; movable / fixed / dual run in that
+  // order from Aries; fire / earth / air / water likewise.
+  function vargaSignIndex(lon, n) {
+    var s = signOf(lon), d = degInSign(lon);
+    var odd = s % 2 === 0, kind = s % 3, element = s % 4;
+    var part = Math.min(n - 1, Math.floor(d / (30 / n)));
+    function from(start) { return (start + part) % 12; }
+    switch (n) {
+      case 1: return s;
+      case 2: return odd === (d < 15) ? 4 : 3;                  // Leo (Sun) / Cancer (Moon)
+      case 3: return (s + part * 4) % 12;                        // 1st, 5th, 9th from the sign
+      case 4: return (s + part * 3) % 12;                        // the sign's kendras
+      case 7: return from(odd ? s : s + 6);
+      case 9: return navamsaSignIndex(lon);
+      case 10: return from(odd ? s : s + 8);
+      case 12: return from(s);
+      case 16: return from([0, 4, 8][kind]);                     // Aries / Leo / Sagittarius
+      case 20: return from([0, 8, 4][kind]);                     // Aries / Sagittarius / Leo
+      case 24: return from(odd ? 4 : 3);                         // Leo / Cancer
+      case 27: return from([0, 3, 6, 9][element]);               // Aries / Cancer / Libra / Capricorn
+      case 30:
+        if (odd) return d < 5 ? 0 : d < 10 ? 10 : d < 18 ? 8 : d < 25 ? 2 : 6;
+        return d < 5 ? 1 : d < 12 ? 5 : d < 20 ? 11 : d < 25 ? 9 : 7;
+      case 40: return from(odd ? 0 : 6);                         // Aries / Libra
+      case 45: return from([0, 4, 8][kind]);                     // Aries / Leo / Sagittarius
+      case 60: return from(s);
+    }
+    return s;
+  }
+
   // ---- Influence Engine: raw, chart-structural facts (calc-core.js's own
   // layer — no Shadbala tables needed here, matching this file's existing
   // "only astronomy, nothing looked up from a static dignity table" rule).
@@ -470,6 +521,7 @@
     // Influence Engine raw facts — exported individually too (not just baked
     // into computeChart's output) so a caller with just a longitude, such as
     // a re-derived divisional chart, can ask the same questions directly.
+    VARGAS: VARGAS, vargaSignIndex: vargaSignIndex,
     combustionOf: combustionOf,
     baladiAvastha: baladiAvastha
   };

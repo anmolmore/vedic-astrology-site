@@ -866,7 +866,6 @@
   .chart-card svg .planet-dg-deb  { fill: #96302f; }
   .chart-card svg text.house-num { fill: var(--muted); opacity: 0.85; font-weight: 600; }
   .chart-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
-  .d9-charts .chart-card svg { max-width: 340px; }
   .chart-card svg rect, .chart-card svg polygon { }
   .chart-card svg .house-hit { cursor: default; }
   .chart-card svg .house-hit:hover { fill: rgba(179,130,47,0.10); }
@@ -1285,6 +1284,32 @@
   td.min-no { color: var(--muted); }
   td.dim { color: var(--muted); }
   th.col-left, td.col-left { text-align: left; }
+  .varga-layout { display: flex; gap: 16px; align-items: flex-start; }
+  .varga-pills { display: flex; flex-direction: column; gap: 6px; flex: none; width: 190px; }
+  .varga-pill { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; box-shadow: none; }
+  .varga-pill .vp-name { font-size: 13px; font-weight: 600; }
+  .varga-pill .vp-use { font-size: 11px; color: var(--muted); }
+  .varga-pill:hover { border-color: var(--gold); }
+  .varga-pill[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: #fff; }
+  .varga-pill[aria-pressed="true"] .vp-use { color: rgba(255,255,255,0.85); }
+  .varga-pills-rule { height: 1px; background: var(--line); margin: 4px 0; }
+  .varga-canvas-wrap { flex: 1; min-width: 0; }
+  .varga-canvas { display: grid; grid-template-columns: repeat(var(--varga-cols, 1), minmax(0, 1fr)); gap: 12px; }
+  .varga-canvas .chart-card { margin: 0; min-width: 0; padding: 10px; }
+  .varga-canvas .chart-card h3 { margin: 0 0 6px; }
+  .varga-canvas svg { display: block; width: 100%; height: auto; max-width: var(--varga-max, 480px); margin: 0 auto; }
+  .varga-empty { color: var(--muted); }
+  @media (max-width: 720px) {
+    .varga-layout { flex-direction: column; }
+    .varga-pills { flex-direction: row; flex-wrap: wrap; width: auto; }
+    .varga-pill { padding: 5px 10px; }
+    .varga-pill .vp-use { display: none; }
+    .varga-pills-rule { flex-basis: 100%; }
+  }
+  #planetTable th { white-space: nowrap; }
+  #planetTable .col-label { white-space: normal; }
+  .col-tog { margin-left: 4px; width: 16px; height: 16px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--muted); font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1; cursor: pointer; vertical-align: middle; box-shadow: none; }
+  .col-tog:hover { color: var(--gold); border-color: var(--gold); }
   td.aspects { font-size: 12.5px; line-height: 1.55; }
   .retro-flag { color: #b03a3a; font-size: 11px; font-weight: 700; margin-left: 3px; }
   /* paired relationship lists — both columns share the exact line metrics so
@@ -1702,7 +1727,7 @@
           <div class="tabstrip" role="tablist" aria-label="Chart detail sections">
             <button role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true">Birth Details</button>
             <button role="tab" id="tab-planets" aria-controls="panel-planets" aria-selected="false" tabindex="-1">Planets</button>
-            <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Navamsa (D9)</button>
+            <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Vargas</button>
             <button role="tab" id="tab-houses" aria-controls="panel-houses" aria-selected="false" tabindex="-1">Houses</button>
             <button role="tab" id="tab-strength" aria-controls="panel-strength" aria-selected="false" tabindex="-1">Strength</button>
             <button role="tab" id="tab-relations" aria-controls="panel-relations" aria-selected="false" tabindex="-1">Relationships</button>
@@ -1751,18 +1776,14 @@
           </div>
           <div role="tabpanel" id="panel-navamsa" aria-labelledby="tab-navamsa" hidden>
     <section class="block">
-      <h2>Navamsa Chart (D9 — Marriage &amp; Dharma)</h2>
-      <p class="na-note hidden" id="naD9">The Navamsa divides each sign into nine parts by exact degree, which a placement by sign does not carry.</p>
-      <div class="charts-row d9-charts" id="navamsaCharts">
-        <div class="chart-card">
-          <h3>South Indian · Navamsa D9</h3>
-          <svg id="southChartD9" viewBox="0 0 320 320"></svg>
-          <div class="chart-note">Signs are fixed; H1–H12 mark the houses from the Navamsa Lagna.</div>
-        </div>
-        <div class="chart-card">
-          <h3>North Indian · Navamsa D9</h3>
-          <svg id="northChartD9" viewBox="0 0 300 300"></svg>
-          <div class="chart-note">Houses are fixed (H1–H12, anti-clockwise from top); the glyph is the rashi.</div>
+      <h2>Vargas (Divisional Charts)</h2>
+      <p class="na-note hidden" id="naD9">Divisional charts divide each sign by exact degree, which a placement by sign does not carry.</p>
+      <div class="varga-layout" id="navamsaCharts">
+        <div class="varga-pills" id="vargaPills" role="group" aria-label="Divisional charts to show"></div>
+        <div class="varga-canvas-wrap">
+          <div class="varga-canvas" id="vargaCanvas"></div>
+          <p class="varga-empty" id="vargaEmpty">Pick a divisional chart on the left to show it here.</p>
+          <div class="chart-note" id="vargaNote"></div>
         </div>
       </div>
     </section>
@@ -2217,7 +2238,7 @@
               <tr><td>Kala</td><td>Tribhaga</td><td>The third of the day or night</td><td>—</td></tr>
               <tr><td>Kala</td><td>Abda, Masa, Vara, Hora</td><td>Lords of the year, month, weekday and hora</td><td>—</td></tr>
               <tr><td>Kala</td><td>Ayana</td><td>North or south of the equator, by tropical longitude</td><td>The planet's own latitude</td></tr>
-              <tr><td>Kala</td><td>Yuddha</td><td>Planetary war between co-tenants within 1°</td><td>The co-tenants' compound relationship. This app flags a war but does not move Virupas for it.</td></tr>
+              <tr><td>Kala</td><td>Yuddha</td><td>Planetary war between co-tenants within 1°</td><td>The co-tenants' compound relationship. Yuddha Bala is added to the winner's Kala Bala and taken from the loser's.</td></tr>
               <tr><td>Chesta</td><td>Chesta</td><td>Retrograde, stationary or direct motion</td><td>—</td></tr>
               <tr><td>Naisargika</td><td>Naisargika</td><td>Natural luminosity, a fixed scale</td><td>—</td></tr>
               <tr><td>Drik</td><td>Drik</td><td>Aspects received, benefic minus malefic</td><td>The aspecting planet's own state; conjunctions; Rahu and Ketu</td></tr>
@@ -2661,9 +2682,9 @@
   Calculations run entirely in your browser using <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a> (MIT-licensed, JPL-derived ephemeris) for planetary positions, with the Lahiri (Chitrapaksha) ayanamsa and classical Parashari rules for houses, nakshatras, Vimshottari dasha, and planetary relationships. Rahu/Ketu use the mean lunar node by default, with a True Node option in the birth-details form. Ayanamsa is computed with a standard precession-rate approximation (accurate to a fraction of an arc-minute across the 1900–2050 range) — cross-checked against Swiss Ephemeris (Lahiri) to within ~0.02°.<br>
   Shadbala follows the Parashari method (Sthana/Dig/Kala/Chesta/Naisargika/Drik) — see the Influence
   Framework tab for the full breakdown, what's been checked against a reference implementation, and what's
-  still open. Graha Yuddha (planetary war, orb &lt;1° among Mars/Mercury/Jupiter/Venus/Saturn) is detected
-  and flagged in the Strength tab and planet interpretations, but — per classical convention — is not folded
-  into the Shadbala totals themselves. Rahu/Ketu's natural relationships follow the common convention of Rahu
+  still open. Graha Yuddha (planetary war, orb &lt;1° among Mars/Mercury/Jupiter/Venus/Saturn) is detected,
+  flagged in the Strength tab and planet interpretations, and scored as Yuddha Bala within Kala Bala (BPHS;
+  B.V. Raman's method), added to the winner and taken from the loser. Rahu/Ketu's natural relationships follow the common convention of Rahu
   as Saturn's analog and Ketu as Mars's.<br>
   Birth-place lookup uses OpenStreetMap Nominatim. No birth data leaves your browser except the place-name search.<br>
   For entertainment and self-study — not a substitute for consultation with a qualified Jyotishi.
@@ -3079,6 +3100,57 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     return (s * 9 + part) % 12;
   }
 
+  // The Shodashavarga — BPHS's sixteen divisional charts, in order of division.
+  var VARGAS = [
+    { n: 1, name: 'Rashi', use: 'The whole life' },
+    { n: 2, name: 'Hora', use: 'Wealth' },
+    { n: 3, name: 'Drekkana', use: 'Siblings, courage' },
+    { n: 4, name: 'Chaturthamsha', use: 'Property, home, fortune' },
+    { n: 7, name: 'Saptamsha', use: 'Children' },
+    { n: 9, name: 'Navamsha', use: 'Marriage, dharma' },
+    { n: 10, name: 'Dashamsha', use: 'Career' },
+    { n: 12, name: 'Dvadashamsha', use: 'Parents' },
+    { n: 16, name: 'Shodashamsha', use: 'Vehicles, comforts' },
+    { n: 20, name: 'Vimshamsha', use: 'Spiritual practice' },
+    { n: 24, name: 'Chaturvimshamsha', use: 'Education, learning' },
+    { n: 27, name: 'Saptavimshamsha', use: 'Strengths, weaknesses' },
+    { n: 30, name: 'Trimshamsha', use: 'Misfortunes, illness' },
+    { n: 40, name: 'Khavedamsha', use: 'Maternal lineage' },
+    { n: 45, name: 'Akshavedamsha', use: 'Paternal lineage, character' },
+    { n: 60, name: 'Shashtiamsha', use: 'Past karma' }
+  ];
+
+  // Sign a longitude falls in for the D-n chart, by the Parashari (BPHS)
+  // rules. Odd signs are Aries, Gemini…; movable / fixed / dual run in that
+  // order from Aries; fire / earth / air / water likewise.
+  function vargaSignIndex(lon, n) {
+    var s = signOf(lon), d = degInSign(lon);
+    var odd = s % 2 === 0, kind = s % 3, element = s % 4;
+    var part = Math.min(n - 1, Math.floor(d / (30 / n)));
+    function from(start) { return (start + part) % 12; }
+    switch (n) {
+      case 1: return s;
+      case 2: return odd === (d < 15) ? 4 : 3;                  // Leo (Sun) / Cancer (Moon)
+      case 3: return (s + part * 4) % 12;                        // 1st, 5th, 9th from the sign
+      case 4: return (s + part * 3) % 12;                        // the sign's kendras
+      case 7: return from(odd ? s : s + 6);
+      case 9: return navamsaSignIndex(lon);
+      case 10: return from(odd ? s : s + 8);
+      case 12: return from(s);
+      case 16: return from([0, 4, 8][kind]);                     // Aries / Leo / Sagittarius
+      case 20: return from([0, 8, 4][kind]);                     // Aries / Sagittarius / Leo
+      case 24: return from(odd ? 4 : 3);                         // Leo / Cancer
+      case 27: return from([0, 3, 6, 9][element]);               // Aries / Cancer / Libra / Capricorn
+      case 30:
+        if (odd) return d < 5 ? 0 : d < 10 ? 10 : d < 18 ? 8 : d < 25 ? 2 : 6;
+        return d < 5 ? 1 : d < 12 ? 5 : d < 20 ? 11 : d < 25 ? 9 : 7;
+      case 40: return from(odd ? 0 : 6);                         // Aries / Libra
+      case 45: return from([0, 4, 8][kind]);                     // Aries / Leo / Sagittarius
+      case 60: return from(s);
+    }
+    return s;
+  }
+
   // ---- Influence Engine: raw, chart-structural facts (calc-core.js's own
   // layer — no Shadbala tables needed here, matching this file's existing
   // "only astronomy, nothing looked up from a static dignity table" rule).
@@ -3402,6 +3474,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     // Influence Engine raw facts — exported individually too (not just baked
     // into computeChart's output) so a caller with just a longitude, such as
     // a re-derived divisional chart, can ask the same questions directly.
+    VARGAS: VARGAS, vargaSignIndex: vargaSignIndex,
     combustionOf: combustionOf,
     baladiAvastha: baladiAvastha
   };
@@ -3424,6 +3497,9 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
   // exclude the Sun and Moon (luminaries, not "grahas" for war purposes) and
   // the nodes (shadowy points, not physical bodies to occupy the same degree).
   var YUDDHA_GRAHAS = ['Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+  // Disc diameters (bimba parimana) the classical Yuddha Bala divides by
+  // (B.V. Raman, after BPHS).
+  var DISC_DIAMETER = { Mars: 9.4, Mercury: 6.6, Jupiter: 190.4, Venus: 16.6, Saturn: 158.0 };
   var SIGN_LORDS = ['Mars','Venus','Mercury','Moon','Sun','Mercury','Venus','Mars','Jupiter','Saturn','Saturn','Jupiter'];
 
   // Exaltation degrees (sidereal, absolute longitude)
@@ -4157,8 +4233,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       var naisargika = NAISARGIKA[g];
       var drik = drikBala(g, lons, beneficMap);
 
-      var total = sthana.total + dig + kala.total + chesta + naisargika + drik.total;
-      var rupa = total / 60;
+      kala.yuddha = 0;
       results[g] = {
         sthana: sthana.total, sthanaDetail: sthana,
         dig: dig,
@@ -4166,13 +4241,41 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         chesta: chesta,
         naisargika: naisargika,
         drik: drik.total, drikDetail: drik.detail,
-        total: total,
-        rupa: rupa,
         required: MIN_REQUIRED[g],
-        percent: (rupa / MIN_REQUIRED[g]) * 100,
-        meetsMinimum: rupa >= MIN_REQUIRED[g],
         ishtaKashta: ishtaKashtaBala(g, sthana.uchcha, chesta, norm360(lons.Sun + ayan))
       };
+    });
+
+    // Yuddha Bala, the last part of Kala Bala (BPHS; B.V. Raman's order).
+    // For each war: Sthana + Dig + Kala up to Hora (i.e. before Ayana) of
+    // each planet, the difference divided by the difference of their disc
+    // diameters; added to the winner's Kala Bala, taken from the loser's.
+    // Which partial sum and which winner rule apply vary between sources and
+    // have not been checked against Parashara's Light for a war chart.
+    yuddha.forEach(function (y) {
+      function base(g) {
+        var r = results[g];
+        return r.sthana + r.dig + (r.kala - r.kalaDetail.ayana);
+      }
+      var dDisc = Math.abs(DISC_DIAMETER[y.winner] - DISC_DIAMETER[y.loser]);
+      var yb = dDisc ? Math.abs(base(y.winner) - base(y.loser)) / dDisc : 0;
+      [[y.winner, yb], [y.loser, -yb]].forEach(function (pair) {
+        var r = results[pair[0]];
+        r.kalaDetail.yuddha = pair[1];
+        r.kalaDetail.total += pair[1];
+        r.kala = r.kalaDetail.total;
+      });
+      y.bala = yb;
+      results[y.winner].yuddha = { role: 'winner', opponent: y.loser, orb: y.orb, bala: yb };
+      results[y.loser].yuddha = { role: 'loser', opponent: y.winner, orb: y.orb, bala: -yb };
+    });
+
+    GRAHAS.forEach(function (g) {
+      var r = results[g];
+      r.total = r.sthana + r.dig + r.kala + r.chesta + r.naisargika + r.drik;
+      r.rupa = r.total / 60;
+      r.percent = (r.rupa / r.required) * 100;
+      r.meetsMinimum = r.rupa >= r.required;
     });
 
     // Rank by the ratio of each planet's Shadbala to its own required minimum
@@ -4182,17 +4285,6 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       return (results[b].percent - results[a].percent) || (results[b].total - results[a].total);
     });
     ranked.forEach(function (g, i) { results[g].rank = i + 1; });
-
-    // Yuddha is deliberately NOT folded into the Virupa totals above — the six
-    // components (Sthana+Dig+Kala+Chesta+Naisargika+Drik=Total) are a verified
-    // classical invariant this app checks programmatically, and Parashari
-    // sources themselves treat Yuddha as a caveat layered on top of Shadbala,
-    // not a 7th component within it. It's surfaced instead as a flag on each
-    // involved planet's result, for the UI and the interpretation layer to use.
-    yuddha.forEach(function (y) {
-      results[y.winner].yuddha = { role: 'winner', opponent: y.loser, orb: y.orb };
-      results[y.loser].yuddha = { role: 'loser', opponent: y.winner, orb: y.orb };
-    });
 
     return {
       grahas: GRAHAS,
@@ -5205,6 +5297,84 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     return out;
   }
 
+  // Compound (panchadha) relation of one planet toward another, as a word.
+  var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
+  function relWordOf(result, from, to) {
+    var rel = result.relationships[from] && result.relationships[from][to];
+    return (rel && REL_WORD[rel.panchadha]) || '';
+  }
+  // How an influencing planet stands toward a sign: its own dignity there
+  // first, else its compound relation to the sign's lord. Interpretive only —
+  // neither Drik nor Bhava Drishti scores it.
+  function signRelationOf(result, H, from, signIdx) {
+    var S = H.Shadbala;
+    if (S.EXALT[from] != null) {
+      var ex = Math.floor(S.EXALT[from] / 30);
+      if (ex === signIdx) return 'Exaltation sign';
+      if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
+    }
+    if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
+    if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
+    var word = relWordOf(result, from, H.engine.SIGN_LORDS[signIdx]);
+    return word ? word + '’s sign' : '';
+  }
+  // For an influence on a planet: how the influencing planet regards the
+  // planet itself, then the sign it falls in.
+  function aspectRelationOf(result, H, from, to) {
+    return [relWordOf(result, from, to), signRelationOf(result, H, from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
+  }
+
+  // The Facts tab's Body / Mind / Soul read: for each, its placement and all
+  // it takes in, heaviest first — lordships, a sign exchange, co-tenants, the
+  // dispositor, then aspects (the tripod hits above, each with how the
+  // influencing planet regards it). Each line is { text, tone } with tone
+  // 'good' / 'bad' for influencers and 'neutral' for structure.
+  function tripodInputs(result, sb, H, tripod) {
+    var E2 = H.engine, asc = result.ascendant, ascSign = asc.signIndex;
+    tripod = tripod || tripodImpact(result, sb, H);
+    function where(n) { var q = result.planets[n]; return n + ' in ' + q.sign + ', ' + ord(q.house) + ' house'; }
+    function deg(x) { return typeof x.degree === 'number' && isFinite(x.degree) ? ' ' + x.degreeFormatted : ''; }
+    function influences(key, target) {
+      var hits = tripod[key];
+      if (!hits.length) return [{ text: 'No aspects or conjunctions land here.', tone: 'neutral' }];
+      var conj = hits.filter(function (h) { return / conjoins /.test(h.via); });
+      var asp = hits.filter(function (h) { return !/ conjoins /.test(h.via); });
+      return conj.concat(asp).map(function (h) {
+        var rel = target ? aspectRelationOf(result, H, h.planet, target) : signRelationOf(result, H, h.planet, ascSign);
+        return { text: h.via + (rel ? ' · ' + rel : ''), tone: h.stabilizing ? 'good' : 'bad', conj: / conjoins /.test(h.via) };
+      });
+    }
+    var out = {};
+
+    // Body: the rising sign, its lord, and what lands on it.
+    var lagnaLord = E2.SIGN_LORDS[ascSign];
+    var body = [{ text: asc.sign + ' rising' + deg(asc) + (asc.nakshatra && asc.nakshatra.name ? ' · ' + asc.nakshatra.name : ''), tone: 'neutral' },
+      { text: 'Lagna lord ' + where(lagnaLord), tone: 'neutral' }];
+    out.Body = body.concat(influences('Body', null));
+
+    [['Mind', 'Moon'], ['Soul', 'Sun']].forEach(function (pair) {
+      var key = pair[0], name = pair[1], p = result.planets[name];
+      var dig = H.dignityOf(name, p);
+      var dignity = dig.length ? dig[0].full : signRelationOf(result, H, name, p.signIndex);
+      var lines = [{ text: name + ' in ' + p.sign + deg(p) + ', ' + ord(p.house) + ' house' + (p.nakshatra ? ' · ' + p.nakshatra : '') +
+        (dignity ? ' · ' + dignity : ''), tone: 'neutral' }];
+      var owned = H.housesOwnedBy(name, ascSign);
+      if (owned.length) lines.push({ text: 'Rules the ' + owned.map(function (o) { return ord(o.house) + ' (' + o.sign + ')'; }).join(' and '), tone: 'neutral' });
+      var disp = E2.SIGN_LORDS[p.signIndex];
+      var exchange = disp !== name && E2.SIGN_LORDS[result.planets[disp].signIndex] === name;
+      if (exchange) lines.push({ text: 'Exchanges signs with ' + disp + ' (' + ord(p.house) + ' ↔ ' + ord(result.planets[disp].house) + ')', tone: 'neutral' });
+      var inf = influences(key, name);
+      var conj = inf.filter(function (l) { return l.conj; }), rest = inf.filter(function (l) { return !l.conj; });
+      lines = lines.concat(conj);
+      if (disp !== name && !exchange) {
+        var dRel = relWordOf(result, name, disp);
+        lines.push({ text: 'Dispositor ' + where(disp) + (dRel ? ' · ' + dRel : ''), tone: 'neutral' });
+      }
+      out[key] = lines.concat(rest);
+    });
+    return out;
+  }
+
   // Dispositor Chain (Influence Framework §5 / item 23 — "Dispositor-as-net-
   // vector," multi-hop). Walks a planet's occupied sign to that sign's
   // classical lord, then to THAT planet's own occupied sign, and so on —
@@ -6024,13 +6194,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           ' — ' + (res.yuddha.role === 'winner' ? 'wins' : 'loses') + ' the war';
         sInt += ' ' + (res.yuddha.role === 'winner'
           ? 'It is also in planetary war (Graha Yuddha) with ' + res.yuddha.opponent + ', within ' + res.yuddha.orb.toFixed(2) +
-            '° — and, by ecliptic latitude, comes out ahead of it. A caveat layered on top of the Shadbala score above, not folded into it.'
+            '° — and, by ecliptic latitude, comes out ahead of it, which adds ' + res.yuddha.bala.toFixed(2) + ' Virupas to its Kala Bala.'
           : 'It is also in planetary war (Graha Yuddha) with ' + res.yuddha.opponent + ', within ' + res.yuddha.orb.toFixed(2) +
-            '° — and, by ecliptic latitude, is the one defeated. This does not change the Shadbala score above, but classically dampens this placement’s results, especially during its own dasha.');
+            '° — and, by ecliptic latitude, is the one defeated. That takes ' + Math.abs(res.yuddha.bala).toFixed(2) + ' Virupas off its Kala Bala, and classically dampens this placement’s results, especially during its own dasha.');
         if (res.yuddha.role === 'loser') {
           T.yuddha = name + ' is defeated in Graha Yuddha (planetary war) by ' + res.yuddha.opponent +
             ' — within ' + res.yuddha.orb.toFixed(2) + '° of it, and behind it by the ecliptic-latitude rule used here. ' +
-            'A classical caveat on this placement’s results that Shadbala’s own total does not capture.';
+            'It loses ' + Math.abs(res.yuddha.bala).toFixed(2) + ' Virupas of Kala Bala, and classically its results are dampened beyond what that number shows.';
         }
       }
     }
@@ -7112,31 +7282,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       return 'Angle ' + n1(d.angle) + '° gives an aspect value of ' + n2(Math.abs(d.value)) + '; ' +
         (full ? 'counted in full' : '÷ 4') + ' = ' + signed(d.weighted);
     }
-    // Compound (panchadha) relation of one planet toward another, as a word.
-    var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
-    function relWord(from, to) {
-      var rel = result.relationships[from] && result.relationships[from][to];
-      return (rel && REL_WORD[rel.panchadha]) || '';
-    }
-    // How an aspecting planet stands toward the sign it aspects: its own
-    // dignity there first, else its compound relation to the sign's lord.
-    // Interpretive only — neither Drik nor Bhava Drishti scores it.
-    function signRelation(from, signIdx) {
-      if (S.EXALT[from] != null) {
-        var ex = Math.floor(S.EXALT[from] / 30);
-        if (ex === signIdx) return 'Exaltation sign';
-        if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
-      }
-      if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
-      if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
-      var word = relWord(from, E2.SIGN_LORDS[signIdx]);
-      return word ? word + '’s sign' : '';
-    }
-    // For an aspect on a planet: how the aspecting planet regards the planet
-    // itself, then the sign it falls in.
-    function aspectRelation(from, to) {
-      return [relWord(from, to), signRelation(from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
-    }
+    function signRelation(from, signIdx) { return signRelationOf(result, H, from, signIdx); }
+    function aspectRelation(from, to) { return aspectRelationOf(result, H, from, to); }
 
     var longitudes = {};
     sb.grahas.forEach(function (g) { longitudes[g] = result.planets[g].longitude; });
@@ -7180,7 +7327,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
               { n: 'Abda (year)', v: kd.abda, max: 15 }, { n: 'Masa (month)', v: kd.masa, max: 30 },
               { n: 'Vara (weekday)', v: kd.vara, max: 45 }, { n: 'Hora', v: kd.hora, max: 60 }
             ] },
-            { n: 'Ayana', v: kd.ayana, min: SB_MIN.ayana[name], max: 60 }
+            { n: 'Ayana', v: kd.ayana, min: SB_MIN.ayana[name], max: 60 },
+            { n: 'Yuddha (planetary war)', v: kd.yuddha || 0, note: r.yuddha ? (r.yuddha.role === 'winner' ? 'wins against ' : 'loses to ') + r.yuddha.opponent : '' }
           ] },
           { n: 'Chesta (motional)', v: r.chesta, min: SB_MIN.chesta[name], max: 60 },
           { n: 'Naisargika (natural)', v: r.naisargika, max: 60 },
@@ -7623,8 +7771,9 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           cond: r.yuddha ? (r.yuddha.role === 'winner' ? 'Wins a planetary war against ' : 'Loses a planetary war to ') + r.yuddha.opponent + ' (' + n2(r.yuddha.orb) + '° apart).'
             : (name === 'Sun' || name === 'Moon') ? 'The Sun and Moon never take part in a planetary war.'
             : 'No planet within 1°, so no planetary war.',
-          calc: r.yuddha ? 'Flagged only; this app does not move Virupas for it' : '0',
-          value: r.yuddha ? '—' : '0.00', comp: 'Yuddha Bala'
+          calc: r.yuddha ? 'Sthana + Dig + Kala up to Hora: the two planets’ difference ÷ the difference of their disc diameters, ' +
+            (r.yuddha.role === 'winner' ? 'added to the winner' : 'taken from the loser') : '0',
+          value: n2(kd.yuddha || 0), comp: 'Yuddha Bala'
         });
 
         // ---- 4–5. Chesta, Naisargika ----
@@ -8106,7 +8255,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     viparitaRajaYogas: viparitaRajaYogas,
     chartWideRajaYogas: chartWideRajaYogas,
     chartWideDhanaYogas: chartWideDhanaYogas,
-    tripodImpact: tripodImpact,
+    tripodImpact: tripodImpact, tripodInputs: tripodInputs,
     influenceEngineChart: influenceEngineChart, nabhashaYogas: nabhashaYogas,
     // Influence Framework additions — exported individually too, so a caller
     // that only wants one slice (e.g. the network overlay wanting a single
@@ -8149,6 +8298,10 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
   // selected sign(s), Out = influences going out. Both on whenever the
   // overlay is turned on; both off (and disabled) while it's off.
   var networkShowIn = true, networkShowOut = true;
+  // Set when a planet is picked from the Influences dropdown: the overlay
+  // then shows only that planet's share of its sign. Cleared by clicking a
+  // sign on the chart, toggling the network, or picking an empty house.
+  var networkFocusPlanet = null;
   var NETWORK_VIEW_KEY = 'vedicChartNetworkOn.v1';
 
   // ---- South Indian chart's optional Dasha-activation overlay ----
@@ -8287,7 +8440,9 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' rules ' + SIGNS[e.to] + ', standing in ' + SIGNS[e.from] + '.';
     }
     if (e.type === 'aspect') {
-      return e.planet + netNatureWord(e.planet, sb, result, H) + ' casts a ' + (e.label || '') + ' aspect from ' + SIGNS[e.from] + ' onto ' + SIGNS[e.to] + '.';
+      var casters = e.planets || [e.planet];
+      return casters.map(function (n) { return n + netNatureWord(n, sb, result, H); }).join(' and ') +
+        (casters.length > 1 ? ' cast a ' : ' casts a ') + (e.label || '') + ' aspect from ' + SIGNS[e.from] + ' onto ' + SIGNS[e.to] + '.';
     }
     if (e.type === 'exchange') {
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' and ' + e.planetReverse + netNatureWord(e.planetReverse, sb, result, H) +
@@ -8396,35 +8551,40 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     return t;
   }
 
-  // What a chart label should judge dignity against: the D1 planet as-is, or
-  // for the Navamsa chart its D9 sign. Moolatrikona is a D1 degree band, so
-  // the D9 view carries no degree and never matches it.
-  function chartPlanet(p, useNavamsa) {
-    if (!useNavamsa) return p;
-    return { signIndex: p.navamsaSignIndex, sign: E.SIGNS[p.navamsaSignIndex], degree: NaN,
-             retrograde: p.retrograde };
+  // The chart renderers take `varga`: false for the main D1 chart, or the
+  // division number n of a D-n chart on the Vargas tab (which may be 1 too).
+  // A varga chart places each point by its D-n sign.
+  function vargaSign(x, varga) {
+    return varga ? E.vargaSignIndex(x.longitude, varga) : x.signIndex;
   }
 
-  function planetsBySign(result, useNavamsa) {
+  // What a chart label should judge dignity against: the D1 planet as-is, or
+  // for a varga chart its D-n sign. Moolatrikona is a D1 degree band, so a
+  // varga view carries no degree and never matches it.
+  function chartPlanet(p, varga) {
+    if (!varga) return p;
+    var s = vargaSign(p, varga);
+    return { signIndex: s, sign: E.SIGNS[s], degree: NaN, retrograde: p.retrograde };
+  }
+
+  function planetsBySign(result, varga) {
     var map = {};
     for (var i = 0; i < 12; i++) map[i] = [];
     PLANET_ORDER.forEach(function (name) {
-      var p = result.planets[name];
-      var idx = useNavamsa ? p.navamsaSignIndex : p.signIndex;
-      map[idx].push(name);
+      map[vargaSign(result.planets[name], varga)].push(name);
     });
     return map;
   }
 
-  function renderNorthChart(svgId, result, useNavamsa, sb) {
+  function renderNorthChart(svgId, result, varga, sb) {
     var svg = document.getElementById(svgId);
     hideChartTooltip();
     svg.innerHTML = '';
     svg.setAttribute('viewBox', '0 0 300 300');
     var polys = northHousePolygons();
-    var ascSignIdx = useNavamsa ? result.ascendant.navamsaSignIndex : result.ascendant.signIndex;
-    var bySign = planetsBySign(result, useNavamsa);
-    var hoverable = !useNavamsa; // narrative rungs read D1 placements only
+    var ascSignIdx = vargaSign(result.ascendant, varga);
+    var bySign = planetsBySign(result, varga);
+    var hoverable = !varga; // narrative rungs read D1 placements only
 
     // outer square
     svg.appendChild(svgEl('rect', { x: 1, y: 1, width: 298, height: 298, fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }));
@@ -8458,13 +8618,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       signText.appendChild(signTitle);
       g.appendChild(signText);
       planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(pos[0], pos[1] + 8 + i * 12, pname, chartPlanet(result.planets[pname], useNavamsa), 'planet-label', 10));
+        g.appendChild(svgPlanetLabel(pos[0], pos[1] + 8 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
       });
       svg.appendChild(g);
     }
   }
 
-  function renderSouthChart(svgId, result, useNavamsa, sb) {
+  function renderSouthChart(svgId, result, varga, sb) {
     var svg = document.getElementById(svgId);
     hideChartTooltip();
     svg.innerHTML = '';
@@ -8476,16 +8636,16 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     // keeps the chart's own top border flush with the svg's top edge
     // (and so with the toggle checkboxes beside it) whether or not the
     // overlay is active.
-    var dashaOverlayActive = !useNavamsa && dashaActivationEnabled && !!lastDashaSelection;
+    var dashaOverlayActive = !varga && dashaActivationEnabled && !!lastDashaSelection;
     svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-    var ascSignIdx = useNavamsa ? result.ascendant.navamsaSignIndex : result.ascendant.signIndex;
-    var bySign = planetsBySign(result, useNavamsa);
-    var hoverable = !useNavamsa; // narrative rungs read D1 placements only
+    var ascSignIdx = vargaSign(result.ascendant, varga);
+    var bySign = planetsBySign(result, varga);
+    var hoverable = !varga; // narrative rungs read D1 placements only
 
     svg.appendChild(svgEl('rect', { x: 1, y: 1, width: size-2, height: size-2, fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }));
 
     var cellRects = {};
-    var clickable = !useNavamsa; // the network overlay only applies to the D1 chart
+    var clickable = !varga; // the network overlay only applies to the D1 chart
     for (var s = 0; s < 12; s++) {
       var rc = SOUTH_LAYOUT[s];
       var row = rc[0], col = rc[1];
@@ -8505,9 +8665,10 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
             // Toggle only this sign's own membership — selecting a different
             // sign never clears one already selected; only an explicit
             // second click on that same sign removes it.
+            networkFocusPlanet = null;
             if (networkSelectedSigns[sIdx]) delete networkSelectedSigns[sIdx];
             else networkSelectedSigns[sIdx] = true;
-            renderSouthChart(svgId, result, useNavamsa, sb);
+            renderSouthChart(svgId, result, varga, sb);
           };
         })(s));
       }
@@ -8516,7 +8677,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       var g = svgEl('g', { 'pointer-events': 'none' }); // labels never steal the house's hover hit-area
       g.appendChild(svgText(x + cell/2, y + 16, SIGN_SYMBOL[s] + ' H' + houseNum, 'sign-label', 10));
       planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(x + cell/2, y + 32 + i * 12, pname, chartPlanet(result.planets[pname], useNavamsa), 'planet-label', 10));
+        g.appendChild(svgPlanetLabel(x + cell/2, y + 32 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
       });
       svg.appendChild(g);
     }
@@ -8532,11 +8693,11 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     // The overlays below (and the shared status/readout elements they
     // update) belong to the D1 chart only — the D9 chart stops here so
     // drawing it never clears or redraws D1's overlay state.
-    if (useNavamsa) return;
+    if (varga) return;
 
     var statusEl = document.getElementById('networkStatus');
     var centerOverlayEl = document.getElementById('chartCenterOverlay');
-    var networkActive = !useNavamsa && networkEnabled;
+    var networkActive = !varga && networkEnabled;
     // Birth details / Dasha readout text goes grey while the network
     // overlay is showing — its dispositor/aspect/exchange lines already add
     // a lot of color to the chart, and the center block sitting right in
@@ -8544,7 +8705,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     // behind them the way blank center space used to.
     if (centerOverlayEl) centerOverlayEl.classList.toggle('network-muted', networkActive);
     if (networkActive) {
-      drawNetworkOverlay(svg, result, cell, cellRects, svgId, useNavamsa, sb);
+      drawNetworkOverlay(svg, result, cell, cellRects, svgId, varga, sb);
     } else if (statusEl) {
       statusEl.classList.add('hidden');
       statusEl.innerHTML = '';
@@ -9008,10 +9169,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           if (toSign === result.planets[otherNode].signIndex &&
               !PLANET_ORDER.some(function (p) { return p !== otherNode && p !== name && result.planets[p].signIndex === toSign; })) continue;
         }
+        // Planets sharing a sign cast the same aspect along the same line:
+        // one line, with every caster listed in `planets` (`planet` stays the
+        // first, which colors the arrowhead).
         var k = fromSign + '>' + toSign + '@' + dist;
-        if (seenAsp[k]) continue;
-        seenAsp[k] = true;
-        edges.push({ from: fromSign, to: toSign, type: 'aspect', label: ordinalWord(dist), planet: name });
+        if (seenAsp[k]) { seenAsp[k].planets.push(name); continue; }
+        seenAsp[k] = { from: fromSign, to: toSign, type: 'aspect', label: ordinalWord(dist), planet: name, planets: [name] };
+        edges.push(seenAsp[k]);
       }
     });
 
@@ -9333,7 +9497,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     return out;
   }
 
-  function drawNetworkOverlay(svg, result, cell, cellRects, svgId, useNavamsa, sb) {
+  function drawNetworkOverlay(svg, result, cell, cellRects, svgId, varga, sb) {
     // Every edge's endpoint sits on a fixed, invisible circle around its
     // sign's own center — NET_ANCHOR_R, half of the sign box's own radius
     // (the box spans cell/2 in each direction from center, so this circle
@@ -9384,6 +9548,58 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     });
     visibleEdges = mergeEdges(visibleEdges);
     secondaryEdges = dedupeEdges(secondaryEdges);
+    // A planet picked from the Influences dropdown narrows its sign to that
+    // planet: lines made by the sign's other tenants (their aspects, their
+    // dispositor and "also rules" lines) go; whatever acts on the sign — its
+    // lord, aspects landing on it, an exchange with the planet — stays.
+    if (networkFocusPlanet && selectedList.length === 1) {
+      var focusSign = selectedList[0];
+      var focusTenants = signTenants(focusSign, result);
+      var others = focusTenants.filter(function (n) { return n !== networkFocusPlanet; });
+      var involved = function (e) { return e.planets || [e.planet, e.planetReverse]; };
+      var keep = function (e) {
+        var who = involved(e);
+        if (who.indexOf(networkFocusPlanet) >= 0) return true;
+        return !who.some(function (n) { return others.indexOf(n) >= 0; });
+      };
+      // An exchange between a co-tenant and the sign's lord is still how
+      // that lord reaches the sign, so for the picked planet it is drawn as
+      // the plain dispositor line it would otherwise be. (On an exchange
+      // edge `planet` stands at `from`, `planetReverse` at `to`.)
+      visibleEdges = visibleEdges.map(function (e) {
+        if (e.type !== 'exchange' || keep(e)) return e;
+        var lord = e.from === focusSign ? e.planetReverse : e.planet;
+        var lordSign = e.from === focusSign ? e.to : e.from;
+        if (E.SIGN_COLORDS[focusSign].indexOf(lord) < 0) return e;
+        return { from: lordSign, to: focusSign, type: 'dispositor', planet: lord,
+          _headEnd: networkShowIn, _headStart: networkShowOut && focusTenants.length > 0, _tenants: focusTenants };
+      }).filter(keep);
+      secondaryEdges = secondaryEdges.filter(keep);
+      // An aspect line shared with a co-tenant is the picked planet's alone here.
+      visibleEdges = visibleEdges.map(function (e) {
+        if (!e.planets || e.planets.length < 2) return e;
+        var c = {};
+        for (var key in e) c[key] = e[key];
+        c.planet = networkFocusPlanet;
+        c.planets = [networkFocusPlanet];
+        return c;
+      });
+      // A dispositor line's "tenants feed back into the lord" half names the
+      // picked planet only.
+      visibleEdges.forEach(function (e) {
+        if (e._tenants) e._tenants = e._tenants.filter(function (n) { return others.indexOf(n) < 0; });
+      });
+    }
+    // A light-blue "also rules" line (ruled sign → where its lord stands)
+    // says the same thing as that lord's own dispositor line running the
+    // other way; when that line is already drawn, the blue one is dropped
+    // so the fact shows once. It stays when only In is on, as then it is
+    // the only line carrying it.
+    secondaryEdges = secondaryEdges.filter(function (s) {
+      return !visibleEdges.some(function (v) {
+        return v.type === 'dispositor' && v.planet === s.planet && v.from === s.to && v.to === s.from;
+      });
+    });
     var renderEdges = visibleEdges.concat(secondaryEdges);
 
     // Spread edges that arrive at (or leave) the same sign from close to the
@@ -10374,8 +10590,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         yFlag.title = g + ' is within ' + r.yuddha.orb.toFixed(2) + '° of ' + r.yuddha.opponent +
           ' — Graha Yuddha (planetary war). By the convention used here (greater ecliptic ' +
           'latitude wins), ' + g + ' ' + (r.yuddha.role === 'winner' ? 'prevails over' : 'is defeated by') +
-          ' ' + r.yuddha.opponent + '. This is a classical caveat layered on top of Shadbala, not a ' +
-          'change to the Virupa totals themselves.';
+          ' ' + r.yuddha.opponent + ', and its Kala Bala ' + (r.yuddha.bala >= 0 ? 'gains ' : 'loses ') +
+          Math.abs(r.yuddha.bala).toFixed(2) + ' Virupas of Yuddha Bala.';
         nameCell.appendChild(yFlag);
       }
       tr.appendChild(nameCell);
@@ -10598,10 +10814,38 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       if (entry.kind + ':' + entry.key === side2LastKey) selectedIdx = i;
     });
     select.value = String(selectedIdx);
+    // Point the chart's network overlay at this entry's sign (the house's
+    // sign, which is also where the planet sits), narrowed to the planet
+    // itself when one is picked. A dropdown pick is one choice, so it
+    // replaces any signs clicked before; what is drawn still follows the
+    // Dispositor & aspect network / In / Out boxes.
+    function focusNetwork(entry) {
+      if (!lastResult) return;
+      networkSelectedSigns = {};
+      networkSelectedSigns[(lastResult.ascendant.signIndex + entry.house - 1) % 12] = true;
+      networkFocusPlanet = entry.kind === 'planet' ? entry.key : null;
+      renderSouthChart('southChartD1', lastResult, false, lastSb);
+    }
     select.onchange = function () {
       var entry = entries[Number(select.value)];
       side2LastKey = entry.kind + ':' + entry.key;
       show(entry);
+      focusNetwork(entry);
+    };
+    // Re-picking the value already shown fires no change event, yet should
+    // still reset the network to that entry (e.g. after signs were clicked
+    // on the chart). The first click opens the list and the second picks
+    // from it; if the value is the one it opened on, refocus. Enter does the
+    // same from the keyboard.
+    var listOpen = false, openedOn = null;
+    select.onclick = function () {
+      if (listOpen && select.value === openedOn) focusNetwork(entries[Number(select.value)]);
+      listOpen = !listOpen;
+      openedOn = select.value;
+    };
+    select.onblur = function () { listOpen = false; };
+    select.onkeyup = function (ev) {
+      if (ev.key === 'Enter') focusNetwork(entries[Number(select.value)]);
     };
     show(entries[selectedIdx]);
   }
@@ -11922,19 +12166,19 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     }
     block('House pick', ordinalWord(hPick.house) + ' · ' + hPick.sign, hWhy, hAlso);
 
-    // Tripod impact — the Influence Engine's Body/Mind/Soul read, as three
+    // Body / Mind / Soul — each one's placement and all it takes in, as three
     // plain columns with the same green/red/grey color code.
     var tri = document.createElement('div');
     tri.className = 'fact-pick';
     var cols = document.createElement('div');
     cols.className = 'facts-cols';
+    var inputs = window.Interpret.tripodInputs(result, sb, interpHelpers(), ie.tripod);
+    var TONE = { good: 'ie-good', bad: 'ie-bad', neutral: 'ie-neutral' };
     [['Body', 'Ascendant'], ['Mind', 'Moon'], ['Soul', 'Sun']].forEach(function (pair) {
       var col = document.createElement('div');
       col.appendChild(spanText(pair[0] + ' (' + pair[1] + ')', 'fact-pick-name'));
-      var hits = ie.tripod[pair[0]];
-      if (!hits.length) col.appendChild(spanText('No aspects or conjunctions land here.', 'facts-tripod-hit ie-neutral'));
-      hits.forEach(function (hit) {
-        col.appendChild(spanText(tripodHitText(hit), 'facts-tripod-hit ' + tripodHitClass(hit)));
+      inputs[pair[0]].forEach(function (line) {
+        col.appendChild(spanText(line.text, 'facts-tripod-hit ' + TONE[line.tone]));
       });
       cols.appendChild(col);
     });
@@ -13526,7 +13770,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     applyChartView(prefGet(CHART_VIEW_KEY) || 'both');
     southCard.style.order = style === 'north' ? '2' : '1';
     northCard.style.order = style === 'north' ? '1' : '2';
-    networkSelectedSigns = {};
+    networkSelectedSigns = {}; networkFocusPlanet = null;
     renderSouthChart('southChartD1', result, false, null);
     renderNorthChart('northChartD1', result, false, null);
 
@@ -13616,6 +13860,171 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       applyNakVisible(nowVisible);
     });
     applyNakVisible(prefGet(NAK_VISIBLE_KEY) !== '0');
+  }
+
+  // ---- Vargas tab: pick divisional charts to show ----
+  // One pill per varga on the left; each selected one is drawn on the canvas
+  // on the right, always in order of division, in the chart style chosen on
+  // the form. The grid's column count follows how many are shown and how
+  // wide the canvas is. The selection is remembered between visits.
+  var VARGAS_KEY = 'vedicChartVargas.v1';
+  var vargaSelected = null;
+
+  function vargaSelection() {
+    if (!vargaSelected) {
+      var saved = prefGet(VARGAS_KEY);
+      vargaSelected = (saved == null ? '9' : saved).split(',').filter(Boolean).map(Number);
+    }
+    return vargaSelected;
+  }
+
+  function layoutVargaCanvas() {
+    var canvas = document.getElementById('vargaCanvas');
+    if (!canvas) return;
+    var count = vargaSelection().length;
+    var width = canvas.clientWidth;
+    var fit = width ? Math.max(1, Math.floor(width / 230)) : 1;
+    var cols = Math.max(1, Math.min(count, Math.ceil(Math.sqrt(count)), fit));
+    if (count === 2 && fit >= 2) cols = 2;
+    canvas.style.setProperty('--varga-cols', cols);
+    canvas.style.setProperty('--varga-max', count === 1 ? '480px' : 'none');
+  }
+
+  function renderVargaCanvas(result, sb) {
+    var canvas = document.getElementById('vargaCanvas');
+    if (!canvas) return;
+    canvas.innerHTML = '';
+    var sel = vargaSelection().slice().sort(function (a, b) { return a - b; });
+    var empty = document.getElementById('vargaEmpty');
+    if (empty) empty.classList.toggle('hidden', sel.length > 0);
+    var north = document.getElementById('chartStyleInput').value === 'north';
+    var note = document.getElementById('vargaNote');
+    if (note) {
+      note.textContent = !sel.length ? '' : north
+        ? 'North Indian: houses are fixed (H1 at the top, anti-clockwise) from each chart’s own lagna; the glyph is the rashi.'
+        : 'South Indian: signs are fixed; H1–H12 count from each chart’s own lagna.';
+    }
+    layoutVargaCanvas();
+    if (!result) return;
+    sel.forEach(function (n) {
+      var v = E.VARGAS.filter(function (x) { return x.n === n; })[0];
+      if (!v) return;
+      var card = document.createElement('div');
+      card.className = 'chart-card';
+      var h = document.createElement('h3');
+      h.textContent = 'D' + n + ' · ' + v.name + ' — ' + v.use;
+      card.appendChild(h);
+      var svg = svgEl('svg', { id: 'vargaChartD' + n, viewBox: north ? '0 0 300 300' : '0 0 320 320' });
+      card.appendChild(svg);
+      canvas.appendChild(card);
+      if (north) renderNorthChart(svg.id, result, n, sb);
+      else renderSouthChart(svg.id, result, n, sb);
+    });
+  }
+
+  function initVargaPills() {
+    var box = document.getElementById('vargaPills');
+    if (!box || box.__wired) return;
+    box.__wired = true;
+    // Each pill stands for a set of divisions: one varga, or a classical
+    // group of them. A pill reads as on when every chart in its set is
+    // shown; clicking it then removes them all, otherwise it adds whichever
+    // are missing (the selection never holds a chart twice).
+    var pills = [];
+    function addPill(nums, title, sub, cls) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'varga-pill' + (cls ? ' ' + cls : '');
+      b.appendChild(spanText(title, 'vp-name'));
+      b.appendChild(spanText(sub, 'vp-use'));
+      b.addEventListener('click', function () {
+        var sel = vargaSelection();
+        var allOn = nums.every(function (n) { return sel.indexOf(n) >= 0; });
+        nums.forEach(function (n) {
+          var at = sel.indexOf(n);
+          if (allOn && at >= 0) sel.splice(at, 1);
+          else if (!allOn && at < 0) sel.push(n);
+        });
+        prefSet(VARGAS_KEY, sel.join(','));
+        refreshPills();
+        renderVargaCanvas(lastResult, lastSb);
+      });
+      pills.push({ el: b, nums: nums });
+      box.appendChild(b);
+    }
+    function refreshPills() {
+      var sel = vargaSelection();
+      pills.forEach(function (p) {
+        var on = p.nums.every(function (n) { return sel.indexOf(n) >= 0; });
+        p.el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    var shad = [1, 2, 3, 9, 12, 30], sapta = shad.concat([7]), dasha = sapta.concat([10, 16, 60]);
+    [['Shadvarga', 'Six charts', shad], ['Saptavarga', 'Seven charts', sapta],
+     ['Dashavarga', 'Ten charts', dasha],
+     ['Shodashavarga', 'All sixteen charts', E.VARGAS.map(function (v) { return v.n; })]
+    ].forEach(function (g) { addPill(g[2], g[0], g[1], 'varga-group'); });
+    var rule = document.createElement('div');
+    rule.className = 'varga-pills-rule';
+    box.appendChild(rule);
+    E.VARGAS.forEach(function (v) { addPill([v.n], 'D' + v.n + ' · ' + v.name, v.use); });
+    refreshPills();
+    var canvas = document.getElementById('vargaCanvas');
+    if (canvas && window.ResizeObserver) new ResizeObserver(layoutVargaCanvas).observe(canvas);
+    renderVargaCanvas(lastResult, lastSb);
+  }
+
+  // ---- Show / hide individual columns of the Planets table ----
+  // Each header but Planet gets a −/+ button. A hidden column shrinks to just its
+  // button (so it can be brought back); the state is a class on the table,
+  // which survives the tbody being re-rendered for each chart.
+  var PLANET_COLS_KEY = 'vedicChartPlanetColsHidden.v1';
+
+  function initPlanetColumnToggles() {
+    var table = document.getElementById('planetTable');
+    if (!table || table.__colsWired) return;
+    table.__colsWired = true;
+    var ths = table.querySelectorAll('thead th');
+    var css = '';
+    for (var i = 1; i <= ths.length; i++) {
+      css += '#planetTable.hc' + i + ' th:nth-child(' + i + ') .col-label { display: none; }\n' +
+        '#planetTable.hc' + i + ' td:nth-child(' + i + ') { font-size: 0; min-width: 0; padding-left: 2px; padding-right: 2px; }\n' +
+        '#planetTable.hc' + i + ' td:nth-child(' + i + ') > * { display: none; }\n';
+    }
+    var style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    var hidden = (prefGet(PLANET_COLS_KEY) || '').split(',').filter(Boolean);
+    function save() { prefSet(PLANET_COLS_KEY, hidden.join(',')); }
+    Array.prototype.forEach.call(ths, function (th, idx) {
+      if (idx === 0) return; // the Planet column always stays
+      var col = String(idx + 1);
+      var label = document.createElement('span');
+      label.className = 'col-label';
+      while (th.firstChild) label.appendChild(th.firstChild);
+      var name = label.textContent;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'col-tog';
+      th.appendChild(label);
+      th.appendChild(btn);
+      function apply() {
+        var off = hidden.indexOf(col) >= 0;
+        table.classList.toggle('hc' + col, off);
+        btn.textContent = off ? '+' : '−';
+        btn.title = (off ? 'Show' : 'Hide') + ' the ' + name + ' column';
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-pressed', off ? 'true' : 'false');
+      }
+      btn.addEventListener('click', function () {
+        var at = hidden.indexOf(col);
+        if (at >= 0) hidden.splice(at, 1); else hidden.push(col);
+        save();
+        apply();
+      });
+      apply();
+    });
   }
 
   // ---- Show / hide the Sthana Bala breakdown table (Strength tab) ----
@@ -13750,6 +14159,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       networkEnabled = box.checked;
       prefSet(NETWORK_VIEW_KEY, networkEnabled ? '1' : '0');
       networkSelectedSigns = {};
+      networkFocusPlanet = null;
       syncDirBoxes();
       if (lastResult) renderSouthChart('southChartD1', lastResult, false, lastSb);
     });
@@ -13802,6 +14212,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     initDashaActivationToggle();
     initFoldersToggle();
     initNakToggle();
+    initPlanetColumnToggles();
+    initVargaPills();
     initSthanaToggle();
     initKalaToggle();
     initResearchTab();
@@ -14298,11 +14710,10 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         applyChartView(prefGet(CHART_VIEW_KEY) || 'both');
         southCard.style.order = style === 'north' ? '2' : '1';
         northCard.style.order = style === 'north' ? '1' : '2';
-        networkSelectedSigns = {};
+        networkSelectedSigns = {}; networkFocusPlanet = null;
         renderSouthChart('southChartD1', result, false, shadbala);
         renderNorthChart('northChartD1', result, false, shadbala);
-        renderSouthChart('southChartD9', result, true, shadbala);
-        renderNorthChart('northChartD9', result, true, shadbala);
+        renderVargaCanvas(result, shadbala);
 
         // Remember these details under the given name for next time
         if (name) {

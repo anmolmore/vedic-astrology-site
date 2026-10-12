@@ -14,6 +14,9 @@
   // exclude the Sun and Moon (luminaries, not "grahas" for war purposes) and
   // the nodes (shadowy points, not physical bodies to occupy the same degree).
   var YUDDHA_GRAHAS = ['Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+  // Disc diameters (bimba parimana) the classical Yuddha Bala divides by
+  // (B.V. Raman, after BPHS).
+  var DISC_DIAMETER = { Mars: 9.4, Mercury: 6.6, Jupiter: 190.4, Venus: 16.6, Saturn: 158.0 };
   var SIGN_LORDS = ['Mars','Venus','Mercury','Moon','Sun','Mercury','Venus','Mars','Jupiter','Saturn','Saturn','Jupiter'];
 
   // Exaltation degrees (sidereal, absolute longitude)
@@ -747,8 +750,7 @@
       var naisargika = NAISARGIKA[g];
       var drik = drikBala(g, lons, beneficMap);
 
-      var total = sthana.total + dig + kala.total + chesta + naisargika + drik.total;
-      var rupa = total / 60;
+      kala.yuddha = 0;
       results[g] = {
         sthana: sthana.total, sthanaDetail: sthana,
         dig: dig,
@@ -756,13 +758,41 @@
         chesta: chesta,
         naisargika: naisargika,
         drik: drik.total, drikDetail: drik.detail,
-        total: total,
-        rupa: rupa,
         required: MIN_REQUIRED[g],
-        percent: (rupa / MIN_REQUIRED[g]) * 100,
-        meetsMinimum: rupa >= MIN_REQUIRED[g],
         ishtaKashta: ishtaKashtaBala(g, sthana.uchcha, chesta, norm360(lons.Sun + ayan))
       };
+    });
+
+    // Yuddha Bala, the last part of Kala Bala (BPHS; B.V. Raman's order).
+    // For each war: Sthana + Dig + Kala up to Hora (i.e. before Ayana) of
+    // each planet, the difference divided by the difference of their disc
+    // diameters; added to the winner's Kala Bala, taken from the loser's.
+    // Which partial sum and which winner rule apply vary between sources and
+    // have not been checked against Parashara's Light for a war chart.
+    yuddha.forEach(function (y) {
+      function base(g) {
+        var r = results[g];
+        return r.sthana + r.dig + (r.kala - r.kalaDetail.ayana);
+      }
+      var dDisc = Math.abs(DISC_DIAMETER[y.winner] - DISC_DIAMETER[y.loser]);
+      var yb = dDisc ? Math.abs(base(y.winner) - base(y.loser)) / dDisc : 0;
+      [[y.winner, yb], [y.loser, -yb]].forEach(function (pair) {
+        var r = results[pair[0]];
+        r.kalaDetail.yuddha = pair[1];
+        r.kalaDetail.total += pair[1];
+        r.kala = r.kalaDetail.total;
+      });
+      y.bala = yb;
+      results[y.winner].yuddha = { role: 'winner', opponent: y.loser, orb: y.orb, bala: yb };
+      results[y.loser].yuddha = { role: 'loser', opponent: y.winner, orb: y.orb, bala: -yb };
+    });
+
+    GRAHAS.forEach(function (g) {
+      var r = results[g];
+      r.total = r.sthana + r.dig + r.kala + r.chesta + r.naisargika + r.drik;
+      r.rupa = r.total / 60;
+      r.percent = (r.rupa / r.required) * 100;
+      r.meetsMinimum = r.rupa >= r.required;
     });
 
     // Rank by the ratio of each planet's Shadbala to its own required minimum
@@ -772,17 +802,6 @@
       return (results[b].percent - results[a].percent) || (results[b].total - results[a].total);
     });
     ranked.forEach(function (g, i) { results[g].rank = i + 1; });
-
-    // Yuddha is deliberately NOT folded into the Virupa totals above — the six
-    // components (Sthana+Dig+Kala+Chesta+Naisargika+Drik=Total) are a verified
-    // classical invariant this app checks programmatically, and Parashari
-    // sources themselves treat Yuddha as a caveat layered on top of Shadbala,
-    // not a 7th component within it. It's surfaced instead as a flag on each
-    // involved planet's result, for the UI and the interpretation layer to use.
-    yuddha.forEach(function (y) {
-      results[y.winner].yuddha = { role: 'winner', opponent: y.loser, orb: y.orb };
-      results[y.loser].yuddha = { role: 'loser', opponent: y.winner, orb: y.orb };
-    });
 
     return {
       grahas: GRAHAS,

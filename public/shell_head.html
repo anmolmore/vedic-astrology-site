@@ -866,7 +866,6 @@
   .chart-card svg .planet-dg-deb  { fill: #96302f; }
   .chart-card svg text.house-num { fill: var(--muted); opacity: 0.85; font-weight: 600; }
   .chart-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
-  .d9-charts .chart-card svg { max-width: 340px; }
   .chart-card svg rect, .chart-card svg polygon { }
   .chart-card svg .house-hit { cursor: default; }
   .chart-card svg .house-hit:hover { fill: rgba(179,130,47,0.10); }
@@ -1285,6 +1284,32 @@
   td.min-no { color: var(--muted); }
   td.dim { color: var(--muted); }
   th.col-left, td.col-left { text-align: left; }
+  .varga-layout { display: flex; gap: 16px; align-items: flex-start; }
+  .varga-pills { display: flex; flex-direction: column; gap: 6px; flex: none; width: 190px; }
+  .varga-pill { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: none; color: inherit; font: inherit; cursor: pointer; box-shadow: none; }
+  .varga-pill .vp-name { font-size: 13px; font-weight: 600; }
+  .varga-pill .vp-use { font-size: 11px; color: var(--muted); }
+  .varga-pill:hover { border-color: var(--gold); }
+  .varga-pill[aria-pressed="true"] { background: var(--gold); border-color: var(--gold); color: #fff; }
+  .varga-pill[aria-pressed="true"] .vp-use { color: rgba(255,255,255,0.85); }
+  .varga-pills-rule { height: 1px; background: var(--line); margin: 4px 0; }
+  .varga-canvas-wrap { flex: 1; min-width: 0; }
+  .varga-canvas { display: grid; grid-template-columns: repeat(var(--varga-cols, 1), minmax(0, 1fr)); gap: 12px; }
+  .varga-canvas .chart-card { margin: 0; min-width: 0; padding: 10px; }
+  .varga-canvas .chart-card h3 { margin: 0 0 6px; }
+  .varga-canvas svg { display: block; width: 100%; height: auto; max-width: var(--varga-max, 480px); margin: 0 auto; }
+  .varga-empty { color: var(--muted); }
+  @media (max-width: 720px) {
+    .varga-layout { flex-direction: column; }
+    .varga-pills { flex-direction: row; flex-wrap: wrap; width: auto; }
+    .varga-pill { padding: 5px 10px; }
+    .varga-pill .vp-use { display: none; }
+    .varga-pills-rule { flex-basis: 100%; }
+  }
+  #planetTable th { white-space: nowrap; }
+  #planetTable .col-label { white-space: normal; }
+  .col-tog { margin-left: 4px; width: 16px; height: 16px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: none; color: var(--muted); font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1; cursor: pointer; vertical-align: middle; box-shadow: none; }
+  .col-tog:hover { color: var(--gold); border-color: var(--gold); }
   td.aspects { font-size: 12.5px; line-height: 1.55; }
   .retro-flag { color: #b03a3a; font-size: 11px; font-weight: 700; margin-left: 3px; }
   /* paired relationship lists — both columns share the exact line metrics so
@@ -1702,7 +1727,7 @@
           <div class="tabstrip" role="tablist" aria-label="Chart detail sections">
             <button role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true">Birth Details</button>
             <button role="tab" id="tab-planets" aria-controls="panel-planets" aria-selected="false" tabindex="-1">Planets</button>
-            <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Navamsa (D9)</button>
+            <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Vargas</button>
             <button role="tab" id="tab-houses" aria-controls="panel-houses" aria-selected="false" tabindex="-1">Houses</button>
             <button role="tab" id="tab-strength" aria-controls="panel-strength" aria-selected="false" tabindex="-1">Strength</button>
             <button role="tab" id="tab-relations" aria-controls="panel-relations" aria-selected="false" tabindex="-1">Relationships</button>
@@ -1751,18 +1776,14 @@
           </div>
           <div role="tabpanel" id="panel-navamsa" aria-labelledby="tab-navamsa" hidden>
     <section class="block">
-      <h2>Navamsa Chart (D9 — Marriage &amp; Dharma)</h2>
-      <p class="na-note hidden" id="naD9">The Navamsa divides each sign into nine parts by exact degree, which a placement by sign does not carry.</p>
-      <div class="charts-row d9-charts" id="navamsaCharts">
-        <div class="chart-card">
-          <h3>South Indian · Navamsa D9</h3>
-          <svg id="southChartD9" viewBox="0 0 320 320"></svg>
-          <div class="chart-note">Signs are fixed; H1–H12 mark the houses from the Navamsa Lagna.</div>
-        </div>
-        <div class="chart-card">
-          <h3>North Indian · Navamsa D9</h3>
-          <svg id="northChartD9" viewBox="0 0 300 300"></svg>
-          <div class="chart-note">Houses are fixed (H1–H12, anti-clockwise from top); the glyph is the rashi.</div>
+      <h2>Vargas (Divisional Charts)</h2>
+      <p class="na-note hidden" id="naD9">Divisional charts divide each sign by exact degree, which a placement by sign does not carry.</p>
+      <div class="varga-layout" id="navamsaCharts">
+        <div class="varga-pills" id="vargaPills" role="group" aria-label="Divisional charts to show"></div>
+        <div class="varga-canvas-wrap">
+          <div class="varga-canvas" id="vargaCanvas"></div>
+          <p class="varga-empty" id="vargaEmpty">Pick a divisional chart on the left to show it here.</p>
+          <div class="chart-note" id="vargaNote"></div>
         </div>
       </div>
     </section>
@@ -2217,7 +2238,7 @@
               <tr><td>Kala</td><td>Tribhaga</td><td>The third of the day or night</td><td>—</td></tr>
               <tr><td>Kala</td><td>Abda, Masa, Vara, Hora</td><td>Lords of the year, month, weekday and hora</td><td>—</td></tr>
               <tr><td>Kala</td><td>Ayana</td><td>North or south of the equator, by tropical longitude</td><td>The planet's own latitude</td></tr>
-              <tr><td>Kala</td><td>Yuddha</td><td>Planetary war between co-tenants within 1°</td><td>The co-tenants' compound relationship. This app flags a war but does not move Virupas for it.</td></tr>
+              <tr><td>Kala</td><td>Yuddha</td><td>Planetary war between co-tenants within 1°</td><td>The co-tenants' compound relationship. Yuddha Bala is added to the winner's Kala Bala and taken from the loser's.</td></tr>
               <tr><td>Chesta</td><td>Chesta</td><td>Retrograde, stationary or direct motion</td><td>—</td></tr>
               <tr><td>Naisargika</td><td>Naisargika</td><td>Natural luminosity, a fixed scale</td><td>—</td></tr>
               <tr><td>Drik</td><td>Drik</td><td>Aspects received, benefic minus malefic</td><td>The aspecting planet's own state; conjunctions; Rahu and Ketu</td></tr>
@@ -2661,9 +2682,9 @@
   Calculations run entirely in your browser using <a href="https://github.com/cosinekitty/astronomy" target="_blank" rel="noopener">Astronomy Engine</a> (MIT-licensed, JPL-derived ephemeris) for planetary positions, with the Lahiri (Chitrapaksha) ayanamsa and classical Parashari rules for houses, nakshatras, Vimshottari dasha, and planetary relationships. Rahu/Ketu use the mean lunar node by default, with a True Node option in the birth-details form. Ayanamsa is computed with a standard precession-rate approximation (accurate to a fraction of an arc-minute across the 1900–2050 range) — cross-checked against Swiss Ephemeris (Lahiri) to within ~0.02°.<br>
   Shadbala follows the Parashari method (Sthana/Dig/Kala/Chesta/Naisargika/Drik) — see the Influence
   Framework tab for the full breakdown, what's been checked against a reference implementation, and what's
-  still open. Graha Yuddha (planetary war, orb &lt;1° among Mars/Mercury/Jupiter/Venus/Saturn) is detected
-  and flagged in the Strength tab and planet interpretations, but — per classical convention — is not folded
-  into the Shadbala totals themselves. Rahu/Ketu's natural relationships follow the common convention of Rahu
+  still open. Graha Yuddha (planetary war, orb &lt;1° among Mars/Mercury/Jupiter/Venus/Saturn) is detected,
+  flagged in the Strength tab and planet interpretations, and scored as Yuddha Bala within Kala Bala (BPHS;
+  B.V. Raman's method), added to the winner and taken from the loser. Rahu/Ketu's natural relationships follow the common convention of Rahu
   as Saturn's analog and Ketu as Mars's.<br>
   Birth-place lookup uses OpenStreetMap Nominatim. No birth data leaves your browser except the place-name search.<br>
   For entertainment and self-study — not a substitute for consultation with a qualified Jyotishi.

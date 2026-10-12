@@ -21,6 +21,10 @@
   // selected sign(s), Out = influences going out. Both on whenever the
   // overlay is turned on; both off (and disabled) while it's off.
   var networkShowIn = true, networkShowOut = true;
+  // Set when a planet is picked from the Influences dropdown: the overlay
+  // then shows only that planet's share of its sign. Cleared by clicking a
+  // sign on the chart, toggling the network, or picking an empty house.
+  var networkFocusPlanet = null;
   var NETWORK_VIEW_KEY = 'vedicChartNetworkOn.v1';
 
   // ---- South Indian chart's optional Dasha-activation overlay ----
@@ -159,7 +163,9 @@
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' rules ' + SIGNS[e.to] + ', standing in ' + SIGNS[e.from] + '.';
     }
     if (e.type === 'aspect') {
-      return e.planet + netNatureWord(e.planet, sb, result, H) + ' casts a ' + (e.label || '') + ' aspect from ' + SIGNS[e.from] + ' onto ' + SIGNS[e.to] + '.';
+      var casters = e.planets || [e.planet];
+      return casters.map(function (n) { return n + netNatureWord(n, sb, result, H); }).join(' and ') +
+        (casters.length > 1 ? ' cast a ' : ' casts a ') + (e.label || '') + ' aspect from ' + SIGNS[e.from] + ' onto ' + SIGNS[e.to] + '.';
     }
     if (e.type === 'exchange') {
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' and ' + e.planetReverse + netNatureWord(e.planetReverse, sb, result, H) +
@@ -268,35 +274,40 @@
     return t;
   }
 
-  // What a chart label should judge dignity against: the D1 planet as-is, or
-  // for the Navamsa chart its D9 sign. Moolatrikona is a D1 degree band, so
-  // the D9 view carries no degree and never matches it.
-  function chartPlanet(p, useNavamsa) {
-    if (!useNavamsa) return p;
-    return { signIndex: p.navamsaSignIndex, sign: E.SIGNS[p.navamsaSignIndex], degree: NaN,
-             retrograde: p.retrograde };
+  // The chart renderers take `varga`: false for the main D1 chart, or the
+  // division number n of a D-n chart on the Vargas tab (which may be 1 too).
+  // A varga chart places each point by its D-n sign.
+  function vargaSign(x, varga) {
+    return varga ? E.vargaSignIndex(x.longitude, varga) : x.signIndex;
   }
 
-  function planetsBySign(result, useNavamsa) {
+  // What a chart label should judge dignity against: the D1 planet as-is, or
+  // for a varga chart its D-n sign. Moolatrikona is a D1 degree band, so a
+  // varga view carries no degree and never matches it.
+  function chartPlanet(p, varga) {
+    if (!varga) return p;
+    var s = vargaSign(p, varga);
+    return { signIndex: s, sign: E.SIGNS[s], degree: NaN, retrograde: p.retrograde };
+  }
+
+  function planetsBySign(result, varga) {
     var map = {};
     for (var i = 0; i < 12; i++) map[i] = [];
     PLANET_ORDER.forEach(function (name) {
-      var p = result.planets[name];
-      var idx = useNavamsa ? p.navamsaSignIndex : p.signIndex;
-      map[idx].push(name);
+      map[vargaSign(result.planets[name], varga)].push(name);
     });
     return map;
   }
 
-  function renderNorthChart(svgId, result, useNavamsa, sb) {
+  function renderNorthChart(svgId, result, varga, sb) {
     var svg = document.getElementById(svgId);
     hideChartTooltip();
     svg.innerHTML = '';
     svg.setAttribute('viewBox', '0 0 300 300');
     var polys = northHousePolygons();
-    var ascSignIdx = useNavamsa ? result.ascendant.navamsaSignIndex : result.ascendant.signIndex;
-    var bySign = planetsBySign(result, useNavamsa);
-    var hoverable = !useNavamsa; // narrative rungs read D1 placements only
+    var ascSignIdx = vargaSign(result.ascendant, varga);
+    var bySign = planetsBySign(result, varga);
+    var hoverable = !varga; // narrative rungs read D1 placements only
 
     // outer square
     svg.appendChild(svgEl('rect', { x: 1, y: 1, width: 298, height: 298, fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }));
@@ -330,13 +341,13 @@
       signText.appendChild(signTitle);
       g.appendChild(signText);
       planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(pos[0], pos[1] + 8 + i * 12, pname, chartPlanet(result.planets[pname], useNavamsa), 'planet-label', 10));
+        g.appendChild(svgPlanetLabel(pos[0], pos[1] + 8 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
       });
       svg.appendChild(g);
     }
   }
 
-  function renderSouthChart(svgId, result, useNavamsa, sb) {
+  function renderSouthChart(svgId, result, varga, sb) {
     var svg = document.getElementById(svgId);
     hideChartTooltip();
     svg.innerHTML = '';
@@ -348,16 +359,16 @@
     // keeps the chart's own top border flush with the svg's top edge
     // (and so with the toggle checkboxes beside it) whether or not the
     // overlay is active.
-    var dashaOverlayActive = !useNavamsa && dashaActivationEnabled && !!lastDashaSelection;
+    var dashaOverlayActive = !varga && dashaActivationEnabled && !!lastDashaSelection;
     svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-    var ascSignIdx = useNavamsa ? result.ascendant.navamsaSignIndex : result.ascendant.signIndex;
-    var bySign = planetsBySign(result, useNavamsa);
-    var hoverable = !useNavamsa; // narrative rungs read D1 placements only
+    var ascSignIdx = vargaSign(result.ascendant, varga);
+    var bySign = planetsBySign(result, varga);
+    var hoverable = !varga; // narrative rungs read D1 placements only
 
     svg.appendChild(svgEl('rect', { x: 1, y: 1, width: size-2, height: size-2, fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }));
 
     var cellRects = {};
-    var clickable = !useNavamsa; // the network overlay only applies to the D1 chart
+    var clickable = !varga; // the network overlay only applies to the D1 chart
     for (var s = 0; s < 12; s++) {
       var rc = SOUTH_LAYOUT[s];
       var row = rc[0], col = rc[1];
@@ -377,9 +388,10 @@
             // Toggle only this sign's own membership — selecting a different
             // sign never clears one already selected; only an explicit
             // second click on that same sign removes it.
+            networkFocusPlanet = null;
             if (networkSelectedSigns[sIdx]) delete networkSelectedSigns[sIdx];
             else networkSelectedSigns[sIdx] = true;
-            renderSouthChart(svgId, result, useNavamsa, sb);
+            renderSouthChart(svgId, result, varga, sb);
           };
         })(s));
       }
@@ -388,7 +400,7 @@
       var g = svgEl('g', { 'pointer-events': 'none' }); // labels never steal the house's hover hit-area
       g.appendChild(svgText(x + cell/2, y + 16, SIGN_SYMBOL[s] + ' H' + houseNum, 'sign-label', 10));
       planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(x + cell/2, y + 32 + i * 12, pname, chartPlanet(result.planets[pname], useNavamsa), 'planet-label', 10));
+        g.appendChild(svgPlanetLabel(x + cell/2, y + 32 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
       });
       svg.appendChild(g);
     }
@@ -404,11 +416,11 @@
     // The overlays below (and the shared status/readout elements they
     // update) belong to the D1 chart only — the D9 chart stops here so
     // drawing it never clears or redraws D1's overlay state.
-    if (useNavamsa) return;
+    if (varga) return;
 
     var statusEl = document.getElementById('networkStatus');
     var centerOverlayEl = document.getElementById('chartCenterOverlay');
-    var networkActive = !useNavamsa && networkEnabled;
+    var networkActive = !varga && networkEnabled;
     // Birth details / Dasha readout text goes grey while the network
     // overlay is showing — its dispositor/aspect/exchange lines already add
     // a lot of color to the chart, and the center block sitting right in
@@ -416,7 +428,7 @@
     // behind them the way blank center space used to.
     if (centerOverlayEl) centerOverlayEl.classList.toggle('network-muted', networkActive);
     if (networkActive) {
-      drawNetworkOverlay(svg, result, cell, cellRects, svgId, useNavamsa, sb);
+      drawNetworkOverlay(svg, result, cell, cellRects, svgId, varga, sb);
     } else if (statusEl) {
       statusEl.classList.add('hidden');
       statusEl.innerHTML = '';
@@ -880,10 +892,13 @@
           if (toSign === result.planets[otherNode].signIndex &&
               !PLANET_ORDER.some(function (p) { return p !== otherNode && p !== name && result.planets[p].signIndex === toSign; })) continue;
         }
+        // Planets sharing a sign cast the same aspect along the same line:
+        // one line, with every caster listed in `planets` (`planet` stays the
+        // first, which colors the arrowhead).
         var k = fromSign + '>' + toSign + '@' + dist;
-        if (seenAsp[k]) continue;
-        seenAsp[k] = true;
-        edges.push({ from: fromSign, to: toSign, type: 'aspect', label: ordinalWord(dist), planet: name });
+        if (seenAsp[k]) { seenAsp[k].planets.push(name); continue; }
+        seenAsp[k] = { from: fromSign, to: toSign, type: 'aspect', label: ordinalWord(dist), planet: name, planets: [name] };
+        edges.push(seenAsp[k]);
       }
     });
 
@@ -1205,7 +1220,7 @@
     return out;
   }
 
-  function drawNetworkOverlay(svg, result, cell, cellRects, svgId, useNavamsa, sb) {
+  function drawNetworkOverlay(svg, result, cell, cellRects, svgId, varga, sb) {
     // Every edge's endpoint sits on a fixed, invisible circle around its
     // sign's own center — NET_ANCHOR_R, half of the sign box's own radius
     // (the box spans cell/2 in each direction from center, so this circle
@@ -1256,6 +1271,58 @@
     });
     visibleEdges = mergeEdges(visibleEdges);
     secondaryEdges = dedupeEdges(secondaryEdges);
+    // A planet picked from the Influences dropdown narrows its sign to that
+    // planet: lines made by the sign's other tenants (their aspects, their
+    // dispositor and "also rules" lines) go; whatever acts on the sign — its
+    // lord, aspects landing on it, an exchange with the planet — stays.
+    if (networkFocusPlanet && selectedList.length === 1) {
+      var focusSign = selectedList[0];
+      var focusTenants = signTenants(focusSign, result);
+      var others = focusTenants.filter(function (n) { return n !== networkFocusPlanet; });
+      var involved = function (e) { return e.planets || [e.planet, e.planetReverse]; };
+      var keep = function (e) {
+        var who = involved(e);
+        if (who.indexOf(networkFocusPlanet) >= 0) return true;
+        return !who.some(function (n) { return others.indexOf(n) >= 0; });
+      };
+      // An exchange between a co-tenant and the sign's lord is still how
+      // that lord reaches the sign, so for the picked planet it is drawn as
+      // the plain dispositor line it would otherwise be. (On an exchange
+      // edge `planet` stands at `from`, `planetReverse` at `to`.)
+      visibleEdges = visibleEdges.map(function (e) {
+        if (e.type !== 'exchange' || keep(e)) return e;
+        var lord = e.from === focusSign ? e.planetReverse : e.planet;
+        var lordSign = e.from === focusSign ? e.to : e.from;
+        if (E.SIGN_COLORDS[focusSign].indexOf(lord) < 0) return e;
+        return { from: lordSign, to: focusSign, type: 'dispositor', planet: lord,
+          _headEnd: networkShowIn, _headStart: networkShowOut && focusTenants.length > 0, _tenants: focusTenants };
+      }).filter(keep);
+      secondaryEdges = secondaryEdges.filter(keep);
+      // An aspect line shared with a co-tenant is the picked planet's alone here.
+      visibleEdges = visibleEdges.map(function (e) {
+        if (!e.planets || e.planets.length < 2) return e;
+        var c = {};
+        for (var key in e) c[key] = e[key];
+        c.planet = networkFocusPlanet;
+        c.planets = [networkFocusPlanet];
+        return c;
+      });
+      // A dispositor line's "tenants feed back into the lord" half names the
+      // picked planet only.
+      visibleEdges.forEach(function (e) {
+        if (e._tenants) e._tenants = e._tenants.filter(function (n) { return others.indexOf(n) < 0; });
+      });
+    }
+    // A light-blue "also rules" line (ruled sign → where its lord stands)
+    // says the same thing as that lord's own dispositor line running the
+    // other way; when that line is already drawn, the blue one is dropped
+    // so the fact shows once. It stays when only In is on, as then it is
+    // the only line carrying it.
+    secondaryEdges = secondaryEdges.filter(function (s) {
+      return !visibleEdges.some(function (v) {
+        return v.type === 'dispositor' && v.planet === s.planet && v.from === s.to && v.to === s.from;
+      });
+    });
     var renderEdges = visibleEdges.concat(secondaryEdges);
 
     // Spread edges that arrive at (or leave) the same sign from close to the
@@ -2246,8 +2313,8 @@
         yFlag.title = g + ' is within ' + r.yuddha.orb.toFixed(2) + '° of ' + r.yuddha.opponent +
           ' — Graha Yuddha (planetary war). By the convention used here (greater ecliptic ' +
           'latitude wins), ' + g + ' ' + (r.yuddha.role === 'winner' ? 'prevails over' : 'is defeated by') +
-          ' ' + r.yuddha.opponent + '. This is a classical caveat layered on top of Shadbala, not a ' +
-          'change to the Virupa totals themselves.';
+          ' ' + r.yuddha.opponent + ', and its Kala Bala ' + (r.yuddha.bala >= 0 ? 'gains ' : 'loses ') +
+          Math.abs(r.yuddha.bala).toFixed(2) + ' Virupas of Yuddha Bala.';
         nameCell.appendChild(yFlag);
       }
       tr.appendChild(nameCell);
@@ -2470,10 +2537,38 @@
       if (entry.kind + ':' + entry.key === side2LastKey) selectedIdx = i;
     });
     select.value = String(selectedIdx);
+    // Point the chart's network overlay at this entry's sign (the house's
+    // sign, which is also where the planet sits), narrowed to the planet
+    // itself when one is picked. A dropdown pick is one choice, so it
+    // replaces any signs clicked before; what is drawn still follows the
+    // Dispositor & aspect network / In / Out boxes.
+    function focusNetwork(entry) {
+      if (!lastResult) return;
+      networkSelectedSigns = {};
+      networkSelectedSigns[(lastResult.ascendant.signIndex + entry.house - 1) % 12] = true;
+      networkFocusPlanet = entry.kind === 'planet' ? entry.key : null;
+      renderSouthChart('southChartD1', lastResult, false, lastSb);
+    }
     select.onchange = function () {
       var entry = entries[Number(select.value)];
       side2LastKey = entry.kind + ':' + entry.key;
       show(entry);
+      focusNetwork(entry);
+    };
+    // Re-picking the value already shown fires no change event, yet should
+    // still reset the network to that entry (e.g. after signs were clicked
+    // on the chart). The first click opens the list and the second picks
+    // from it; if the value is the one it opened on, refocus. Enter does the
+    // same from the keyboard.
+    var listOpen = false, openedOn = null;
+    select.onclick = function () {
+      if (listOpen && select.value === openedOn) focusNetwork(entries[Number(select.value)]);
+      listOpen = !listOpen;
+      openedOn = select.value;
+    };
+    select.onblur = function () { listOpen = false; };
+    select.onkeyup = function (ev) {
+      if (ev.key === 'Enter') focusNetwork(entries[Number(select.value)]);
     };
     show(entries[selectedIdx]);
   }
@@ -3794,19 +3889,19 @@
     }
     block('House pick', ordinalWord(hPick.house) + ' · ' + hPick.sign, hWhy, hAlso);
 
-    // Tripod impact — the Influence Engine's Body/Mind/Soul read, as three
+    // Body / Mind / Soul — each one's placement and all it takes in, as three
     // plain columns with the same green/red/grey color code.
     var tri = document.createElement('div');
     tri.className = 'fact-pick';
     var cols = document.createElement('div');
     cols.className = 'facts-cols';
+    var inputs = window.Interpret.tripodInputs(result, sb, interpHelpers(), ie.tripod);
+    var TONE = { good: 'ie-good', bad: 'ie-bad', neutral: 'ie-neutral' };
     [['Body', 'Ascendant'], ['Mind', 'Moon'], ['Soul', 'Sun']].forEach(function (pair) {
       var col = document.createElement('div');
       col.appendChild(spanText(pair[0] + ' (' + pair[1] + ')', 'fact-pick-name'));
-      var hits = ie.tripod[pair[0]];
-      if (!hits.length) col.appendChild(spanText('No aspects or conjunctions land here.', 'facts-tripod-hit ie-neutral'));
-      hits.forEach(function (hit) {
-        col.appendChild(spanText(tripodHitText(hit), 'facts-tripod-hit ' + tripodHitClass(hit)));
+      inputs[pair[0]].forEach(function (line) {
+        col.appendChild(spanText(line.text, 'facts-tripod-hit ' + TONE[line.tone]));
       });
       cols.appendChild(col);
     });
@@ -5398,7 +5493,7 @@
     applyChartView(prefGet(CHART_VIEW_KEY) || 'both');
     southCard.style.order = style === 'north' ? '2' : '1';
     northCard.style.order = style === 'north' ? '1' : '2';
-    networkSelectedSigns = {};
+    networkSelectedSigns = {}; networkFocusPlanet = null;
     renderSouthChart('southChartD1', result, false, null);
     renderNorthChart('northChartD1', result, false, null);
 
@@ -5488,6 +5583,171 @@
       applyNakVisible(nowVisible);
     });
     applyNakVisible(prefGet(NAK_VISIBLE_KEY) !== '0');
+  }
+
+  // ---- Vargas tab: pick divisional charts to show ----
+  // One pill per varga on the left; each selected one is drawn on the canvas
+  // on the right, always in order of division, in the chart style chosen on
+  // the form. The grid's column count follows how many are shown and how
+  // wide the canvas is. The selection is remembered between visits.
+  var VARGAS_KEY = 'vedicChartVargas.v1';
+  var vargaSelected = null;
+
+  function vargaSelection() {
+    if (!vargaSelected) {
+      var saved = prefGet(VARGAS_KEY);
+      vargaSelected = (saved == null ? '9' : saved).split(',').filter(Boolean).map(Number);
+    }
+    return vargaSelected;
+  }
+
+  function layoutVargaCanvas() {
+    var canvas = document.getElementById('vargaCanvas');
+    if (!canvas) return;
+    var count = vargaSelection().length;
+    var width = canvas.clientWidth;
+    var fit = width ? Math.max(1, Math.floor(width / 230)) : 1;
+    var cols = Math.max(1, Math.min(count, Math.ceil(Math.sqrt(count)), fit));
+    if (count === 2 && fit >= 2) cols = 2;
+    canvas.style.setProperty('--varga-cols', cols);
+    canvas.style.setProperty('--varga-max', count === 1 ? '480px' : 'none');
+  }
+
+  function renderVargaCanvas(result, sb) {
+    var canvas = document.getElementById('vargaCanvas');
+    if (!canvas) return;
+    canvas.innerHTML = '';
+    var sel = vargaSelection().slice().sort(function (a, b) { return a - b; });
+    var empty = document.getElementById('vargaEmpty');
+    if (empty) empty.classList.toggle('hidden', sel.length > 0);
+    var north = document.getElementById('chartStyleInput').value === 'north';
+    var note = document.getElementById('vargaNote');
+    if (note) {
+      note.textContent = !sel.length ? '' : north
+        ? 'North Indian: houses are fixed (H1 at the top, anti-clockwise) from each chart’s own lagna; the glyph is the rashi.'
+        : 'South Indian: signs are fixed; H1–H12 count from each chart’s own lagna.';
+    }
+    layoutVargaCanvas();
+    if (!result) return;
+    sel.forEach(function (n) {
+      var v = E.VARGAS.filter(function (x) { return x.n === n; })[0];
+      if (!v) return;
+      var card = document.createElement('div');
+      card.className = 'chart-card';
+      var h = document.createElement('h3');
+      h.textContent = 'D' + n + ' · ' + v.name + ' — ' + v.use;
+      card.appendChild(h);
+      var svg = svgEl('svg', { id: 'vargaChartD' + n, viewBox: north ? '0 0 300 300' : '0 0 320 320' });
+      card.appendChild(svg);
+      canvas.appendChild(card);
+      if (north) renderNorthChart(svg.id, result, n, sb);
+      else renderSouthChart(svg.id, result, n, sb);
+    });
+  }
+
+  function initVargaPills() {
+    var box = document.getElementById('vargaPills');
+    if (!box || box.__wired) return;
+    box.__wired = true;
+    // Each pill stands for a set of divisions: one varga, or a classical
+    // group of them. A pill reads as on when every chart in its set is
+    // shown; clicking it then removes them all, otherwise it adds whichever
+    // are missing (the selection never holds a chart twice).
+    var pills = [];
+    function addPill(nums, title, sub, cls) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'varga-pill' + (cls ? ' ' + cls : '');
+      b.appendChild(spanText(title, 'vp-name'));
+      b.appendChild(spanText(sub, 'vp-use'));
+      b.addEventListener('click', function () {
+        var sel = vargaSelection();
+        var allOn = nums.every(function (n) { return sel.indexOf(n) >= 0; });
+        nums.forEach(function (n) {
+          var at = sel.indexOf(n);
+          if (allOn && at >= 0) sel.splice(at, 1);
+          else if (!allOn && at < 0) sel.push(n);
+        });
+        prefSet(VARGAS_KEY, sel.join(','));
+        refreshPills();
+        renderVargaCanvas(lastResult, lastSb);
+      });
+      pills.push({ el: b, nums: nums });
+      box.appendChild(b);
+    }
+    function refreshPills() {
+      var sel = vargaSelection();
+      pills.forEach(function (p) {
+        var on = p.nums.every(function (n) { return sel.indexOf(n) >= 0; });
+        p.el.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    }
+    var shad = [1, 2, 3, 9, 12, 30], sapta = shad.concat([7]), dasha = sapta.concat([10, 16, 60]);
+    [['Shadvarga', 'Six charts', shad], ['Saptavarga', 'Seven charts', sapta],
+     ['Dashavarga', 'Ten charts', dasha],
+     ['Shodashavarga', 'All sixteen charts', E.VARGAS.map(function (v) { return v.n; })]
+    ].forEach(function (g) { addPill(g[2], g[0], g[1], 'varga-group'); });
+    var rule = document.createElement('div');
+    rule.className = 'varga-pills-rule';
+    box.appendChild(rule);
+    E.VARGAS.forEach(function (v) { addPill([v.n], 'D' + v.n + ' · ' + v.name, v.use); });
+    refreshPills();
+    var canvas = document.getElementById('vargaCanvas');
+    if (canvas && window.ResizeObserver) new ResizeObserver(layoutVargaCanvas).observe(canvas);
+    renderVargaCanvas(lastResult, lastSb);
+  }
+
+  // ---- Show / hide individual columns of the Planets table ----
+  // Each header but Planet gets a −/+ button. A hidden column shrinks to just its
+  // button (so it can be brought back); the state is a class on the table,
+  // which survives the tbody being re-rendered for each chart.
+  var PLANET_COLS_KEY = 'vedicChartPlanetColsHidden.v1';
+
+  function initPlanetColumnToggles() {
+    var table = document.getElementById('planetTable');
+    if (!table || table.__colsWired) return;
+    table.__colsWired = true;
+    var ths = table.querySelectorAll('thead th');
+    var css = '';
+    for (var i = 1; i <= ths.length; i++) {
+      css += '#planetTable.hc' + i + ' th:nth-child(' + i + ') .col-label { display: none; }\n' +
+        '#planetTable.hc' + i + ' td:nth-child(' + i + ') { font-size: 0; min-width: 0; padding-left: 2px; padding-right: 2px; }\n' +
+        '#planetTable.hc' + i + ' td:nth-child(' + i + ') > * { display: none; }\n';
+    }
+    var style = document.createElement('style');
+    style.textContent = css;
+    document.head.appendChild(style);
+
+    var hidden = (prefGet(PLANET_COLS_KEY) || '').split(',').filter(Boolean);
+    function save() { prefSet(PLANET_COLS_KEY, hidden.join(',')); }
+    Array.prototype.forEach.call(ths, function (th, idx) {
+      if (idx === 0) return; // the Planet column always stays
+      var col = String(idx + 1);
+      var label = document.createElement('span');
+      label.className = 'col-label';
+      while (th.firstChild) label.appendChild(th.firstChild);
+      var name = label.textContent;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'col-tog';
+      th.appendChild(label);
+      th.appendChild(btn);
+      function apply() {
+        var off = hidden.indexOf(col) >= 0;
+        table.classList.toggle('hc' + col, off);
+        btn.textContent = off ? '+' : '−';
+        btn.title = (off ? 'Show' : 'Hide') + ' the ' + name + ' column';
+        btn.setAttribute('aria-label', btn.title);
+        btn.setAttribute('aria-pressed', off ? 'true' : 'false');
+      }
+      btn.addEventListener('click', function () {
+        var at = hidden.indexOf(col);
+        if (at >= 0) hidden.splice(at, 1); else hidden.push(col);
+        save();
+        apply();
+      });
+      apply();
+    });
   }
 
   // ---- Show / hide the Sthana Bala breakdown table (Strength tab) ----
@@ -5622,6 +5882,7 @@
       networkEnabled = box.checked;
       prefSet(NETWORK_VIEW_KEY, networkEnabled ? '1' : '0');
       networkSelectedSigns = {};
+      networkFocusPlanet = null;
       syncDirBoxes();
       if (lastResult) renderSouthChart('southChartD1', lastResult, false, lastSb);
     });
@@ -5674,6 +5935,8 @@
     initDashaActivationToggle();
     initFoldersToggle();
     initNakToggle();
+    initPlanetColumnToggles();
+    initVargaPills();
     initSthanaToggle();
     initKalaToggle();
     initResearchTab();
@@ -6170,11 +6433,10 @@
         applyChartView(prefGet(CHART_VIEW_KEY) || 'both');
         southCard.style.order = style === 'north' ? '2' : '1';
         northCard.style.order = style === 'north' ? '1' : '2';
-        networkSelectedSigns = {};
+        networkSelectedSigns = {}; networkFocusPlanet = null;
         renderSouthChart('southChartD1', result, false, shadbala);
         renderNorthChart('northChartD1', result, false, shadbala);
-        renderSouthChart('southChartD9', result, true, shadbala);
-        renderNorthChart('northChartD9', result, true, shadbala);
+        renderVargaCanvas(result, shadbala);
 
         // Remember these details under the given name for next time
         if (name) {

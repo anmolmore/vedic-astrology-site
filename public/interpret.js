@@ -983,6 +983,84 @@
     return out;
   }
 
+  // Compound (panchadha) relation of one planet toward another, as a word.
+  var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
+  function relWordOf(result, from, to) {
+    var rel = result.relationships[from] && result.relationships[from][to];
+    return (rel && REL_WORD[rel.panchadha]) || '';
+  }
+  // How an influencing planet stands toward a sign: its own dignity there
+  // first, else its compound relation to the sign's lord. Interpretive only —
+  // neither Drik nor Bhava Drishti scores it.
+  function signRelationOf(result, H, from, signIdx) {
+    var S = H.Shadbala;
+    if (S.EXALT[from] != null) {
+      var ex = Math.floor(S.EXALT[from] / 30);
+      if (ex === signIdx) return 'Exaltation sign';
+      if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
+    }
+    if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
+    if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
+    var word = relWordOf(result, from, H.engine.SIGN_LORDS[signIdx]);
+    return word ? word + '’s sign' : '';
+  }
+  // For an influence on a planet: how the influencing planet regards the
+  // planet itself, then the sign it falls in.
+  function aspectRelationOf(result, H, from, to) {
+    return [relWordOf(result, from, to), signRelationOf(result, H, from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
+  }
+
+  // The Facts tab's Body / Mind / Soul read: for each, its placement and all
+  // it takes in, heaviest first — lordships, a sign exchange, co-tenants, the
+  // dispositor, then aspects (the tripod hits above, each with how the
+  // influencing planet regards it). Each line is { text, tone } with tone
+  // 'good' / 'bad' for influencers and 'neutral' for structure.
+  function tripodInputs(result, sb, H, tripod) {
+    var E2 = H.engine, asc = result.ascendant, ascSign = asc.signIndex;
+    tripod = tripod || tripodImpact(result, sb, H);
+    function where(n) { var q = result.planets[n]; return n + ' in ' + q.sign + ', ' + ord(q.house) + ' house'; }
+    function deg(x) { return typeof x.degree === 'number' && isFinite(x.degree) ? ' ' + x.degreeFormatted : ''; }
+    function influences(key, target) {
+      var hits = tripod[key];
+      if (!hits.length) return [{ text: 'No aspects or conjunctions land here.', tone: 'neutral' }];
+      var conj = hits.filter(function (h) { return / conjoins /.test(h.via); });
+      var asp = hits.filter(function (h) { return !/ conjoins /.test(h.via); });
+      return conj.concat(asp).map(function (h) {
+        var rel = target ? aspectRelationOf(result, H, h.planet, target) : signRelationOf(result, H, h.planet, ascSign);
+        return { text: h.via + (rel ? ' · ' + rel : ''), tone: h.stabilizing ? 'good' : 'bad', conj: / conjoins /.test(h.via) };
+      });
+    }
+    var out = {};
+
+    // Body: the rising sign, its lord, and what lands on it.
+    var lagnaLord = E2.SIGN_LORDS[ascSign];
+    var body = [{ text: asc.sign + ' rising' + deg(asc) + (asc.nakshatra && asc.nakshatra.name ? ' · ' + asc.nakshatra.name : ''), tone: 'neutral' },
+      { text: 'Lagna lord ' + where(lagnaLord), tone: 'neutral' }];
+    out.Body = body.concat(influences('Body', null));
+
+    [['Mind', 'Moon'], ['Soul', 'Sun']].forEach(function (pair) {
+      var key = pair[0], name = pair[1], p = result.planets[name];
+      var dig = H.dignityOf(name, p);
+      var dignity = dig.length ? dig[0].full : signRelationOf(result, H, name, p.signIndex);
+      var lines = [{ text: name + ' in ' + p.sign + deg(p) + ', ' + ord(p.house) + ' house' + (p.nakshatra ? ' · ' + p.nakshatra : '') +
+        (dignity ? ' · ' + dignity : ''), tone: 'neutral' }];
+      var owned = H.housesOwnedBy(name, ascSign);
+      if (owned.length) lines.push({ text: 'Rules the ' + owned.map(function (o) { return ord(o.house) + ' (' + o.sign + ')'; }).join(' and '), tone: 'neutral' });
+      var disp = E2.SIGN_LORDS[p.signIndex];
+      var exchange = disp !== name && E2.SIGN_LORDS[result.planets[disp].signIndex] === name;
+      if (exchange) lines.push({ text: 'Exchanges signs with ' + disp + ' (' + ord(p.house) + ' ↔ ' + ord(result.planets[disp].house) + ')', tone: 'neutral' });
+      var inf = influences(key, name);
+      var conj = inf.filter(function (l) { return l.conj; }), rest = inf.filter(function (l) { return !l.conj; });
+      lines = lines.concat(conj);
+      if (disp !== name && !exchange) {
+        var dRel = relWordOf(result, name, disp);
+        lines.push({ text: 'Dispositor ' + where(disp) + (dRel ? ' · ' + dRel : ''), tone: 'neutral' });
+      }
+      out[key] = lines.concat(rest);
+    });
+    return out;
+  }
+
   // Dispositor Chain (Influence Framework §5 / item 23 — "Dispositor-as-net-
   // vector," multi-hop). Walks a planet's occupied sign to that sign's
   // classical lord, then to THAT planet's own occupied sign, and so on —
@@ -1802,13 +1880,13 @@
           ' — ' + (res.yuddha.role === 'winner' ? 'wins' : 'loses') + ' the war';
         sInt += ' ' + (res.yuddha.role === 'winner'
           ? 'It is also in planetary war (Graha Yuddha) with ' + res.yuddha.opponent + ', within ' + res.yuddha.orb.toFixed(2) +
-            '° — and, by ecliptic latitude, comes out ahead of it. A caveat layered on top of the Shadbala score above, not folded into it.'
+            '° — and, by ecliptic latitude, comes out ahead of it, which adds ' + res.yuddha.bala.toFixed(2) + ' Virupas to its Kala Bala.'
           : 'It is also in planetary war (Graha Yuddha) with ' + res.yuddha.opponent + ', within ' + res.yuddha.orb.toFixed(2) +
-            '° — and, by ecliptic latitude, is the one defeated. This does not change the Shadbala score above, but classically dampens this placement’s results, especially during its own dasha.');
+            '° — and, by ecliptic latitude, is the one defeated. That takes ' + Math.abs(res.yuddha.bala).toFixed(2) + ' Virupas off its Kala Bala, and classically dampens this placement’s results, especially during its own dasha.');
         if (res.yuddha.role === 'loser') {
           T.yuddha = name + ' is defeated in Graha Yuddha (planetary war) by ' + res.yuddha.opponent +
             ' — within ' + res.yuddha.orb.toFixed(2) + '° of it, and behind it by the ecliptic-latitude rule used here. ' +
-            'A classical caveat on this placement’s results that Shadbala’s own total does not capture.';
+            'It loses ' + Math.abs(res.yuddha.bala).toFixed(2) + ' Virupas of Kala Bala, and classically its results are dampened beyond what that number shows.';
         }
       }
     }
@@ -2890,31 +2968,8 @@
       return 'Angle ' + n1(d.angle) + '° gives an aspect value of ' + n2(Math.abs(d.value)) + '; ' +
         (full ? 'counted in full' : '÷ 4') + ' = ' + signed(d.weighted);
     }
-    // Compound (panchadha) relation of one planet toward another, as a word.
-    var REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
-    function relWord(from, to) {
-      var rel = result.relationships[from] && result.relationships[from][to];
-      return (rel && REL_WORD[rel.panchadha]) || '';
-    }
-    // How an aspecting planet stands toward the sign it aspects: its own
-    // dignity there first, else its compound relation to the sign's lord.
-    // Interpretive only — neither Drik nor Bhava Drishti scores it.
-    function signRelation(from, signIdx) {
-      if (S.EXALT[from] != null) {
-        var ex = Math.floor(S.EXALT[from] / 30);
-        if (ex === signIdx) return 'Exaltation sign';
-        if ((ex + 6) % 12 === signIdx) return 'Debilitation sign';
-      }
-      if (S.MOOLATRIKONA[from] && S.MOOLATRIKONA[from].sign === signIdx) return 'Moolatrikona sign';
-      if (S.OWN_SIGNS[from] && S.OWN_SIGNS[from].indexOf(signIdx) >= 0) return 'Own sign';
-      var word = relWord(from, E2.SIGN_LORDS[signIdx]);
-      return word ? word + '’s sign' : '';
-    }
-    // For an aspect on a planet: how the aspecting planet regards the planet
-    // itself, then the sign it falls in.
-    function aspectRelation(from, to) {
-      return [relWord(from, to), signRelation(from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
-    }
+    function signRelation(from, signIdx) { return signRelationOf(result, H, from, signIdx); }
+    function aspectRelation(from, to) { return aspectRelationOf(result, H, from, to); }
 
     var longitudes = {};
     sb.grahas.forEach(function (g) { longitudes[g] = result.planets[g].longitude; });
@@ -2958,7 +3013,8 @@
               { n: 'Abda (year)', v: kd.abda, max: 15 }, { n: 'Masa (month)', v: kd.masa, max: 30 },
               { n: 'Vara (weekday)', v: kd.vara, max: 45 }, { n: 'Hora', v: kd.hora, max: 60 }
             ] },
-            { n: 'Ayana', v: kd.ayana, min: SB_MIN.ayana[name], max: 60 }
+            { n: 'Ayana', v: kd.ayana, min: SB_MIN.ayana[name], max: 60 },
+            { n: 'Yuddha (planetary war)', v: kd.yuddha || 0, note: r.yuddha ? (r.yuddha.role === 'winner' ? 'wins against ' : 'loses to ') + r.yuddha.opponent : '' }
           ] },
           { n: 'Chesta (motional)', v: r.chesta, min: SB_MIN.chesta[name], max: 60 },
           { n: 'Naisargika (natural)', v: r.naisargika, max: 60 },
@@ -3401,8 +3457,9 @@
           cond: r.yuddha ? (r.yuddha.role === 'winner' ? 'Wins a planetary war against ' : 'Loses a planetary war to ') + r.yuddha.opponent + ' (' + n2(r.yuddha.orb) + '° apart).'
             : (name === 'Sun' || name === 'Moon') ? 'The Sun and Moon never take part in a planetary war.'
             : 'No planet within 1°, so no planetary war.',
-          calc: r.yuddha ? 'Flagged only; this app does not move Virupas for it' : '0',
-          value: r.yuddha ? '—' : '0.00', comp: 'Yuddha Bala'
+          calc: r.yuddha ? 'Sthana + Dig + Kala up to Hora: the two planets’ difference ÷ the difference of their disc diameters, ' +
+            (r.yuddha.role === 'winner' ? 'added to the winner' : 'taken from the loser') : '0',
+          value: n2(kd.yuddha || 0), comp: 'Yuddha Bala'
         });
 
         // ---- 4–5. Chesta, Naisargika ----
@@ -3884,7 +3941,7 @@
     viparitaRajaYogas: viparitaRajaYogas,
     chartWideRajaYogas: chartWideRajaYogas,
     chartWideDhanaYogas: chartWideDhanaYogas,
-    tripodImpact: tripodImpact,
+    tripodImpact: tripodImpact, tripodInputs: tripodInputs,
     influenceEngineChart: influenceEngineChart, nabhashaYogas: nabhashaYogas,
     // Influence Framework additions — exported individually too, so a caller
     // that only wants one slice (e.g. the network overlay wanting a single
