@@ -221,6 +221,12 @@
     1: [150,45],  2: [95,35],   3: [45,85],   4: [75,150],  5: [45,215],  6: [95,265],
     7: [150,255], 8: [205,265], 9: [255,215], 10:[225,150], 11:[255,85],  12:[205,35]
   };
+  // Room for planet labels in each North Indian house: [width, rows].
+  var NORTH_LABEL_FIT = {
+    1: [80, 4], 4: [80, 4], 7: [80, 4], 10: [80, 4],
+    2: [60, 3], 6: [60, 3], 8: [60, 3], 12: [60, 3],
+    3: [44, 5], 5: [44, 5], 9: [44, 5], 11: [44, 5]
+  };
   // small house-number anchors, tucked against the outer edge of each house region
   var NORTH_HOUSENUM_POS = {
     1: [150,13],  2: [48,17],   3: [15,53],   4: [15,151],  5: [15,249],  6: [48,289],
@@ -246,6 +252,51 @@
   // Moolatrikona all together — see dignityOf's own comment), so each flag
   // gets its own colored tspan, slash-joined, plus a combined <title> for
   // the full wording on hover.
+  // Lays out a box's planet labels: one per line, down from firstY, while
+  // they fit in maxRows; past that they wrap side by side into rows no wider
+  // than maxW, the font stepping down (to 7 at the smallest) until the rows
+  // fit — overflow goes across, not down. Widths are estimated from the
+  // label text, so this also works for charts drawn while hidden.
+  function appendPlanetLabels(g, names, result, varga, cx, firstY, maxW, maxRows) {
+    if (!names.length) return;
+    var items = names.map(function (n) {
+      var p = chartPlanet(result.planets[n], varga);
+      var chars = 5 + (p.retrograde ? 1 : 0);
+      var flags = dignityOf(n, p);
+      if (flags.length) chars += 1 + flags.map(function (f) { return f.t; }).join('/').length;
+      return { name: n, p: p, chars: chars };
+    });
+    if (items.length <= maxRows) {
+      items.forEach(function (it, i) {
+        g.appendChild(svgPlanetLabel(cx, firstY + i * 12, it.name, it.p, 'planet-label', 10));
+      });
+      return;
+    }
+    var size = 10, rows, gap;
+    for (;;) {
+      gap = size * 0.4;
+      rows = [[]];
+      var used = 0;
+      items.forEach(function (it) {
+        it.w = it.chars * size * 0.58;
+        var row = rows[rows.length - 1];
+        if (row.length && used + gap + it.w > maxW) { rows.push([it]); used = it.w; }
+        else { used += (row.length ? gap : 0) + it.w; row.push(it); }
+      });
+      if (rows.length <= maxRows || size <= 7) break;
+      size -= 0.5;
+    }
+    var step = size * 1.2;
+    rows.forEach(function (row, r) {
+      var total = row.reduce(function (sum, it) { return sum + it.w; }, 0) + gap * (row.length - 1);
+      var x = cx - total / 2;
+      row.forEach(function (it) {
+        g.appendChild(svgPlanetLabel(x + it.w / 2, firstY + r * step, it.name, it.p, 'planet-label', size));
+        x += it.w + gap;
+      });
+    });
+  }
+
   function svgPlanetLabel(x, y, pname, p, cls, size) {
     var t = svgEl('text', { x: x, y: y, class: cls || '', 'font-size': size || 11, 'text-anchor': 'middle' });
     t.appendChild(document.createTextNode(PLANET_SYMBOL[pname] + ' ' + pname.slice(0, 3)));
@@ -277,6 +328,18 @@
   // The chart renderers take `varga`: false for the main D1 chart, or the
   // division number n of a D-n chart on the Vargas tab (which may be 1 too).
   // A varga chart places each point by its D-n sign.
+  // "D1 · Rashi", "D9 · Navamsha" … — the label drawn in a chart's centre.
+  function chartCenterLabel(varga) {
+    var n = varga || 1;
+    var v = E.VARGAS.filter(function (x) { return x.n === n; })[0];
+    return 'D' + n + (v ? ' · ' + v.name : '');
+  }
+
+  function chartCenterUse(varga) {
+    var v = E.VARGAS.filter(function (x) { return x.n === (varga || 1); })[0];
+    return v ? v.use : '';
+  }
+
   function vargaSign(x, varga) {
     return varga ? E.vargaSignIndex(x.longitude, varga) : x.signIndex;
   }
@@ -340,11 +403,20 @@
       signTitle.textContent = E.SIGNS[signIdx] + ' (rashi ' + (signIdx + 1) + ') in house ' + h2;
       signText.appendChild(signTitle);
       g.appendChild(signText);
-      planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(pos[0], pos[1] + 8 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
-      });
+      var fit = NORTH_LABEL_FIT[h2];
+      appendPlanetLabels(g, planets, result, varga, pos[0], pos[1] + 8, fit[0], fit[1]);
       svg.appendChild(g);
     }
+    // The chart's name at the centre point, on a small backing so the
+    // crossing house lines don't run through it.
+    // A Vargas chart adds its use ("The whole life") as a second line.
+    var label = chartCenterLabel(varga), use = varga ? chartCenterUse(varga) : '';
+    var lw = Math.max(label.length * 5.2, use.length * 4.6) + 10, lh = use ? 26 : 15;
+    var lg = svgEl('g', { 'pointer-events': 'none' });
+    lg.appendChild(svgEl('rect', { x: 150 - lw / 2, y: 150 - lh / 2, width: lw, height: lh, rx: 3, class: 'chart-center-label-bg' }));
+    lg.appendChild(svgText(150, use ? 146 : 153, label, 'chart-center-label', 9.5));
+    if (use) lg.appendChild(svgText(150, 157, use, 'chart-center-sub', 8.5));
+    svg.appendChild(lg);
   }
 
   function renderSouthChart(svgId, result, varga, sb) {
@@ -365,7 +437,10 @@
     var bySign = planetsBySign(result, varga);
     var hoverable = !varga; // narrative rungs read D1 placements only
 
-    svg.appendChild(svgEl('rect', { x: 1, y: 1, width: size-2, height: size-2, fill: 'none', stroke: 'var(--line)', 'stroke-width': 2 }));
+    // Each box (and the centre block) is drawn with its own outline, inset
+    // by half of BOX_GAP on every side, so no two boxes share a line and a
+    // highlighted box's color never runs into its neighbour's edge.
+    var BOX_GAP = 3, inset = BOX_GAP / 2;
 
     var cellRects = {};
     var clickable = !varga; // the network overlay only applies to the D1 chart
@@ -377,7 +452,8 @@
       var houseNum = ((s - ascSignIdx + 12) % 12) + 1;
       var planets = bySign[s] || [];
       var cellRect = svgEl('rect', {
-        x: x, y: y, width: cell, height: cell, fill: isAsc ? 'var(--house1-fill)' : 'none', stroke: 'var(--line)', 'stroke-width': 1,
+        x: x + inset, y: y + inset, width: cell - BOX_GAP, height: cell - BOX_GAP, rx: 3,
+        fill: isAsc ? 'var(--house1-fill)' : 'none', stroke: 'var(--line)', 'stroke-width': 1,
         'pointer-events': 'all', class: 'house-hit'
       });
       if (hoverable) wireHouseHover(cellRect, houseNum, s, planets, result, sb);
@@ -399,19 +475,27 @@
       cellRects[s] = cellRect;
       var g = svgEl('g', { 'pointer-events': 'none' }); // labels never steal the house's hover hit-area
       g.appendChild(svgText(x + cell/2, y + 16, SIGN_SYMBOL[s] + ' H' + houseNum, 'sign-label', 10));
-      planets.forEach(function (pname, i) {
-        g.appendChild(svgPlanetLabel(x + cell/2, y + 32 + i * 12, pname, chartPlanet(result.planets[pname], varga), 'planet-label', 10));
-      });
+      appendPlanetLabels(g, planets, result, varga, x + cell / 2, y + 32, cell - 8, 4);
       svg.appendChild(g);
     }
     // mark center 2x2 as unused — a touch warmer when the Dasha-activation
     // overlay is about to print its period readout there, so the text sits
     // on a block that reads as "occupied" rather than the plain blank tint.
     svg.appendChild(svgEl('rect', {
-      x: cell, y: cell, width: cell*2, height: cell*2,
+      x: cell + inset, y: cell + inset, width: cell*2 - BOX_GAP, height: cell*2 - BOX_GAP, rx: 3,
       fill: dashaOverlayActive ? 'rgba(179,130,47,0.07)' : 'var(--center-fill)',
       stroke: 'var(--line)', 'stroke-width': 1
     }));
+
+    // A Vargas chart's name and use at the top of the centre block. (The
+    // main D1 chart shows its name as the first line of its centre
+    // content instead — .chart-center-name — in that content's own size.)
+    if (varga) {
+      var cg = svgEl('g', { 'pointer-events': 'none' });
+      cg.appendChild(svgText(2 * cell, cell + inset + 16, chartCenterLabel(varga), 'chart-center-label', 11));
+      cg.appendChild(svgText(2 * cell, cell + inset + 29, chartCenterUse(varga), 'chart-center-sub', 9.5));
+      svg.appendChild(cg);
+    }
 
     // The overlays below (and the shared status/readout elements they
     // update) belong to the D1 chart only — the D9 chart stops here so
@@ -434,12 +518,10 @@
       statusEl.innerHTML = '';
     }
 
-    var dashaStatusEl = document.getElementById('dashaActivationStatus');
     var dashaCenterEl = document.getElementById('dashaCenterReadout');
     if (dashaOverlayActive) {
       drawDashaActivationOverlay(svg, result, cell, size, cellRects);
     } else {
-      if (dashaStatusEl) { dashaStatusEl.classList.add('hidden'); dashaStatusEl.innerHTML = ''; }
       if (dashaCenterEl) { dashaCenterEl.classList.add('hidden'); dashaCenterEl.innerHTML = ''; }
     }
   }
@@ -459,7 +541,6 @@
   // both).
   function drawDashaActivationOverlay(svg, result, cell, size, cellRects) {
     var sel = lastDashaSelection;
-    var statusEl = document.getElementById('dashaActivationStatus');
     if (!sel) return;
 
     var ascSignIdx = result.ascendant.signIndex;
@@ -533,11 +614,6 @@
         '<div class="dcr-pct">' + timing.pct + '% complete, ' + timing.daysSub + '</div>';
     }
 
-    if (statusEl) {
-      statusEl.classList.remove('hidden');
-      statusEl.innerHTML = 'Showing ' + rows.length + ' of 12 houses activated by <strong>' +
-        sel.lords.map(function (l) { return l.role + ' ' + l.lord; }).join(' → ') + '</strong>.';
-    }
   }
 
   // ---- Chart hover tooltip: Planet narrative(s) occupying the house, then
@@ -3249,6 +3325,162 @@
     return rows;
   }
 
+  // ---- Period lords: how the selected MD / AD / PD lords relate ----
+  // One builder, drawn into the Dashas tab (below Houses Activated) and the
+  // chart's "Period lords" side tab from the same selection, so the two
+  // always match. Facts only: each lord's placement and functional nature,
+  // then for each pair the sub-lord's house counted from the higher lord,
+  // the compound relationship both ways, and any connection (sign
+  // exchange, conjunction, aspect, dispositor); then the houses the lords
+  // share, from the same buildActivation() the Houses Activated table uses.
+  var PL_REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
+  var PL_REL_TONE = { 'Best Friend': 'good', Friend: 'good', Neutral: 'neutral', Enemy: 'bad', 'Worst Enemy': 'bad' };
+  function plFunctional(name, result) {
+    var role = window.Interpret.functionalRoleOf(name, result, interpHelpers());
+    var info = role.dual ? role.appConvention : role.classical;
+    var t = info.tags;
+    var good = t.indexOf('Lagna') >= 0 || t.indexOf('Trikona') >= 0, bad = t.indexOf('Dusthana') >= 0;
+    var word = good && bad ? 'mixed' : good ? 'benefic' : bad ? 'malefic' : 'neutral';
+    var tags = t.filter(function (x) { return x !== 'Upachaya'; });
+    return { word: word, tone: word === 'benefic' ? 'good' : word === 'malefic' ? 'bad' : word === 'mixed' ? 'mid' : 'neutral',
+      tags: tags, houses: info.ownedHouses.slice().sort(function (a, b) { return a - b; }), co: role.dual };
+  }
+  function plPlacement(a, b, result) {
+    if (isNodePair(a, b)) return { text: 'Node axis', note: 'Rahu and Ketu are always opposite', tone: 'neutral' };
+    var d = ((result.planets[b].signIndex - result.planets[a].signIndex + 12) % 12) + 1;
+    var kind = d === 1 ? 'same sign' : [4, 7, 10].indexOf(d) >= 0 ? 'kendra' : [5, 9].indexOf(d) >= 0 ? 'trine'
+      : d === 3 ? 'effort' : d === 11 ? 'gains' : d === 2 || d === 12 ? '2 / 12' : '6 / 8';
+    var tone = [5, 9, 3, 11].indexOf(d) >= 0 ? 'good' : [2, 12].indexOf(d) >= 0 ? 'mid' : [6, 8].indexOf(d) >= 0 ? 'bad' : 'neutral';
+    return { text: ordinalWord(d) + ' · ' + kind, note: b + ' is ' + ordinalWord(d) + ' from ' + a, tone: tone };
+  }
+  function plConnections(a, b, result) {
+    var pa = result.planets[a], pb = result.planets[b], out = [];
+    if (pa.signIndex === pb.signIndex) out.push('Conjunct in ' + pa.sign);
+    var aLordsB = E.SIGN_COLORDS[pb.signIndex].indexOf(a) >= 0, bLordsA = E.SIGN_COLORDS[pa.signIndex].indexOf(b) >= 0;
+    if (aLordsB && bLordsA && pa.signIndex !== pb.signIndex) out.push('Exchange signs (' + pa.sign + ' ↔ ' + pb.sign + ')');
+    else {
+      if (bLordsA) out.push(b + ' disposits ' + a);
+      if (aLordsB) out.push(a + ' disposits ' + b);
+    }
+    if (!isNodePair(a, b)) {
+      if (aspectsCastBy(a, result).some(function (x) { return x.planet === b; })) out.push(a + ' aspects ' + b);
+      if (aspectsCastBy(b, result).some(function (x) { return x.planet === a; })) out.push(b + ' aspects ' + a);
+    }
+    return out;
+  }
+  function buildPeriodLords(result, lords) {
+    var box = document.createElement('div');
+    box.className = 'pl-box';
+    function pill(text, tone) { return spanText(text, 'pl-pill pl-' + (tone || 'neutral')); }
+    function line(label, nodes) {
+      var d = document.createElement('div');
+      d.className = 'pl-line';
+      d.appendChild(spanText(label, 'pl-label'));
+      nodes.forEach(function (n) { d.appendChild(typeof n === 'string' ? document.createTextNode(n) : n); });
+      return d;
+    }
+    var cards = document.createElement('div');
+    cards.className = 'pl-cards';
+    lords.forEach(function (l) {
+      var p = result.planets[l.lord], f = plFunctional(l.lord, result);
+      var c = document.createElement('div');
+      c.className = 'pl-card';
+      // Role as 'MD · Mahadasha'; the narrow side tab shows just 'MD'.
+      var roleEl = spanText(l.role, 'pl-role');
+      roleEl.appendChild(spanText(' · ' + ROLE_NAME[l.role], 'pl-role-long'));
+      c.appendChild(roleEl);
+      c.appendChild(spanText(PLANET_SYMBOL[l.lord] + ' ' + l.lord, 'pl-name'));
+      c.appendChild(spanText(p.sign + ' · ' + ordinalWord(p.house) + ' house', 'pl-sub'));
+      c.appendChild(spanText(f.houses.length ? (f.co ? 'Co-lord of ' : 'Lord of ') + f.houses.map(ordinalWord).join(', ') : 'Rules no house', 'pl-sub'));
+      c.appendChild(spanText('Dispositor: ' + E.SIGN_LORDS[p.signIndex], 'pl-sub'));
+      var fn = document.createElement('div');
+      fn.className = 'pl-sub';
+      fn.appendChild(pill('Functional ' + f.word, f.tone));
+      if (f.tags.length) fn.appendChild(document.createTextNode(' ' + f.tags.join(', ')));
+      c.appendChild(fn);
+      cards.appendChild(c);
+    });
+    box.appendChild(cards);
+
+    // Down the chain first (MD→AD, AD→PD), then MD→PD.
+    var pairs = [];
+    for (var i = 0; i + 1 < lords.length; i++) pairs.push([lords[i], lords[i + 1]]);
+    if (lords.length === 3) pairs.push([lords[0], lords[2]]);
+    var facts = { placements: [], connections: [] };
+    if (pairs.length) {
+      var grid = document.createElement('div');
+      grid.className = 'pl-pairs';
+      pairs.forEach(function (pr) {
+        var a = pr[0].lord, b = pr[1].lord;
+        var blk = document.createElement('div');
+        blk.className = 'pl-pair';
+        blk.appendChild(spanText(pr[0].role + ' → ' + pr[1].role, 'pl-pair-head'));
+        blk.appendChild(spanText(a + ' → ' + b, 'pl-pair-sub'));
+        if (a === b) {
+          blk.appendChild(line('Same planet', [' ' + a + ' runs both levels']));
+          grid.appendChild(blk);
+          return;
+        }
+        var pl = plPlacement(a, b, result);
+        blk.appendChild(line('Placement', [pill(pl.text, pl.tone), ' ' + pl.note]));
+        facts.placements.push(pr[0].role + '→' + pr[1].role + ' ' + pl.text);
+        var ra = result.relationships[a] && result.relationships[a][b];
+        var rb = result.relationships[b] && result.relationships[b][a];
+        var fr = [];
+        if (ra && rb && ra.panchadha === rb.panchadha) fr.push(pill(PL_REL_WORD[ra.panchadha], PL_REL_TONE[ra.panchadha]), ' both ways');
+        else {
+          if (ra) fr.push(pill(PL_REL_WORD[ra.panchadha], PL_REL_TONE[ra.panchadha]), ' ' + a + ' sees ' + b + ' ');
+          if (rb) fr.push(pill(PL_REL_WORD[rb.panchadha], PL_REL_TONE[rb.panchadha]), ' ' + b + ' sees ' + a);
+        }
+        blk.appendChild(line('Friendship', fr));
+        var conn = plConnections(a, b, result);
+        conn.forEach(function (c) { facts.connections.push(c); });
+        blk.appendChild(line('Connection', conn.length ? conn.map(function (c) { return pill(c, 'good'); })
+          : [pill('None', 'neutral'), ' ' + b + ' gives mostly its own results']));
+        grid.appendChild(blk);
+      });
+      box.appendChild(grid);
+    }
+
+    var shared = buildActivation(result, lords).filter(function (r) { return r.tier >= 2; });
+    var sh = document.createElement('div');
+    sh.className = 'pl-shared';
+    sh.appendChild(spanText(lords.length > 1 ? 'Shared houses' : 'Houses', 'pl-label'));
+    if (lords.length < 2) sh.appendChild(document.createTextNode(' Select an Antardasha to compare lords.'));
+    else if (!shared.length) sh.appendChild(document.createTextNode(' None: no house is touched by more than one lord.'));
+    shared.forEach(function (r) {
+      var d = document.createElement('div');
+      d.className = 'pl-shared-row';
+      d.appendChild(pill(ordinalWord(r.house) + ' · ' + r.sign, r.tier >= 3 ? 'mid' : 'neutral'));
+      d.appendChild(document.createTextNode(' ' + r.roles.join(' + ') + ': '));
+      d.appendChild(spanText(r.reasons.map(function (x) { return x.text; }).join('; '), 'pl-muted'));
+      sh.appendChild(d);
+    });
+    box.appendChild(sh);
+
+    if (pairs.length) {
+      var all = shared.filter(function (r) { return r.tier === lords.length; }).map(function (r) { return ordinalWord(r.house); });
+      var ov = document.createElement('div');
+      ov.className = 'pl-overall';
+      ov.appendChild(spanText('Overall', 'pl-label'));
+      ov.appendChild(document.createTextNode(' Placements: ' + facts.placements.join(', ') + '. Connections: ' +
+        (facts.connections.length ? facts.connections.join(', ') : 'none') + '.' +
+        (all.length ? ' Touched by every lord: ' + all.join(', ') + '.' : '')));
+      box.appendChild(ov);
+    }
+    return box;
+  }
+  function renderPeriodLords(result, lords) {
+    ['periodLordsDash', 'periodLordsSide'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = '';
+      if (result && lords && lords.length) el.appendChild(buildPeriodLords(result, lords));
+    });
+    var note = document.getElementById('periodLordsSideNote');
+    if (note) note.classList.toggle('hidden', !!(result && lords && lords.length));
+  }
+
   function renderActivation(result, lords) {
     var tbody = document.querySelector('#activationTable tbody');
     var note = document.getElementById('activationNote');
@@ -3569,6 +3801,7 @@
         });
 
       renderActivation(result, sel.lords);
+      renderPeriodLords(result, sel.lords);
 
       // Keep the South Indian chart's Dasha-activation overlay (if enabled)
       // in sync with whatever's selected here. Uses this closure's own
@@ -3706,189 +3939,17 @@
       line.appendChild(cat); line.appendChild(items);
       grid.appendChild(line);
     });
-    // The picks below need the Influence Engine's yogas, so they're drawn by
-    // renderFactsPicks() from renderInfluenceEngineTab(); clear any stale ones.
+    // Body / Mind / Soul below needs the Influence Engine, so it's drawn by
+    // renderFactsPicks() from renderInfluenceEngineTab(); clear any stale one.
     var picks = document.getElementById('factsPicks');
     if (picks) picks.innerHTML = '';
   }
 
-  // ---- Facts: significant planet and house ----
-  // A rule-based "where this chart concentrates" pick, built only from what
-  // the Influence Engine and Shadbala already compute. Planets get two
-  // separate roles rather than one blended score:
-  //   Chart ruler:  the Lagna lord — sets the chart's direction.
-  //   Focal planet: +1 per yoga it helps form, +1 strongest Shadbala,
-  //                 +1 below its Shadbala minimum, +1 in the loop (or
-  //                 self-ruled planet) that every dispositor chain ends in.
-  //                 Ties go to the planet forming more yogas, then the
-  //                 higher Shadbala. Lordship of the Lagna
-  //                 is deliberately not scored here — that's the ruler's role.
-  //   When one planet holds both roles, they're shown as a single callout.
-  //   House: +1 per occupant, +1 per aspecting planet, +1 if a kendra.
-  //          Ties go to the higher Bhava Bala, then the lower house number.
-  //          Also names the house whose occupants form the most yogas, where
-  //          that differs.
-  function chartYogaList(ie) {
-    var out = [];
-    ie.vry.forEach(function (y) { out.push({ label: y.name, planets: [y.lord] }); });
-    ie.neechaBhanga.forEach(function (y) { out.push({ label: 'Neecha Bhanga', planets: [y.planet] }); });
-    ie.mahapurusha.forEach(function (y) { out.push({ label: y.name, planets: [y.planet] }); });
-    ie.gajakesari.forEach(function () { out.push({ label: 'Gajakesari', planets: ['Moon', 'Jupiter'] }); });
-    ie.conjunction.forEach(function (y) { out.push({ label: y.name.replace(/ Yoga$/, ''), planets: y.planets }); });
-    [['raja', 'Raja Yoga'], ['dhana', 'Dhana Yoga'], ['parivartana', 'Parivartana']].forEach(function (k) {
-      ie[k[0]].forEach(function (y) { out.push({ label: k[1], planets: y.planets }); });
-    });
-    return out;
-  }
-
-  function yogaLabelFor(name, y) {
-    var others = y.planets.filter(function (p) { return p !== name; });
-    return y.label + (others.length ? ' with ' + others.join(', ') : '');
-  }
-
+  // ---- Facts: Body / Mind / Soul ----
   function renderFactsPicks(ie, result, sb) {
     var box = document.getElementById('factsPicks');
     if (!box) return;
     box.innerHTML = '';
-    var yogas = chartYogaList(ie);
-    var lagnaLord = E.SIGN_LORDS[result.ascendant.signIndex];
-    var sbRes = sb && sb.results;
-
-    // Planets every dispositor chain ends in (only if all chains agree).
-    var finals = null;
-    PLANET_ORDER.forEach(function (n) {
-      var dc = ie.planets[n].dispositorChain;
-      var end = dc.terminal === 'self-ruled' ? [dc.planet] : dc.terminal === 'loop' ? dc.loop : [];
-      var set = {};
-      end.forEach(function (p) { set[p] = true; });
-      if (finals === null) finals = set;
-      else Object.keys(finals).forEach(function (p) { if (!set[p]) delete finals[p]; });
-    });
-    finals = finals || {};
-
-    var strongest = null;
-    if (sbRes) {
-      PLANET_ORDER.forEach(function (n) {
-        if (sbRes[n] && sbRes[n].rank === 1) strongest = n;
-      });
-    }
-
-    var planetRows = PLANET_ORDER.map(function (n) {
-      var why = [], score = 0;
-      var mine = yogas.filter(function (y) { return y.planets.indexOf(n) >= 0; });
-      if (mine.length) {
-        score += mine.length;
-        why.push('Forms ' + mine.length + ' yoga' + (mine.length > 1 ? 's' : '') + ': ' +
-          mine.map(function (y) { return yogaLabelFor(n, y); }).join('; '));
-      }
-      if (n === strongest) { score += 1; why.push('Strongest Shadbala (' + Math.round(sbRes[n].percent) + '%)'); }
-      if (sbRes && sbRes[n] && !sbRes[n].meetsMinimum) {
-        score += 1; why.push('Below its Shadbala minimum (' + Math.round(sbRes[n].percent) + '%)');
-      }
-      if (finals[n]) { score += 1; why.push('Final dispositor — every dispositor chain ends with it'); }
-      var owned = housesOwnedBy(n, result.ascendant.signIndex)
-        .filter(function (h) { return E.SIGN_LORDS[(result.ascendant.signIndex + h.house - 1) % 12] === n; })
-        .sort(function (a, b) { return a.house - b.house; });
-      return { name: n, score: score, yogaCount: mine.length, why: why, owned: owned };
-    });
-    planetRows.sort(function (a, b) {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.yogaCount !== a.yogaCount) return b.yogaCount - a.yogaCount;
-      var ta = sbRes && sbRes[a.name] ? sbRes[a.name].total : -1;
-      var tb = sbRes && sbRes[b.name] ? sbRes[b.name].total : -1;
-      return tb - ta;
-    });
-    var focal = planetRows[0];
-    var ruler = planetRows.filter(function (r) { return r.name === lagnaLord; })[0];
-    function rulesLine(row) {
-      return row.owned.length
-        ? ['Rules the ' + row.owned.map(function (h) { return ordinalWord(h.house); }).join(' and ')]
-        : [];
-    }
-
-    var rp = result.planets[lagnaLord];
-    var rHouseCls = [1, 4, 7, 10].indexOf(rp.house) >= 0 ? ' (a kendra)'
-      : [5, 9].indexOf(rp.house) >= 0 ? ' (a trikona)'
-      : [6, 8, 12].indexOf(rp.house) >= 0 ? ' (a dusthana)' : '';
-    var rulerWhy = ['Lagna lord (' + result.ascendant.sign + ' rising), placed in the ' +
-      ordinalWord(rp.house) + rHouseCls];
-    dignityOf(lagnaLord, rp).forEach(function (d) { rulerWhy.push(d.full); });
-    if (sbRes && sbRes[lagnaLord]) rulerWhy.push('Shadbala ' + Math.round(sbRes[lagnaLord].percent) + '% — Rank ' + sbRes[lagnaLord].rank + ' of 7');
-    // Verdicts come from the Influence Engine tab's framework (absent for a
-    // hand-placed chart, which has no Shadbala to grade).
-    function verdictLine(label, narrative) {
-      return narrative ? BF_DOT[narrative.verdict.color] + ' ' + label + ': ' + narrative.verdict.word : null;
-    }
-    var rulerVerdict = verdictLine('Influence verdict', bfPlanetNarrative(lagnaLord));
-    if (rulerVerdict) rulerWhy.push(rulerVerdict);
-
-    var houseRows = [];
-    for (var h = 1; h <= 12; h++) {
-      var signIdx = (result.ascendant.signIndex + h - 1) % 12;
-      var occ = PLANET_ORDER.filter(function (n) { return result.planets[n].house === h; });
-      var asp = aspectsOntoSign(signIdx, result).map(function (a) { return a.planet; });
-      var kendra = [1, 4, 7, 10].indexOf(h) >= 0;
-      var hYogas = yogas.filter(function (y) {
-        return y.planets.some(function (p) { return occ.indexOf(p) >= 0; });
-      });
-      var hn = bfHouseNarrative(h);
-      houseRows.push({
-        house: h, sign: E.SIGNS[signIdx], occ: occ, asp: asp, kendra: kendra,
-        score: occ.length + asp.length + (kendra ? 1 : 0),
-        yogaCount: hYogas.length, verdict: verdictLine('House verdict', hn),
-        bhava: hn ? hn.total : 0
-      });
-    }
-    var byScore = houseRows.slice().sort(function (a, b) {
-      return (b.score - a.score) || (b.bhava - a.bhava) || (a.house - b.house);
-    });
-    var hPick = byScore[0];
-    var hWhy = [];
-    if (hPick.occ.length) hWhy.push('Occupied by ' + hPick.occ.join(', '));
-    if (hPick.asp.length) hWhy.push('Aspected by ' + hPick.asp.join(', '));
-    if (hPick.kendra) hWhy.push('A kendra (angular house)');
-    if (hPick.verdict) hWhy.push(hPick.verdict);
-    var hub = houseRows.slice().sort(function (a, b) {
-      return (b.yogaCount - a.yogaCount) || (b.score - a.score) || (a.house - b.house);
-    })[0];
-    var hAlso = hub.yogaCount > 0 && hub.house !== hPick.house
-      ? 'Most yogas meet in: ' + ordinalWord(hub.house) + ' · ' + hub.sign + ' (' + hub.occ.join(', ') +
-        ' — ' + hub.yogaCount + ' yoga' + (hub.yogaCount > 1 ? 's' : '') + ')'
-      : null;
-
-    // Chart ruler / Focal planet / House pick sit side by side, in the same
-    // three-column grid as the Tripod impact below.
-    var pickRow = document.createElement('div');
-    pickRow.className = 'facts-cols';
-    box.appendChild(pickRow);
-    function block(label, title, why, also, wide) {
-      var wrap = document.createElement('div');
-      wrap.className = 'fact-pick' + (wide ? ' fact-pick-wide' : '');
-      var head = document.createElement('div');
-      head.className = 'fact-pick-head';
-      head.appendChild(spanText(label, 'fact-cat'));
-      head.appendChild(spanText(title, 'fact-pick-name'));
-      wrap.appendChild(head);
-      var ul = document.createElement('ul');
-      ul.className = 'fact-pick-why';
-      why.forEach(function (w) { var li = document.createElement('li'); li.textContent = w; ul.appendChild(li); });
-      wrap.appendChild(ul);
-      if (also) wrap.appendChild(spanText(also, 'fact-pick-also'));
-      pickRow.appendChild(wrap);
-    }
-    function planetTitle(n) { return PLANET_SYMBOL[n] + ' ' + n; }
-    if (focal.name === lagnaLord || focal.score === 0) {
-      // Ruler and focus coincide (or nothing else stands out): one callout.
-      var both = focal.name === lagnaLord;
-      block(both ? 'Ruler & focal planet' : 'Chart ruler', planetTitle(lagnaLord),
-        rulerWhy.concat(both ? focal.why : []).concat(rulesLine(ruler)), null, true);
-    } else {
-      block('Chart ruler', planetTitle(lagnaLord), rulerWhy.concat(rulesLine(ruler)), null);
-      var focalVerdict = verdictLine('Influence verdict', bfPlanetNarrative(focal.name));
-      block('Focal planet', planetTitle(focal.name), focal.why.concat(focalVerdict ? [focalVerdict] : []).concat(rulesLine(focal)), null);
-    }
-    block('House pick', ordinalWord(hPick.house) + ' · ' + hPick.sign, hWhy, hAlso);
-
     // Body / Mind / Soul — each one's placement and all it takes in, as three
     // plain columns with the same green/red/grey color code.
     var tri = document.createElement('div');
@@ -5437,6 +5498,7 @@
     var picker = document.querySelector('#panel2-dashas .dasha-picker');
     if (naD) naD.classList.toggle('hidden', !simulated);
     if (picker) picker.style.display = simulated ? 'none' : '';
+    if (simulated) renderPeriodLords(null, null);
   }
 
   function renderSimSummary(result) {
@@ -5621,12 +5683,6 @@
     var empty = document.getElementById('vargaEmpty');
     if (empty) empty.classList.toggle('hidden', sel.length > 0);
     var north = document.getElementById('chartStyleInput').value === 'north';
-    var note = document.getElementById('vargaNote');
-    if (note) {
-      note.textContent = !sel.length ? '' : north
-        ? 'North Indian: houses are fixed (H1 at the top, anti-clockwise) from each chart’s own lagna; the glyph is the rashi.'
-        : 'South Indian: signs are fixed; H1–H12 count from each chart’s own lagna.';
-    }
     layoutVargaCanvas();
     if (!result) return;
     sel.forEach(function (n) {
@@ -5634,9 +5690,6 @@
       if (!v) return;
       var card = document.createElement('div');
       card.className = 'chart-card';
-      var h = document.createElement('h3');
-      h.textContent = 'D' + n + ' · ' + v.name + ' — ' + v.use;
-      card.appendChild(h);
       var svg = svgEl('svg', { id: 'vargaChartD' + n, viewBox: north ? '0 0 300 300' : '0 0 320 320' });
       card.appendChild(svg);
       canvas.appendChild(card);

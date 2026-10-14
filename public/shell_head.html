@@ -540,16 +540,9 @@
   .fact-item .fact-count { font-variant-numeric: tabular-nums; font-weight: 600; margin-left: 6px; }
   .facts-picks:not(:empty) { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
   .fact-pick { padding: 4px 2px 8px; }
-  .fact-pick-head { display: flex; flex-direction: column; gap: 2px; }
   .fact-pick-name { font-size: 14px; font-weight: 700; color: var(--text); }
-  .fact-pick-why { margin: 4px 0 0; padding-left: 14px; font-size: 12.5px; color: var(--text); }
-  .fact-pick-why li { margin: 2px 0; }
-  .fact-pick-also { display: block; margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
   .facts-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 12px; margin-top: 4px; }
   .facts-cols > .fact-pick { padding: 0; }
-  /* Ruler and focal planet in one callout: it spans the first two columns so
-     the House pick stays under Element. */
-  .facts-cols > .fact-pick.fact-pick-wide { grid-column: span 2; }
   .facts-cols + .fact-pick { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
   .facts-tripod-hit { display: block; font-size: 12.5px; padding: 2px 0; }
 
@@ -854,6 +847,9 @@
   .chart-card svg { width: 100%; max-width: 300px; }
   .chart-card svg text.sign-label { fill: var(--gold-soft); }
   .chart-card svg text.planet-label { fill: var(--text); }
+  .chart-card svg text.chart-center-label { fill: var(--gold-soft); font-weight: 600; }
+  .chart-card svg text.chart-center-sub { fill: var(--muted); }
+  .chart-card svg .chart-center-label-bg { fill: var(--panel); opacity: 0.92; }
   /* Dignity flags on a chart's planet labels (Own/Moolatrikona/Exalted/
      Debilitated) — same short codes and colors as the Planet table's `.dg`
      chips (see dignityOf() in app.js), just as plain colored tspans rather
@@ -952,6 +948,7 @@
   }
   .chart-center-overlay .fc-line { font-size: 9px; gap: 1px; align-items: center; text-align: center; }
   .chart-center-overlay .fc-line b { font-size: 9.5px; }
+  .chart-center-overlay .chart-center-name { font-size: 9.5px; font-weight: 600; color: var(--gold-soft); }
   .chart-center-overlay .fc-edit { font-size: 9px; padding: 3px 9px; }
   /* Every colored bit of text in the center block — birth details' bolded
      name, the Dasha readout's title and role-colored MD/AD/PD spans — turns
@@ -1031,8 +1028,8 @@
   .side-tabwrap { flex: 1 1 240px; min-width: 220px; display: flex; flex-direction: column; }
   .side-tabstrip { display: flex; gap: 3px; }
   .side-tabstrip button {
-    font-family: inherit; font-size: 11px; cursor: pointer;
-    padding: 6px 12px 7px; margin-bottom: -1px;
+    font-family: inherit; font-size: 11px; cursor: pointer; white-space: nowrap;
+    padding: 6px 10px 7px; margin-bottom: -1px;
     background: var(--panel2); color: var(--muted);
     border: 1px solid var(--line);
     border-radius: 8px 8px 0 0;
@@ -1056,9 +1053,39 @@
     /* contain: size keeps the panel's content from setting the row's height,
        so the chart column alone decides it. */
     contain: size;
-    text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "South Indian · Rashi D1" title) wants that, this reused Influence Engine content doesn't */
+    text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "D1 · Rashi" title) wants that, this reused Influence Engine content doesn't */
   }
   .side-tabpanel.hidden { display: none; }
+  /* Period lords (Dashas tab and the chart's side tab — same content). */
+  .pl-box { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+  .pl-cards, .pl-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
+  .pl-card, .pl-pair { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--panel); }
+  .pl-role { display: block; font-size: 10.5px; color: var(--muted); }
+  .pl-name { display: block; font-size: 14px; font-weight: 700; color: var(--text); margin: 1px 0 2px; }
+  .pl-sub { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+  .pl-pair-head { display: block; font-size: 12px; font-weight: 700; color: var(--gold-soft); }
+  .pl-pair-sub { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .pl-line, .pl-shared, .pl-overall { font-size: 12px; line-height: 1.6; }
+  .pl-label { font-weight: 700; margin-right: 4px; }
+  .pl-line .pl-label { display: inline-block; min-width: 70px; color: var(--muted); font-weight: 600; }
+  .pl-shared-row { margin-top: 2px; }
+  .pl-muted { color: var(--muted); }
+  .pl-pill { display: inline-block; font-size: 10.5px; padding: 0 7px; border-radius: 999px; margin: 1px 2px 1px 0; border: 1px solid var(--line); }
+  .pl-good { color: #1d6b46; background: rgba(29,107,70,0.10); border-color: rgba(29,107,70,0.25); }
+  .pl-bad { color: #96302f; background: rgba(150,48,47,0.09); border-color: rgba(150,48,47,0.25); }
+  .pl-mid { color: #7d5a1c; background: rgba(179,130,47,0.12); border-color: rgba(179,130,47,0.3); }
+  .pl-neutral { color: var(--muted); }
+  /* Side tab: the same 2 x 3 grid as the Dashas tab (lords on top, pairs
+     below), tightened to fit the narrow panel. */
+  .period-lords-side .pl-cards, .period-lords-side .pl-pairs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .period-lords-side .pl-card, .period-lords-side .pl-pair { padding: 5px 6px; }
+  .period-lords-side .pl-name { font-size: 12.5px; }
+  .period-lords-side .pl-sub, .period-lords-side .pl-line { font-size: 10.5px; line-height: 1.45; }
+  .period-lords-side .pl-line { margin-top: 3px; }
+  .period-lords-side .pl-line .pl-label { display: block; min-width: 0; font-size: 9.5px; }
+  .period-lords-side .pl-pill { font-size: 9.5px; padding: 0 5px; }
+  .period-lords-side .pl-role-long { display: none; }
+  .period-lords-side .pl-card, .period-lords-side .pl-pair { overflow-wrap: break-word; }
   .ie-interp-wrap { margin-top: 14px; }
   .ie-interp-head { display: block; font-weight: 700; font-size: 12.5px; color: var(--gold-soft); margin-bottom: 4px; }
   .ie-interp-box {
@@ -1138,8 +1165,6 @@
      already computes for the "Houses Activated" table. Role colors match
      the Dasha tree's own MD/AD/PD pills (.dt-lvl-md/ad/pd) so the chart and
      the tab read as one system. */
-  .dasha-activation-status { font-size: 10px; color: var(--muted); margin-top: 6px; min-height: 12px; text-align: center; }
-  .dasha-activation-status strong { color: var(--gold-soft); }
   .chart-card svg .house-hit.dasha-t1 { stroke: var(--gold); stroke-width: 1.6; }
   .chart-card svg .house-hit.dasha-t2 { stroke: var(--gold); stroke-width: 2.2; fill: rgba(179,130,47,0.09); }
   .chart-card svg .house-hit.dasha-t3 { stroke: var(--gold-soft); stroke-width: 2.6; fill: rgba(179,130,47,0.17); }
@@ -1295,8 +1320,7 @@
   .varga-pills-rule { height: 1px; background: var(--line); margin: 4px 0; }
   .varga-canvas-wrap { flex: 1; min-width: 0; }
   .varga-canvas { display: grid; grid-template-columns: repeat(var(--varga-cols, 1), minmax(0, 1fr)); gap: 12px; }
-  .varga-canvas .chart-card { margin: 0; min-width: 0; padding: 10px; }
-  .varga-canvas .chart-card h3 { margin: 0 0 6px; }
+  .varga-canvas .chart-card { margin: 0; min-width: 0; padding: 0; border: none; background: none; }
   .varga-canvas svg { display: block; width: 100%; height: auto; max-width: var(--varga-max, 480px); margin: 0 auto; }
   .varga-empty { color: var(--muted); }
   @media (max-width: 720px) {
@@ -1667,10 +1691,10 @@
             <div class="chart-card" id="southCardD1">
               <div class="chart-body-row">
                 <div class="chart-svg-wrap">
-                  <h3 class="chart-svg-title">South Indian · Rashi D1</h3>
                   <div class="chart-svg-inner">
                     <svg id="southChartD1" viewBox="0 0 320 320"></svg>
                     <div class="chart-center-overlay" id="chartCenterOverlay">
+                      <div class="chart-center-name">D1 · Rashi</div>
                       <div class="form-collapsed hidden" id="formCollapsed">
                         <div class="fc-line" id="fcLine"></div>
                         <button type="button" class="fc-edit" id="editDetailsBtn">Edit details</button>
@@ -1678,7 +1702,6 @@
                       <div class="dasha-center-readout hidden" id="dashaCenterReadout"></div>
                     </div>
                   </div>
-                  <div class="dasha-activation-status hidden" id="dashaActivationStatus"></div>
                 </div>
                 <div class="chart-notes-col">
                   <div class="network-status hidden" id="networkStatus"></div>
@@ -1686,8 +1709,9 @@
                 <div class="side-tabwrap" id="chartSideTabs">
                   <div class="side-tabstrip" id="chartSideTabstrip" role="tablist" aria-label="South Indian chart side panel">
                     <button type="button" role="tab" id="sideTab-facts" aria-controls="sidePanel-facts" aria-selected="true">Facts</button>
-                    <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false">Yogas formed</button>
-                    <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false">Influences</button>
+                    <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false" title="Yogas formed" aria-label="Yogas formed">Yogas</button>
+                    <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false" title="Natal Influences" aria-label="Natal Influences">Natal</button>
+                    <button type="button" role="tab" id="sideTab-periods" aria-controls="sidePanel-periods" aria-selected="false" title="Period lords" aria-label="Period lords">Periods</button>
                   </div>
                   <div class="side-panelbox">
                     <div class="side-tabpanel" role="tabpanel" id="sidePanel-facts" aria-labelledby="sideTab-facts">
@@ -1703,15 +1727,16 @@
                       <select id="chartSide2Select" class="side-tab2-select" aria-label="House and planet"></select>
                       <div id="chartSide2Content"></div>
                     </div>
+                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-periods" aria-labelledby="sideTab-periods">
+                      <p class="na-note" id="periodLordsSideNote">Not available: dasha periods need the Moon’s exact degree and a birth date.</p>
+                      <div class="period-lords period-lords-side" id="periodLordsSide"></div>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="chart-note">Signs are fixed; H1–H12 mark the houses from the Lagna.</div>
             </div>
             <div class="chart-card" id="northCardD1">
-              <h3>North Indian · Rashi D1</h3>
               <svg id="northChartD1" viewBox="0 0 300 300"></svg>
-              <div class="chart-note">Houses are fixed (H1–H12, anti-clockwise from top); the glyph is the rashi.</div>
             </div>
           </div>
         </div>
@@ -1783,7 +1808,6 @@
         <div class="varga-canvas-wrap">
           <div class="varga-canvas" id="vargaCanvas"></div>
           <p class="varga-empty" id="vargaEmpty">Pick a divisional chart on the left to show it here.</p>
-          <div class="chart-note" id="vargaNote"></div>
         </div>
       </div>
     </section>
@@ -1929,6 +1953,8 @@
         </table>
       </div>
       <p class="sub-note" id="activationNote"></p>
+      <h3 class="sub-head">Period Lords</h3>
+      <div class="period-lords" id="periodLordsDash"></div>
     </div>
   </section>
         </div>
