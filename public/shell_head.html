@@ -548,6 +548,12 @@
 
   /* ---------- tabbed detail sections ---------- */
   .tabwrap { margin-top: 34px; }
+  /* "Chart in a tab" layout: the chart band moves into the Chart tab's panel,
+     so it no longer pins to the top of the window. */
+  .tabstrip button[hidden] { display: none !important; }
+  #panel-chart .chart-band { position: static; margin: 0; padding: 4px 0 0; border-bottom: none; box-shadow: none; }
+  #panel-chart .chart-band .band-title { display: none; }
+  body.chart-in-tab #foldersToggleBtn { display: none; }
   .tab-toolbar {
     display: flex; align-items: center; justify-content: space-between;
     gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
@@ -1491,6 +1497,20 @@
   #chartSide2Content .bf-narrative { padding: 10px 12px; }
   #chartSide2Content .bf-block-head { font-size: 14px; }
   #chartSide2Content .bf-narrative p { font-size: 12.5px; }
+  .s2-snap { margin-bottom: 12px; }
+  .s2-snap .table-wrap { margin-bottom: 10px; }
+  .s2-snap table { font-size: 12px; }
+  .s2-snap th { cursor: help; }
+  .s2-snap td { vertical-align: top; }
+  .s2-snap .gr-where { display: block; margin-left: 0; }
+  .s2-snap td.reldig .rd-lord { display: table; margin: 2px 0 0; }
+  .s2-snap td.aspects .asp-item { display: block; margin-right: 0; }
+  .s2-snap td.aspects .asp-item + .asp-item { margin-top: 4px; }
+  .s2-snap td.aspects .asp-item > span:first-child { display: block; }
+  .s2-snap td.aspects .asp-where { margin-left: 0; }
+  .s2-snap .s2-min { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+  .s2-snap .s2-toggle { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; box-shadow: none; }
+  .s2-snap td.s2-tree { text-align: left; padding: 6px 10px; }
   .ie-yogas { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
   .ie-yoga-category { font-size: 14px; font-weight: 700; color: var(--gold-soft); margin: 16px 0 4px; padding-top: 10px; border-top: 1px solid rgba(128,128,128,0.2); }
   .ie-yoga-category:first-child { margin-top: 0; padding-top: 0; border-top: none; }
@@ -1747,9 +1767,11 @@
             <button type="button" id="foldersToggleBtn" class="folders-toggle" aria-expanded="true">Hide sections</button>
             <span class="tab-hint">Drag a tab to reorder · ← → to move between them</span>
             <button type="button" id="layoutToggleBtn" class="folders-toggle layout-toggle" aria-pressed="false">Side rail</button>
+            <button type="button" id="chartTabToggleBtn" class="folders-toggle chart-tab-toggle" aria-pressed="false" title="Show the chart as the first tab, or pinned above the tabs">Chart in a tab</button>
           </div>
           <div class="tabstrip-row">
           <div class="tabstrip" role="tablist" aria-label="Chart detail sections">
+            <button role="tab" id="tab-chart" aria-controls="panel-chart" aria-selected="false" tabindex="-1" hidden>Chart</button>
             <button role="tab" id="tab-summary" aria-controls="panel-summary" aria-selected="true">Birth Details</button>
             <button role="tab" id="tab-planets" aria-controls="panel-planets" aria-selected="false" tabindex="-1">Planets</button>
             <button role="tab" id="tab-navamsa" aria-controls="panel-navamsa" aria-selected="false" tabindex="-1">Vargas</button>
@@ -1764,6 +1786,7 @@
             <button type="button" id="addTabBtn" class="tab-add" title="Add a tab of your own">+ Add tab</button>
           </div>
           <div class="panelbox">
+          <div role="tabpanel" id="panel-chart" aria-labelledby="tab-chart" hidden></div>
           <div role="tabpanel" id="panel-summary" aria-labelledby="tab-summary">
     <section class="block">
       <h2>Birth Details</h2>
@@ -1792,7 +1815,7 @@
         <p class="na-note hidden" id="naNak">Nakshatra and pada come from a planet’s exact degree, which a placement by sign does not carry.</p>
         <div class="table-wrap">
           <table id="nakshatraTable">
-            <thead><tr><th>Point</th><th>Nakshatra</th><th>Pada</th><th>Nakshatra Lord</th></tr></thead>
+            <thead><tr><th>Point</th><th>Nakshatra</th><th>Pada</th><th>Nakshatra Lord</th><th>Deity</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

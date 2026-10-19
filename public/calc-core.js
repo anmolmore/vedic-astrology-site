@@ -26,14 +26,15 @@
   SIGN_COLORDS[10] = ['Saturn', 'Rahu'];   // Aquarius
   SIGN_COLORDS[11] = ['Jupiter', 'Ketu'];  // Pisces
 
+  // [name, Vimshottari lord, presiding deity]
   var NAKSHATRAS = [
-    ['Ashwini','Ketu'], ['Bharani','Venus'], ['Krittika','Sun'], ['Rohini','Moon'],
-    ['Mrigashira','Mars'], ['Ardra','Rahu'], ['Punarvasu','Jupiter'], ['Pushya','Saturn'],
-    ['Ashlesha','Mercury'], ['Magha','Ketu'], ['Purva Phalguni','Venus'], ['Uttara Phalguni','Sun'],
-    ['Hasta','Moon'], ['Chitra','Mars'], ['Swati','Rahu'], ['Vishakha','Jupiter'],
-    ['Anuradha','Saturn'], ['Jyeshtha','Mercury'], ['Mula','Ketu'], ['Purva Ashadha','Venus'],
-    ['Uttara Ashadha','Sun'], ['Shravana','Moon'], ['Dhanishta','Mars'], ['Shatabhisha','Rahu'],
-    ['Purva Bhadrapada','Jupiter'], ['Uttara Bhadrapada','Saturn'], ['Revati','Mercury']
+    ['Ashwini','Ketu','Ashwini Kumaras'], ['Bharani','Venus','Yama'], ['Krittika','Sun','Agni'], ['Rohini','Moon','Brahma'],
+    ['Mrigashira','Mars','Soma'], ['Ardra','Rahu','Rudra'], ['Punarvasu','Jupiter','Aditi'], ['Pushya','Saturn','Brihaspati'],
+    ['Ashlesha','Mercury','Nagas'], ['Magha','Ketu','Pitris'], ['Purva Phalguni','Venus','Bhaga'], ['Uttara Phalguni','Sun','Aryaman'],
+    ['Hasta','Moon','Savitar'], ['Chitra','Mars','Tvashtar'], ['Swati','Rahu','Vayu'], ['Vishakha','Jupiter','Indra-Agni'],
+    ['Anuradha','Saturn','Mitra'], ['Jyeshtha','Mercury','Indra'], ['Mula','Ketu','Nirriti'], ['Purva Ashadha','Venus','Apas'],
+    ['Uttara Ashadha','Sun','Vishvedevas'], ['Shravana','Moon','Vishnu'], ['Dhanishta','Mars','Vasus'], ['Shatabhisha','Rahu','Varuna'],
+    ['Purva Bhadrapada','Jupiter','Aja Ekapada'], ['Uttara Bhadrapada','Saturn','Ahir Budhnya'], ['Revati','Mercury','Pushan']
   ];
 
   var DASHA_YEARS = { Ketu:7, Venus:20, Sun:6, Moon:10, Mars:7, Rahu:18, Jupiter:16, Saturn:19, Mercury:17 };
@@ -136,7 +137,7 @@
     if (idx > 26) idx = 26;
     var within = norm360(lon) - idx * span;
     var pada = Math.floor(within / (span / 4)) + 1;
-    return { index: idx, name: NAKSHATRAS[idx][0], lord: NAKSHATRAS[idx][1], pada: pada };
+    return { index: idx, name: NAKSHATRAS[idx][0], lord: NAKSHATRAS[idx][1], deity: NAKSHATRAS[idx][2], pada: pada };
   }
 
   function navamsaSignIndex(lon) {
@@ -452,6 +453,7 @@
         nakshatra: nak.name,
         pada: nak.pada,
         nakshatraLord: nak.lord,
+        nakshatraDeity: nak.deity,
         house: houseNum,
         retrograde: planets[name].retrograde,
         navamsaSignIndex: navamsaSignIndex(lon_),

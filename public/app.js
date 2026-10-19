@@ -2284,9 +2284,11 @@
       var nakName = r.name === 'Ascendant' ? r.p.nakshatra.name : r.p.nakshatra;
       var pada = r.name === 'Ascendant' ? r.p.nakshatra.pada : r.p.pada;
       var lord = r.name === 'Ascendant' ? r.p.nakshatra.lord : r.p.nakshatraLord;
+      var deity = r.name === 'Ascendant' ? r.p.nakshatra.deity : r.p.nakshatraDeity;
       tr.appendChild(td(nakName));
       tr.appendChild(td(String(pada)));
       tr.appendChild(td(lord));
+      tr.appendChild(td(deity));
       tbody.appendChild(tr);
     });
   }
@@ -2587,7 +2589,171 @@
     });
     return wrap;
   }
+  // The entry's own rows from the Planets, Shadbala, Bhava Bala and Houses
+  // tables, under shortened headers (full names on hover). The rows are
+  // copied from the rendered tables, so they read exactly as there; the main
+  // render calls side2Refresh() once those tables are filled. Each strength
+  // figure carries its minimum (a house: its benchmark) in brackets, and the
+  // Shadbala and Bhava Bala totals open the narratives' breakdown tree.
+  var side2Refresh = null;
+  // Jagradadi, Baladi, Deeptadi and Shayanadi states in plain English.
+  var AVASTHA_ENGLISH = {
+    Jagrat: 'Awake', Swapna: 'Dreaming', Sushupti: 'Asleep',
+    Bala: 'Infant', Kumara: 'Youth', Yuva: 'Adult', Vriddha: 'Old', Mrita: 'Dead',
+    Dipta: 'Radiant', Swastha: 'At ease', Pramudita: 'Delighted', Shanta: 'Calm',
+    Dina: 'Humbled', Duhkhita: 'Distressed', Khala: 'Wicked', Vikala: 'Crippled', Kopa: 'Angry',
+    Nidra: 'Sleeping', Shayana: 'Lying down', Upavesha: 'Sitting', Netrapani: 'Hand on eyes',
+    Prakasha: 'Shining', Gamana: 'Going', Agamana: 'Returning', Sabha: 'In assembly',
+    Agama: 'Arriving', Bhojana: 'Eating', Nrityalipsa: 'Eager to dance', Kautuka: 'Curious'
+  };
+  function side2Snapshot(entry) {
+    var wrap = document.createElement('div');
+    wrap.className = 's2-snap';
+    var trees = {};
+    entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative' && b.tree) trees[b.subject] = b.tree; });
+    function sourceRow(tableId, match) {
+      return [].filter.call(document.querySelectorAll('#' + tableId + ' tbody tr'), function (tr) {
+        return tr.cells.length && match(tr.cells[0].textContent);
+      })[0] || null;
+    }
+    function twoLines(cell, first, second) {
+      cell.textContent = first;
+      cell.appendChild(document.createElement('br'));
+      cell.appendChild(document.createTextNode(second));
+    }
+    function addMin(cell, text, low) {
+      cell.appendChild(spanText('(' + text + ')', 's2-min'));
+      if (low) cell.classList.add('pct-weak');
+    }
+    // A Total cell that shows and hides the breakdown row under it. The tree
+    // is a copy, so opening its branches here leaves the narrative's alone.
+    function treeToggle(cell, tree, cols) {
+      var row = document.createElement('tr');
+      var hold = document.createElement('td');
+      hold.colSpan = cols;
+      hold.className = 's2-tree';
+      hold.appendChild(bfShadbalaTree(JSON.parse(JSON.stringify(tree))));
+      row.appendChild(hold);
+      row.hidden = true; // collapsed until the total is clicked
+      var value = cell.firstChild.textContent;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 's2-toggle';
+      function label() { btn.textContent = value + (row.hidden ? ' ▸' : ' ▾'); }
+      btn.onclick = function () { row.hidden = !row.hidden; label(); };
+      label();
+      cell.replaceChild(btn, cell.firstChild);
+      return row;
+    }
+    function table(headers, rows) {
+      var tw = document.createElement('div');
+      tw.className = 'table-wrap';
+      var t = document.createElement('table');
+      var hr = document.createElement('tr');
+      headers.forEach(function (h) { var c = th(h[0]); if (h[1]) c.title = h[1]; hr.appendChild(c); });
+      var thead = document.createElement('thead');
+      thead.appendChild(hr);
+      t.appendChild(thead);
+      var tbody = document.createElement('tbody');
+      rows.forEach(function (r) { tbody.appendChild(r); });
+      t.appendChild(tbody);
+      tw.appendChild(t);
+      wrap.appendChild(tw);
+    }
+
+    if (entry.kind === 'planet') {
+      var name = entry.key;
+      var pRow = sourceRow('planetTable', function (t) { return t.indexOf(name) >= 0; });
+      if (pRow) {
+        pRow = pRow.cloneNode(true);
+        while (pRow.cells.length > 8) pRow.deleteCell(-1); // drop the two relationship columns
+        if (pRow.cells[5].textContent !== '—') addMin(pRow.cells[5], '100%');
+        // Two lines a cell where the content splits naturally: one owned sign
+        // over its house (two owned signs, one per line), the sign over its
+        // qualities, the four Avasthas two and two. The planet's own place and
+        // the dignity's lord already sit on a line of their own (CSS).
+        var owns = pRow.cells[1].textContent.split(', ');
+        var ownM = /^(.+) (\(\d+\))$/.exec(owns[0]);
+        if (owns.length > 1) twoLines(pRow.cells[1], owns[0], owns[1]);
+        else if (ownM) twoLines(pRow.cells[1], ownM[1], ownM[2]);
+        var signName = pRow.cells[3].firstChild;
+        if (signName && signName.nextSibling) pRow.cells[3].insertBefore(document.createElement('br'), signName.nextSibling);
+        // The Avasthas in English, with the Sanskrit name on hover.
+        [].forEach.call(pRow.cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi, .av-shayanadi'), function (s) {
+          var en = AVASTHA_ENGLISH[s.textContent];
+          if (en) { s.title = s.textContent; s.textContent = en; }
+        });
+        var avSeps = pRow.cells[4].querySelectorAll('.sign-combo-sep');
+        if (avSeps.length === 3) avSeps[1].parentNode.replaceChild(document.createElement('br'), avSeps[1]);
+        table([['Planet', 'Planet (Sign, House)'], ['Owns', 'Ownership'], ['Dignity'], ['Sign', 'Sign (Duality, Modality, Element)'],
+          ['Avastha'], ['SB %', 'Shadbala %'], ['Deg', 'Degrees'], ['Decl', 'Declination']], [pRow]);
+      }
+      var r = lastSb && lastSb.results[name];
+      var sRow = r && trees.planet && sourceRow('shadbalaTable', function (t) { return t.indexOf(name) >= 0; });
+      if (sRow) {
+        sRow = sRow.cloneNode(true);
+        sRow.deleteCell(-1); // the Min ✓ column, now in brackets on each figure
+        var mins = {};
+        trees.planet.c.forEach(function (c) { mins[c.n.split(' ')[0]] = c; });
+        addMin(sRow.cells[1], Math.round(trees.planet.min), r.total < trees.planet.min);
+        addMin(sRow.cells[2], '100%');
+        ['Sthana', 'Dig', 'Kala', 'Chesta', 'Naisargika', 'Drik'].forEach(function (k, i) {
+          var c = mins[k];
+          addMin(sRow.cells[3 + i], c && c.min ? c.min : '—', c && c.min && c.v < c.min);
+        });
+        addMin(sRow.cells[9], r.required.toFixed(2));
+        // Rank among the seven, by ratio to each planet's own minimum.
+        var rankCell = sRow.insertCell(3);
+        rankCell.textContent = String(r.rank);
+        rankCell.appendChild(spanText('(of 7)', 's2-min'));
+        table([['Body'], ['Total'], ['%'], ['Rank', 'Shadbala rank, by ratio to each planet’s own minimum'],
+          ['Sthana', 'Sthana (positional)'], ['Dig', 'Dig (directional)'], ['Kala', 'Kala (temporal)'],
+          ['Chesta', 'Chesta (motional)'], ['Nais', 'Naisargika (natural)'], ['Drik', 'Drik (aspectual)'], ['Rūpa']],
+          [sRow, treeToggle(sRow.cells[1], trees.planet, 11)]);
+      }
+    }
+
+    var hTree = trees.house;
+    var bRow = hTree && sourceRow('bhavaBalaTable', function (t) { return t === 'House ' + entry.house; });
+    if (bRow) {
+      bRow = bRow.cloneNode(true);
+      addMin(bRow.cells[1], Math.round(hTree.min));
+      addMin(bRow.cells[2], (hTree.min / 60).toFixed(2));
+      addMin(bRow.cells[5], Math.round(hTree.c[0].min), hTree.c[0].v < hTree.c[0].min);
+      [6, 7, 8, 9].forEach(function (i) { addMin(bRow.cells[i], '—'); });
+      table([['House'], ['Total', 'Against the benchmark: the lord’s Shadbala minimum + 30'], ['Rūpa'], ['Sign'], ['Lord'],
+        ['Adhipati', 'Bhavadhipati (the house lord’s Shadbala)'], ['Dig', 'Bhava Dig'], ['Drishti', 'Bhava Drishti'],
+        ['Occup', 'Planets in (occupation)'], ['Day/Nt', 'Day-Night']],
+        [bRow, treeToggle(bRow.cells[1], hTree, 10)]);
+    }
+
+    var hRow = document.querySelectorAll('#houseTable tbody tr')[entry.house - 1];
+    if (hRow) {
+      hRow = hRow.cloneNode(true);
+      // "2 (☽ Moon, ♃ Jupiter · Libra)" becomes the house and its occupants
+      // over the sign.
+      var hs = hRow.cells[0].querySelector('.hs-sign');
+      if (hs) {
+        var hsSign = hs.textContent.replace(/^·\s*/, '');
+        hs.parentNode.removeChild(hs);
+        twoLines(hRow.cells[0], hRow.cells[0].textContent.replace(/\s+$/, ''), hsSign);
+      }
+      // Karakas two to a line.
+      var kCell = hRow.cells[2], karakas = kCell.textContent.split(', ');
+      if (karakas.length > 2) {
+        kCell.textContent = '';
+        for (var k = 0; k < karakas.length; k += 2) {
+          if (k) kCell.appendChild(document.createElement('br'));
+          kCell.appendChild(document.createTextNode(karakas.slice(k, k + 2).join(', ')));
+        }
+      }
+      table([['House (Pl, Sign)', 'House (Planets, Sign)'], ['Class'], ['Karakas'], ['Nat rel', 'Natural relationship'],
+        ['Cmp rel', 'Compound relationship'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)']], [hRow]);
+    }
+    return wrap;
+  }
   function renderChartSide2(entries) {
+    side2Refresh = null;
     var select = document.getElementById('chartSide2Select');
     var note = document.getElementById('chartSide2Note');
     var content = document.getElementById('chartSide2Content');
@@ -2601,7 +2767,16 @@
 
     function show(entry) {
       content.innerHTML = '';
-      content.appendChild(bfNarrativeColumns(entry.fw.blocks));
+      content.appendChild(side2Snapshot(entry));
+      // The breakdown trees now open from the totals above, so the
+      // narratives here go without their own copy.
+      content.appendChild(bfNarrativeColumns(entry.fw.blocks.map(function (b) {
+        if (b.kind !== 'narrative' || !b.tree) return b;
+        var copy = {};
+        Object.keys(b).forEach(function (k) { copy[k] = b[k]; });
+        copy.tree = null;
+        return copy;
+      })));
       content.appendChild(bfInterpretationBox(entry));
     }
     var selectedIdx = 0;
@@ -2647,6 +2822,7 @@
       if (ev.key === 'Enter') focusNetwork(entries[Number(select.value)]);
     };
     show(entries[selectedIdx]);
+    side2Refresh = function () { show(entries[Number(select.value)]); };
   }
 
   // ---- Influence Engine tab: Bala framework ----
@@ -4960,7 +5136,8 @@
     function wireTab(tab) {
       tab.addEventListener('click', function () { select(tab, false); });
       tab.addEventListener('keydown', function (ev) {
-        var list = tabs(), i = list.indexOf(tab), n = list.length;
+        // hidden tabs (the Chart tab while the chart is pinned) are skipped
+        var list = tabs().filter(function (t) { return !t.hidden; }), i = list.indexOf(tab), n = list.length;
         // Ctrl/Alt + arrow reorders — the keyboard equivalent of dragging
         if ((ev.ctrlKey || ev.altKey || ev.metaKey) &&
             (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' ||
@@ -5043,7 +5220,7 @@
         var list = customList().filter(function (c) { return c.id !== id; });
         saveCustom(list);
         var all = allNotes(); delete all[id]; prefSet(NOTES_KEY, JSON.stringify(all));
-        var nxt = tabs().filter(function (t) { return t !== tab; })[0];
+        var nxt = tabs().filter(function (t) { return t !== tab && !t.hidden; })[0];
         tab.remove(); panel.remove();
         saveOrder();
         if (nxt) select(nxt, true);
@@ -5127,7 +5304,7 @@
     }
     applyLayout(prefGet(K(LAYOUT_KEY)) || 'folder');
 
-    select(tabs()[0], false);
+    select(tabs().filter(function (t) { return !t.hidden; })[0], false);
 
     tabApis.push({
       refreshScope: function (key, display) {
@@ -5418,6 +5595,7 @@
         nakshatra: null,
         pada: null,
         nakshatraLord: null,
+        nakshatraDeity: null,
         house: ((sIdx - ascIdx + 12) % 12) + 1,
         retrograde: false,
         navamsaSignIndex: null,
@@ -5912,6 +6090,72 @@
     applyChartExpanded(prefGet(CHART_EXPAND_KEY) === '1');
   }
 
+  // ---- Chart in a tab, or pinned above the tabs ----
+  // In tab mode the chart band (charts plus their side panel) is moved, as is,
+  // into the Chart tab's panel, so every handler and overlay keeps working; in
+  // pinned mode it goes back to its own place above the tab folder. The tab
+  // mode always shows the folder and expands the charts, without touching the
+  // saved Hide sections / Expand charts choices, which apply again on return.
+  var CHART_TAB_KEY = 'vedicChartInTab.v1';
+  var chartBandHome = null;
+  var lastContentTab = null;
+
+  function applyChartInTab(inTab) {
+    var band = document.getElementById('chartBand');
+    var tab = document.getElementById('tab-chart');
+    var panel = document.getElementById('panel-chart');
+    var btn = document.getElementById('chartTabToggleBtn');
+    if (!band || !tab || !panel) return;
+    if (!chartBandHome) chartBandHome = { parent: band.parentNode, next: band.nextSibling };
+    var strip = tab.parentNode;
+    var selected = strip.querySelector('[role="tab"][aria-selected="true"]');
+    if (selected && selected !== tab) lastContentTab = selected;
+    if (!strip.__chartTabWatch) {
+      // the content tab last opened, by click or arrow key, to return to
+      strip.__chartTabWatch = true;
+      ['click', 'focusin'].forEach(function (type) {
+        strip.addEventListener(type, function (ev) {
+          var t = ev.target.closest && ev.target.closest('[role="tab"]');
+          if (t && t !== tab) lastContentTab = t;
+        });
+      });
+    }
+
+    document.body.classList.toggle('chart-in-tab', inTab);
+    tab.hidden = !inTab;
+    if (inTab) {
+      panel.appendChild(band);
+      applyFoldersVisible(true);
+      applyChartExpanded(true);
+      tab.click();
+    } else {
+      chartBandHome.parent.insertBefore(band, chartBandHome.next);
+      applyFoldersVisible(prefGet(FOLDERS_KEY) !== '0');
+      applyChartExpanded(prefGet(CHART_EXPAND_KEY) === '1');
+      if (tab.getAttribute('aria-selected') === 'true') {
+        var back = lastContentTab && !lastContentTab.hidden ? lastContentTab
+          : [].filter.call(strip.querySelectorAll('[role="tab"]'), function (t) { return !t.hidden; })[0];
+        if (back) back.click();
+      }
+    }
+    if (btn) {
+      btn.textContent = inTab ? 'Pin chart on top' : 'Chart in a tab';
+      btn.setAttribute('aria-pressed', inTab ? 'true' : 'false');
+    }
+  }
+
+  function initChartTabToggle() {
+    var btn = document.getElementById('chartTabToggleBtn');
+    if (!btn || btn.__wired) return;
+    btn.__wired = true;
+    btn.addEventListener('click', function () {
+      var nowInTab = !document.body.classList.contains('chart-in-tab');
+      prefSet(CHART_TAB_KEY, nowInTab ? '1' : '0');
+      applyChartInTab(nowInTab);
+    });
+    if (prefGet(CHART_TAB_KEY) === '1') applyChartInTab(true);
+  }
+
   function initNetworkToggle() {
     var box = document.getElementById('networkToggle');
     if (!box || box.__wired) return;
@@ -5995,6 +6239,7 @@
     initResearchTab();
     populateOffsets();
     initTabs('tabWrap');
+    initChartTabToggle();
     initSideTabs();
     var placeInput = document.getElementById('placeInput');
     var suggestBox = document.getElementById('placeSuggestions');
@@ -6479,6 +6724,8 @@
         renderHouseTable(result);
         renderNakshatraTable(result);
         renderRelationshipTables(result);
+        // The Natal side tab copies rows from the tables just filled.
+        if (side2Refresh) side2Refresh();
         // Both styles are drawn side by side; the one chosen on the form leads.
         var style = document.getElementById('chartStyleInput').value;
         var southCard = document.getElementById('southCardD1');
