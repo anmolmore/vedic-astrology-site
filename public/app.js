@@ -729,6 +729,14 @@
       } else {
         var r = sb.results[pname];
         sub.appendChild(ctStatLine('Shadbala ' + Math.round(r.percent) + '% — Rank ' + r.rank + ' of 7'));
+        // Ishta against Kashta: red when Kashta outweighs it, green otherwise.
+        var ik = r.ishtaKashta;
+        if (ik) {
+          var iV = ik.ishta.toFixed(1), kV = ik.kashta.toFixed(1);
+          var ikLine = ctStatLine('Ishta (' + iV + ') ' + (+iV > +kV ? '>' : +iV < +kV ? '<' : '=') + ' Kashta (' + kV + ')');
+          ikLine.classList.add(+iV < +kV ? 'ct-kashta' : 'ct-ishta');
+          sub.appendChild(ikLine);
+        }
       }
       section.appendChild(sub);
 
@@ -2611,6 +2619,11 @@
     wrap.className = 's2-snap';
     var trees = {};
     entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative' && b.tree) trees[b.subject] = b.tree; });
+    var result = lastResult;
+    var ascSign = result.ascendant.signIndex;
+    var houseSign = (ascSign + entry.house - 1) % 12;
+    var beneficMap = (lastSb && lastSb.context && lastSb.context.beneficMap) || window.Interpret.DEFAULT_BENEFIC;
+    function benefic(n) { return window.Interpret.isNaturalBenefic(n, beneficMap); }
     function sourceRow(tableId, match) {
       return [].filter.call(document.querySelectorAll('#' + tableId + ' tbody tr'), function (tr) {
         return tr.cells.length && match(tr.cells[0].textContent);
@@ -2621,10 +2634,25 @@
       cell.appendChild(document.createElement('br'));
       cell.appendChild(document.createTextNode(second));
     }
-    function addMin(cell, text, low) {
+    function addMin(cell, text) {
       cell.appendChild(spanText('(' + text + ')', 's2-min'));
-      if (low) cell.classList.add('pct-weak');
     }
+    // Helping values go green and hurting ones red, with the reason on hover;
+    // neutral ones stay plain. A bare text value is wrapped first so only the
+    // value is tinted, not the minimum in brackets under it.
+    function paint(el, kind, why) {
+      if (!el || !kind) return;
+      if (el.nodeType === 3) {
+        var s = document.createElement('span');
+        el.parentNode.replaceChild(s, el);
+        s.appendChild(el);
+        el = s;
+      }
+      el.classList.add(kind === 'help' ? 's2-help' : 's2-hurt');
+      if (why) el.title = why;
+    }
+    function versus(v, min) { return v >= min ? 'help' : 'hurt'; }
+    function signed(v) { return v > 0 ? 'help' : v < 0 ? 'hurt' : null; }
     // A Total cell that shows and hides the breakdown row under it. The tree
     // is a copy, so opening its branches here leaves the narrative's alone.
     function treeToggle(cell, tree, cols) {
@@ -2662,69 +2690,145 @@
     }
 
     if (entry.kind === 'planet') {
-      var name = entry.key;
+      var name = entry.key, p = result.planets[name];
       var pRow = sourceRow('planetTable', function (t) { return t.indexOf(name) >= 0; });
       if (pRow) {
         pRow = pRow.cloneNode(true);
         while (pRow.cells.length > 8) pRow.deleteCell(-1); // drop the two relationship columns
-        if (pRow.cells[5].textContent !== '—') addMin(pRow.cells[5], '100%');
-        // Two lines a cell where the content splits naturally: one owned sign
-        // over its house (two owned signs, one per line), the sign over its
-        // qualities, the four Avasthas two and two. The planet's own place and
-        // the dignity's lord already sit on a line of their own (CSS).
-        var owns = pRow.cells[1].textContent.split(', ');
-        var ownM = /^(.+) (\(\d+\))$/.exec(owns[0]);
-        if (owns.length > 1) twoLines(pRow.cells[1], owns[0], owns[1]);
-        else if (ownM) twoLines(pRow.cells[1], ownM[1], ownM[2]);
+
+        // Planet: its house, and the flags riding on its name.
+        var h = p.house, hk = null, hWhy = '';
+        if (!benefic(name) && [3, 6, 11].indexOf(h) >= 0) { hk = 'help'; hWhy = 'A natural malefic in the ' + ordinalWord(h) + ', an Upachaya house'; }
+        else if (name === 'Saturn' && h === 8) { hk = 'help'; hWhy = 'Saturn in the 8th supports longevity'; }
+        else if (name === 'Ketu' && h === 12) { hk = 'help'; hWhy = 'Ketu in the 12th supports liberation'; }
+        else if ([6, 8, 12].indexOf(h) >= 0) { hk = 'hurt'; hWhy = 'The ' + ordinalWord(h) + ' is a Dusthana'; }
+        else if ([1, 4, 7, 10].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Kendra'; }
+        else if ([5, 9].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Trikona'; }
+        paint(pRow.cells[0].querySelector('.gr-where'), hk, hWhy);
+        [].forEach.call(pRow.cells[0].querySelectorAll('.name-dg-flag'), function (f) {
+          var kind = /dg-deb/.test(f.className) ? 'hurt' : 'help';
+          f.className = 'dg name-dg-flag';
+          paint(f, kind, f.title);
+        });
+
+        // Owns: each owned sign over its house, one sign to a line.
+        var ownCell = pRow.cells[1];
+        var owned = (window.Shadbala.OWN_SIGNS[name] || []);
+        if (owned.length) {
+          ownCell.textContent = '';
+          owned.forEach(function (sIdx, i) {
+            var oh = ((sIdx - ascSign + 12) % 12) + 1;
+            var s = document.createElement('span');
+            s.className = 's2-own';
+            if (owned.length > 1) s.textContent = E.SIGNS[sIdx] + ' (' + oh + ')';
+            else { s.textContent = E.SIGNS[sIdx]; s.appendChild(document.createElement('br')); s.appendChild(document.createTextNode('(' + oh + ')')); }
+            ownCell.appendChild(s);
+            if (oh === 1) paint(s, 'help', 'Rules the lagna');
+            else if (oh === 5 || oh === 9) paint(s, 'help', 'Rules the ' + ordinalWord(oh) + ', a Trikona');
+            else if ([6, 8, 12].indexOf(oh) >= 0) paint(s, 'hurt', 'Rules the ' + ordinalWord(oh) + ', a Dusthana');
+          });
+        }
+
+        // Dignity: own sign or a friend's helps, an enemy's hurts.
+        var dCell = pRow.cells[2];
+        var tier = relDignityTier(name, p, result);
+        dCell.className = dCell.className.replace(/\breldig-\S+/g, '');
+        if (tier) {
+          var dk = ['own', 'bf', 'f'].indexOf(tier.k) >= 0 ? 'help' : ['e', 'we'].indexOf(tier.k) >= 0 ? 'hurt' : null;
+          paint(dCell.firstChild, dk, tier.t);
+        }
+
+        // Sign over its qualities.
         var signName = pRow.cells[3].firstChild;
         if (signName && signName.nextSibling) pRow.cells[3].insertBefore(document.createElement('br'), signName.nextSibling);
-        // The Avasthas in English, with the Sanskrit name on hover.
+
+        // Avasthas in English (Sanskrit on hover), coloured by state, two and two.
+        var AV_HELP = { Jagrat: 1, Yuva: 1, Dipta: 1, Swastha: 1, Pramudita: 1, Shanta: 1 };
+        var AV_HURT = { Sushupti: 1, Bala: 1, Vriddha: 1, Mrita: 1, Dina: 1, Duhkhita: 1, Khala: 1, Vikala: 1, Kopa: 1 };
         [].forEach.call(pRow.cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi, .av-shayanadi'), function (s) {
-          var en = AVASTHA_ENGLISH[s.textContent];
-          if (en) { s.title = s.textContent; s.textContent = en; }
+          var skt = s.textContent, en = AVASTHA_ENGLISH[skt];
+          if (!en) return;
+          s.className = s.className.replace(/\bav-jss-\S+/g, '');
+          s.textContent = en;
+          var shayanadi = /av-shayanadi/.test(s.className);
+          paint(s, shayanadi ? null : AV_HELP[skt] ? 'help' : AV_HURT[skt] ? 'hurt' : null, skt);
+          s.title = skt;
         });
         var avSeps = pRow.cells[4].querySelectorAll('.sign-combo-sep');
         if (avSeps.length === 3) avSeps[1].parentNode.replaceChild(document.createElement('br'), avSeps[1]);
+
+        // SB %: meets its minimum or not.
+        var pctCell = pRow.cells[5];
+        if (pctCell.textContent !== '—') {
+          pctCell.classList.remove('pct-strong', 'pct-weak');
+          var rr = lastSb && lastSb.results[name];
+          if (rr) paint(pctCell.firstChild, rr.meetsMinimum ? 'help' : 'hurt', rr.meetsMinimum ? 'Meets its Shadbala minimum' : 'Short of its Shadbala minimum');
+          addMin(pctCell, '100%');
+        }
         table([['Planet', 'Planet (Sign, House)'], ['Owns', 'Ownership'], ['Dignity'], ['Sign', 'Sign (Duality, Modality, Element)'],
           ['Avastha'], ['SB %', 'Shadbala %'], ['Deg', 'Degrees'], ['Decl', 'Declination']], [pRow]);
       }
+
       var r = lastSb && lastSb.results[name];
       var sRow = r && trees.planet && sourceRow('shadbalaTable', function (t) { return t.indexOf(name) >= 0; });
       if (sRow) {
         sRow = sRow.cloneNode(true);
         sRow.deleteCell(-1); // the Min ✓ column, now in brackets on each figure
+        sRow.deleteCell(9);  // Rūpa: the Total in Virupas already says it
+        sRow.cells[2].classList.remove('pct-strong', 'pct-weak');
         var mins = {};
         trees.planet.c.forEach(function (c) { mins[c.n.split(' ')[0]] = c; });
-        addMin(sRow.cells[1], Math.round(trees.planet.min), r.total < trees.planet.min);
+        var tMin = trees.planet.min;
+        addMin(sRow.cells[1], Math.round(tMin));
+        paint(sRow.cells[2].firstChild, versus(r.percent, 100), r.meetsMinimum ? 'At or above 100%' : 'Below 100%');
         addMin(sRow.cells[2], '100%');
         ['Sthana', 'Dig', 'Kala', 'Chesta', 'Naisargika', 'Drik'].forEach(function (k, i) {
-          var c = mins[k];
-          addMin(sRow.cells[3 + i], c && c.min ? c.min : '—', c && c.min && c.v < c.min);
+          var c = mins[k], cell = sRow.cells[3 + i];
+          if (c && c.min) paint(cell.firstChild, versus(c.v, c.min), c.v >= c.min ? 'At or above its minimum' : 'Below its minimum');
+          else if (k === 'Drik') paint(cell.firstChild, signed(c.v), c.v > 0 ? 'Net aspects positive' : 'Net aspects negative');
+          addMin(cell, c && c.min ? c.min : '—');
         });
-        addMin(sRow.cells[9], r.required.toFixed(2));
         // Rank among the seven, by ratio to each planet's own minimum.
         var rankCell = sRow.insertCell(3);
         rankCell.textContent = String(r.rank);
+        paint(rankCell.firstChild, r.rank <= 2 ? 'help' : r.rank >= 6 ? 'hurt' : null, r.rank <= 2 ? 'Top two of seven' : 'Bottom two of seven');
         rankCell.appendChild(spanText('(of 7)', 's2-min'));
         table([['Body'], ['Total'], ['%'], ['Rank', 'Shadbala rank, by ratio to each planet’s own minimum'],
           ['Sthana', 'Sthana (positional)'], ['Dig', 'Dig (directional)'], ['Kala', 'Kala (temporal)'],
-          ['Chesta', 'Chesta (motional)'], ['Nais', 'Naisargika (natural)'], ['Drik', 'Drik (aspectual)'], ['Rūpa']],
-          [sRow, treeToggle(sRow.cells[1], trees.planet, 11)]);
+          ['Chesta', 'Chesta (motional)'], ['Nais', 'Naisargika (natural)'], ['Drik', 'Drik (aspectual)']],
+          [sRow, treeToggle(sRow.cells[1], trees.planet, 10)]);
+        paint(sRow.cells[1].firstChild, versus(r.total, tMin), r.total >= tMin ? 'At or above its minimum' : 'Below its minimum');
       }
     }
 
     var hTree = trees.house;
     var bRow = hTree && sourceRow('bhavaBalaTable', function (t) { return t === 'House ' + entry.house; });
     if (bRow) {
+      // The Bhava Bala table lists houses strongest first, so its row
+      // position is the house's rank.
+      var hRank = [].indexOf.call(bRow.parentNode.rows, bRow) + 1;
+      var part = function (prefix) { return hTree.c.filter(function (c) { return c.n.indexOf(prefix) === 0; })[0]; };
+      var adh = part('Bhavadhipati'), bDig = part('Bhava Digbala'), bDr = part('Bhava Drishti'), bOcc = part('Occupation'), bDn = part('Day-Night');
       bRow = bRow.cloneNode(true);
       addMin(bRow.cells[1], Math.round(hTree.min));
-      addMin(bRow.cells[2], (hTree.min / 60).toFixed(2));
-      addMin(bRow.cells[5], Math.round(hTree.c[0].min), hTree.c[0].v < hTree.c[0].min);
+      paint(bRow.cells[5].firstChild, versus(adh.v, adh.min), adh.v >= adh.min ? 'Lord at or above its minimum' : 'Lord below its minimum');
+      addMin(bRow.cells[5], Math.round(adh.min));
+      paint(bRow.cells[6].firstChild, bDig.v >= 40 ? 'help' : bDig.v <= 20 ? 'hurt' : null, bDig.v >= 40 ? '40 or more of 60' : '20 or less of 60');
+      paint(bRow.cells[7].firstChild, signed(bDr.v), bDr.v > 0 ? 'Net aspects positive' : 'Net aspects negative');
+      paint(bRow.cells[8].firstChild, signed(bOcc.v), bOcc.v > 0 ? 'Jupiter or Mercury in the house' : 'Sun, Mars or Saturn in the house');
+      paint(bRow.cells[9].firstChild, bDn.v > 0 ? 'help' : null, 'Full Day-Night credit');
       [6, 7, 8, 9].forEach(function (i) { addMin(bRow.cells[i], '—'); });
-      table([['House'], ['Total', 'Against the benchmark: the lord’s Shadbala minimum + 30'], ['Rūpa'], ['Sign'], ['Lord'],
+      bRow.deleteCell(2); // Rūpa, replaced by the rank
+      var hRankCell = bRow.insertCell(2);
+      hRankCell.textContent = String(hRank);
+      paint(hRankCell.firstChild, hRank <= 4 ? 'help' : hRank >= 9 ? 'hurt' : null, hRank <= 4 ? 'Top four of twelve' : 'Bottom four of twelve');
+      hRankCell.appendChild(spanText('(of 12)', 's2-min'));
+      table([['House'], ['Total', 'Against the benchmark: the lord’s Shadbala minimum + 30'],
+        ['Rank', 'Bhava Bala rank among the twelve houses, by total'], ['Sign'], ['Lord'],
         ['Adhipati', 'Bhavadhipati (the house lord’s Shadbala)'], ['Dig', 'Bhava Dig'], ['Drishti', 'Bhava Drishti'],
         ['Occup', 'Planets in (occupation)'], ['Day/Nt', 'Day-Night']],
         [bRow, treeToggle(bRow.cells[1], hTree, 10)]);
+      paint(bRow.cells[1].firstChild, versus(hTree.v, hTree.min), hTree.v >= hTree.min ? 'At or above the benchmark' : 'Below the benchmark');
     }
 
     var hRow = document.querySelectorAll('#houseTable tbody tr')[entry.house - 1];
@@ -2738,19 +2842,90 @@
         hs.parentNode.removeChild(hs);
         twoLines(hRow.cells[0], hRow.cells[0].textContent.replace(/\s+$/, ''), hsSign);
       }
-      // Karakas two to a line.
-      var kCell = hRow.cells[2], karakas = kCell.textContent.split(', ');
-      if (karakas.length > 2) {
+      // Class: Kendra and Trikona help, Dusthana and Maraka hurt.
+      [].forEach.call(hRow.cells[1].querySelectorAll('.dg'), function (chip) {
+        var c = chip.textContent;
+        chip.className = 'dg';
+        paint(chip, c === 'Kendra' || c === 'Trikona' ? 'help' : c === 'Dusthana' || c === 'Maraka' ? 'hurt' : null, c + ' house');
+      });
+      // Karakas two to a line; one sitting in the house helps it.
+      var kCell = hRow.cells[2];
+      var karakas = (window.Interpret.KARAKA_OF_HOUSE && window.Interpret.KARAKA_OF_HOUSE[entry.house]) || [];
+      if (karakas.length) {
         kCell.textContent = '';
-        for (var k = 0; k < karakas.length; k += 2) {
-          if (k) kCell.appendChild(document.createElement('br'));
-          kCell.appendChild(document.createTextNode(karakas.slice(k, k + 2).join(', ')));
-        }
+        karakas.forEach(function (kp, i) {
+          if (i) kCell.appendChild(i % 2 ? document.createTextNode(', ') : document.createElement('br'));
+          var s = spanText(PLANET_SYMBOL[kp] + ' ' + kp);
+          kCell.appendChild(s);
+          if (result.planets[kp].signIndex === houseSign) paint(s, 'help', 'The karaka sits in the house');
+        });
       }
+      // Relationships: friends help, enemies hurt.
+      [hRow.cells[3], hRow.cells[4]].forEach(function (cell) {
+        [].forEach.call(cell.querySelectorAll('.r-bf, .r-friend, .r-enemy, .r-we, .r-neutral'), function (s) {
+          var kind = /r-bf|r-friend/.test(s.className) ? 'help' : /r-enemy|r-we/.test(s.className) ? 'hurt' : null;
+          s.className = s.className.replace(/\br-\S+/g, '');
+          paint(s, kind, s.textContent);
+        });
+      });
+      // Aspects: a benefic's helps, a malefic's (the nodes included) hurts.
+      [].forEach.call(hRow.cells[5].querySelectorAll('.asp-item'), function (item) {
+        var who = item.firstChild;
+        if (!who || item.classList.contains('asp-none')) return;
+        var pn = who.textContent.split(' ').pop();
+        if (!result.planets[pn]) return;
+        paint(who, benefic(pn) ? 'help' : 'hurt', benefic(pn) ? 'A natural benefic’s aspect' : 'A natural malefic’s aspect');
+      });
       table([['House (Pl, Sign)', 'House (Planets, Sign)'], ['Class'], ['Karakas'], ['Nat rel', 'Natural relationship'],
         ['Cmp rel', 'Compound relationship'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)']], [hRow]);
     }
     return wrap;
+  }
+  // Whether a helping or hurting factor already shows as a colour in the rows
+  // above, so the cards below can call out only the ones that don't.
+  function side2Covered(f, subject, entry) {
+    var t = f.t;
+    if (subject === 'planet') {
+      return /^it rules the |^it is the lagna lord|^it sits in the |an Upachaya house, gives|^Saturn in the 8th|^Ketu in the 12th|avastha$|^it is combust|^it is Vargottama/.test(t);
+    }
+    var occ = /^its occupant (\w+) /.exec(t);
+    if (occ) return entry.kind === 'planet' && occ[1] === entry.key;
+    return /^its karaka | aspects it from house /.test(t);
+  }
+  // The Natal tab's Shadbala and Bhava Bala cards: only those helping and
+  // hurting factors that the colours in the rows above don't already show.
+  // Ishta against Kashta rides on the entry's dropdown label instead.
+  function side2NarrativeCards(blocks, entry) {
+    var cols = document.createElement('div');
+    cols.className = 'bf-narratives';
+    blocks.forEach(function (block) {
+      if (block.kind !== 'narrative') return;
+      var box = document.createElement('div');
+      box.className = 'bf-block bf-narrative bf-narrative-' + block.verdict.color + (block.subject ? ' bf-narrative-' + block.subject : '');
+      var head = document.createElement('h3');
+      head.className = 'bf-block-head';
+      head.textContent = block.heading;
+      box.appendChild(head);
+      var shown = 0;
+      [['Helping', block.help, 'bf-help'], ['Hurting', block.hurt, 'bf-hurt']].forEach(function (pair) {
+        var rest = pair[1].filter(function (f) { return !side2Covered(f, block.subject, entry); });
+        if (!rest.length) return;
+        shown += rest.length;
+        var grp = document.createElement('div');
+        grp.className = 'bf-lines ' + pair[2];
+        grp.appendChild(spanText(pair[0], 'bf-narrative-label'));
+        rest.forEach(function (f) {
+          var item = document.createElement('p');
+          item.className = 'bf-item';
+          item.textContent = f.t.charAt(0).toUpperCase() + f.t.slice(1) + ' (' + f.w + 'pt)';
+          grp.appendChild(item);
+        });
+        box.appendChild(grp);
+      });
+      if (!shown) box.appendChild(spanText('Nothing more: what helps and hurts shows in the colours above.', 'bf-sbtree-muted'));
+      cols.appendChild(box);
+    });
+    return cols;
   }
   function renderChartSide2(entries) {
     side2Refresh = null;
@@ -2768,22 +2943,19 @@
     function show(entry) {
       content.innerHTML = '';
       content.appendChild(side2Snapshot(entry));
-      // The breakdown trees now open from the totals above, so the
-      // narratives here go without their own copy.
-      content.appendChild(bfNarrativeColumns(entry.fw.blocks.map(function (b) {
-        if (b.kind !== 'narrative' || !b.tree) return b;
-        var copy = {};
-        Object.keys(b).forEach(function (k) { copy[k] = b[k]; });
-        copy.tree = null;
-        return copy;
-      })));
+      content.appendChild(side2NarrativeCards(entry.fw.blocks, entry));
       content.appendChild(bfInterpretationBox(entry));
     }
     var selectedIdx = 0;
     entries.forEach(function (entry, i) {
       var opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = bfOptionLabel(entry);
+      // A planet's Ishta against Kashta follows its verdict, with a red dot
+      // when Kashta outweighs it and a green one otherwise (an option's text
+      // can't be coloured in part, so the dot carries the colour).
+      var ik = entry.fw.blocks.filter(function (b) { return b.kind === 'narrative' && b.ishta; })[0];
+      opt.textContent = bfOptionLabel(entry) +
+        (ik ? '  ·  ' + BF_DOT[ik.ishta.text.indexOf(' < ') >= 0 ? 'red' : 'green'] + ' ' + ik.ishta.text : '');
       select.appendChild(opt);
       if (entry.kind + ':' + entry.key === side2LastKey) selectedIdx = i;
     });

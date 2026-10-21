@@ -1220,6 +1220,8 @@
   .chart-tooltip .ct-verdict { margin: 5px 0 0; }
   .chart-tooltip .ct-verdict .bf-badge { margin-left: 0; }
   .chart-tooltip .ct-sub .ct-stat { margin: 5px 0 0; padding-top: 0; border-top: none; }
+  .chart-tooltip .ct-sub .ct-stat.ct-ishta { color: #1d6b46; margin-top: 2px; }
+  .chart-tooltip .ct-sub .ct-stat.ct-kashta { color: #96302f; margin-top: 2px; }
   .chart-tooltip .ct-line { margin: 0 0 4px; }
   .chart-tooltip .ct-line b { color: var(--text); font-weight: 700; }
   .chart-tooltip .ct-rel { margin: 6px 0 0; color: var(--muted); }
@@ -1502,6 +1504,11 @@
   .s2-snap table { font-size: 12px; }
   .s2-snap th { cursor: help; }
   .s2-snap td { vertical-align: top; }
+  /* helping / hurting values, the same tints as the Exalted / Debilitated flags */
+  .s2-snap .s2-help, .s2-snap .s2-hurt { border-radius: 4px; padding: 0 3px; cursor: help; }
+  .s2-snap .s2-help { color: #1d6b46; background: rgba(44,117,72,0.14); }
+  .s2-snap .s2-hurt { color: #96302f; background: rgba(176,58,58,0.13); }
+  .s2-snap .s2-own { display: block; }
   .s2-snap .gr-where { display: block; margin-left: 0; }
   .s2-snap td.reldig .rd-lord { display: table; margin: 2px 0 0; }
   .s2-snap td.aspects .asp-item { display: block; margin-right: 0; }
