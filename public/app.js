@@ -2559,6 +2559,8 @@
           var panel = document.getElementById(t.getAttribute('aria-controls'));
           if (panel) panel.classList.toggle('hidden', !on);
         });
+        // the Periods tab's tree can only be centred once it is on screen
+        scrollTreeToSelection();
       });
     });
   }
@@ -3750,10 +3752,9 @@
     });
     box.appendChild(cards);
 
-    // Down the chain first (MD→AD, AD→PD), then MD→PD.
+    // Down the chain only (MD→AD, AD→PD); MD→PD skips a level, so it is left out.
     var pairs = [];
     for (var i = 0; i + 1 < lords.length; i++) pairs.push([lords[i], lords[i + 1]]);
-    if (lords.length === 3) pairs.push([lords[0], lords[2]]);
     var facts = { placements: [], connections: [] };
     if (pairs.length) {
       var grid = document.createElement('div');
@@ -3925,13 +3926,27 @@
     return { isNow: isNow, future: future, pct: pct, daysVal: daysVal, daysSub: daysSub };
   }
 
-  // Mahadasha -> Antardasha -> Pratyantardasha as an expandable tree.
+  // Mahadasha -> Antardasha -> Pratyantardasha as an expandable tree, drawn in
+  // two places: the Dashas tab and, above the period-lord cards, the chart's
+  // Periods side tab. Both trees show the same selection; picking a period in
+  // either selects it in the other and updates everything that follows the
+  // period in view, once.
+  var DASHA_HOSTS = [
+    { tree: 'dashaTree', stats: 'dashaStats', current: 'dashaCurrent', main: true },
+    { tree: 'sideDashaTree', stats: 'sideDashaStats', current: 'sideDashaCurrent', main: false }
+  ];
   function renderDashaPicker(result, sb) {
-    var tree = document.getElementById('dashaTree');
-    var stats = document.getElementById('dashaStats');
-    var current = document.getElementById('dashaCurrent');
+    var hosts = DASHA_HOSTS.map(function (h) {
+      return {
+        main: h.main,
+        tree: document.getElementById(h.tree),
+        stats: document.getElementById(h.stats),
+        current: document.getElementById(h.current),
+        nodes: {}, selectedRow: null
+      };
+    }).filter(function (h) { return h.tree && h.stats && h.current; });
+    hosts.forEach(function (h) { h.tree.innerHTML = ''; h.stats.innerHTML = ''; h.current.innerHTML = ''; });
     var list = result.antardashas || [];
-    tree.innerHTML = ''; stats.innerHTML = ''; current.innerHTML = '';
     if (!list.length) return;
 
     var now = new Date();
@@ -3953,18 +3968,32 @@
     });
 
     function live(s, e) { return now >= s && now < e; }
+    function keyOf(lords) { return lords.map(function (l) { return l.lord; }).join('|') + ':' + lords.length; }
 
-    var selectedRow = null;
+    // Expand down to a period in one host's tree and return its node.
+    function reveal(host, lords) {
+      for (var n = 1; n < lords.length; n++) {
+        var up = host.nodes[keyOf(lords.slice(0, n))];
+        if (up) up.__expand(true);
+      }
+      return host.nodes[keyOf(lords)];
+    }
 
-    function select(row, lords, start, end) {
-      if (selectedRow) selectedRow.classList.remove('sel');
-      selectedRow = row;
-      row.classList.add('sel');
+    function select(lords, start, end) {
+      hosts.forEach(function (host) {
+        var node = reveal(host, lords);
+        if (!node) return;
+        if (host.selectedRow) host.selectedRow.classList.remove('sel');
+        host.selectedRow = node.__row;
+        node.__row.classList.add('sel');
+        node.__expand(true);
+      });
       showDetail({ lords: lords, start: start, end: end });
+      scrollTreeToSelection();
     }
 
     // one tree row plus its (lazily built) children
-    function makeNode(level, opts) {
+    function makeNode(host, level, opts) {
       var wrap = document.createElement('div');
       wrap.className = 'dt-node lvl-' + level;
 
@@ -4031,66 +4060,55 @@
         expand(kids.classList.contains('hidden'));
       });
       row.addEventListener('click', function () {
-        select(row, opts.lords, opts.start, opts.end);
-        if (opts.buildChildren) expand(true);
+        select(opts.lords, opts.start, opts.end);
       });
 
       wrap.appendChild(row);
       wrap.appendChild(kids);
       wrap.__expand = expand;
       wrap.__row = row;
-      wrap.__kids = [];
+      host.nodes[keyOf(opts.lords)] = wrap;
       return wrap;
     }
 
-    groups.forEach(function (g) {
-      var mdNode = makeNode('md', {
-        suffix: g.clamped ? '   (balance at birth)' : '',
-        start: g.start, end: g.end,
-        lords: [{ lord: g.maha, role: 'MD' }],
-        buildChildren: function (box, parent) {
-          g.antars.forEach(function (a) {
-            var adNode = makeNode('ad', {
-              start: a.start, end: a.end,
-              lords: [{ lord: g.maha, role: 'MD' }, { lord: a.antar, role: 'AD' }],
-              buildChildren: function (pbox, pparent) {
-                var prats = E.pratyantardashas(a, birth);
-                pparent.__prats = prats;
-                prats.forEach(function (pd) {
-                  var pdNode = makeNode('pd', {
-                    start: pd.start, end: pd.end,
-                    lords: [{ lord: g.maha, role: 'MD' },
-                            { lord: a.antar, role: 'AD' },
-                            { lord: pd.prat, role: 'PD' }]
+    hosts.forEach(function (host) {
+      groups.forEach(function (g) {
+        host.tree.appendChild(makeNode(host, 'md', {
+          suffix: g.clamped ? '   (balance at birth)' : '',
+          start: g.start, end: g.end,
+          lords: [{ lord: g.maha, role: 'MD' }],
+          buildChildren: function (box) {
+            g.antars.forEach(function (a) {
+              box.appendChild(makeNode(host, 'ad', {
+                start: a.start, end: a.end,
+                lords: [{ lord: g.maha, role: 'MD' }, { lord: a.antar, role: 'AD' }],
+                buildChildren: function (pbox) {
+                  E.pratyantardashas(a, birth).forEach(function (pd) {
+                    pbox.appendChild(makeNode(host, 'pd', {
+                      start: pd.start, end: pd.end,
+                      lords: [{ lord: g.maha, role: 'MD' },
+                              { lord: a.antar, role: 'AD' },
+                              { lord: pd.prat, role: 'PD' }]
+                    }));
                   });
-                  pparent.__kids.push(pdNode);
-                  pbox.appendChild(pdNode);
-                });
-              }
+                }
+              }));
             });
-            parent.__kids.push(adNode);
-            box.appendChild(adNode);
-          });
-        }
+          }
+        }));
       });
-      tree.appendChild(mdNode);
-      g.__node = mdNode;
     });
 
-    function showDetail(sel) {
-      stats.innerHTML = '';
-      // Read the clock each time so a page left open still reports accurately.
-      var t = new Date();
+    // The selected period's title, level pill and timing chips, in one host.
+    // The Dashas tab's level pill shows or hides its tree (and remembers it);
+    // the side tab's shows or hides its own.
+    function renderSelection(host, sel) {
       var total = sel.end - sel.start;
-      var isNow = t >= sel.start && t < sel.end;
-      var future = t < sel.start;
-
-      // Depth is shown as MD, MD - AD or MD - AD - PD, matching the selected level
       var levelCode = sel.lords.map(function (l) { return l.role; }).join(' - ');
       var levelFull = sel.lords.map(function (l) { return ROLE_NAME[l.role]; }).join(' › ');
       var chain = sel.lords.map(function (l) { return l.lord; }).join('  -  ');
 
-      current.innerHTML = '';
+      host.current.innerHTML = '';
       var ct = document.createElement('div');
       ct.className = 'dc-title';
       ct.textContent = chain;
@@ -4103,11 +4121,9 @@
       var lvl = document.createElement('button');
       lvl.type = 'button';
       lvl.className = 'dc-level';
-      lvl.id = 'dashaLevelToggle';
-      lvl.setAttribute('aria-controls', 'dashaTree');
-      var treeEl = document.getElementById('dashaTree');
-      var treeShown = !treeEl || !treeEl.classList.contains('hidden');
-      lvl.setAttribute('aria-expanded', treeShown ? 'true' : 'false');
+      if (host.main) lvl.id = 'dashaLevelToggle';
+      lvl.setAttribute('aria-controls', host.tree.id);
+      lvl.setAttribute('aria-expanded', host.tree.classList.contains('hidden') ? 'false' : 'true');
       var lvlText = document.createElement('span');
       lvlText.textContent = levelCode;
       var lvlCaret = document.createElement('span');
@@ -4119,34 +4135,44 @@
       lvl.title = levelFull + ' — click to show or hide the period tree';
       lvl.addEventListener('click', function () {
         var show = lvl.getAttribute('aria-expanded') !== 'true';
-        applyTreeVisible(show);
-        prefSet(TREE_KEY, show ? 'show' : 'hide');
+        if (host.main) {
+          applyTreeVisible(show);
+          prefSet(TREE_KEY, show ? 'show' : 'hide');
+        } else {
+          host.tree.classList.toggle('hidden', !show);
+          lvl.setAttribute('aria-expanded', show ? 'true' : 'false');
+          if (show) scrollTreeToSelection();
+        }
       });
       cs.appendChild(lvl);
       cs.appendChild(document.createTextNode('  ·  ' + fmtDate(sel.start) + ' – ' +
         fmtDate(sel.end) + '  ·  ' + fmtDuration(total)));
-      current.appendChild(ct); current.appendChild(cs);
+      host.current.appendChild(ct); host.current.appendChild(cs);
 
+      // Both figures describe the SELECTED period, never the current one.
+      var timing = dashaTimingStats(sel.start, sel.end);
+      host.stats.innerHTML = '';
+      [['Days Left', timing.daysVal, timing.daysSub], ['% Complete', timing.pct + '%', fmtDuration(total) + ' in total']]
+        .forEach(function (it) {
+          var chip = document.createElement('div');
+          chip.className = 'stat-chip' + (timing.isNow ? ' is-now' : '');
+          var k = document.createElement('div'); k.className = 'k'; k.textContent = it[0];
+          var v = document.createElement('div'); v.className = 'v'; v.textContent = it[1];
+          var s = document.createElement('div'); s.className = 's'; s.textContent = it[2];
+          chip.appendChild(k); chip.appendChild(v); chip.appendChild(s);
+          host.stats.appendChild(chip);
+        });
+    }
+
+    function showDetail(sel) {
+      hosts.forEach(function (host) { renderSelection(host, sel); });
+
+      var levelCode = sel.lords.map(function (l) { return l.role; }).join(' - ');
       var head = document.getElementById('activationHead');
       if (head) {
         head.innerHTML = 'Houses Activated in This Period ' +
           '<span class="head-level">— ' + levelCode + '</span>';
       }
-
-      // Both figures describe the SELECTED period, never the current one.
-      var timing = dashaTimingStats(sel.start, sel.end);
-      var daysVal = timing.daysVal, daysSub = timing.daysSub, pct = timing.pct;
-
-      [['Days Left', daysVal, daysSub], ['% Complete', pct + '%', fmtDuration(total) + ' in total']]
-        .forEach(function (it) {
-          var chip = document.createElement('div');
-          chip.className = 'stat-chip' + (isNow ? ' is-now' : '');
-          var k = document.createElement('div'); k.className = 'k'; k.textContent = it[0];
-          var v = document.createElement('div'); v.className = 'v'; v.textContent = it[1];
-          var s = document.createElement('div'); s.className = 's'; s.textContent = it[2];
-          chip.appendChild(k); chip.appendChild(v); chip.appendChild(s);
-          stats.appendChild(chip);
-        });
 
       renderActivation(result, sel.lords);
       renderPeriodLords(result, sel.lords);
@@ -4172,39 +4198,34 @@
     }
 
     // Open on the deepest period running today
-    var gi = -1;
-    for (var i = 0; i < groups.length; i++) if (live(groups[i].start, groups[i].end)) { gi = i; break; }
-    if (gi < 0) {
-      groups[0].__node.__row.click();
-      return;
+    var g0 = groups.filter(function (g) { return live(g.start, g.end); })[0];
+    if (!g0) { select([{ lord: groups[0].maha, role: 'MD' }], groups[0].start, groups[0].end); return; }
+    var lords = [{ lord: g0.maha, role: 'MD' }], start = g0.start, end = g0.end;
+    var a0 = g0.antars.filter(function (a) { return live(a.start, a.end); })[0];
+    if (a0) {
+      lords.push({ lord: a0.antar, role: 'AD' }); start = a0.start; end = a0.end;
+      var p0 = E.pratyantardashas(a0, birth).filter(function (pd) { return live(pd.start, pd.end); })[0];
+      if (p0) { lords.push({ lord: p0.prat, role: 'PD' }); start = p0.start; end = p0.end; }
     }
-    var mdNode = groups[gi].__node;
-    mdNode.__expand(true);
-    var ai = -1;
-    for (var j = 0; j < groups[gi].antars.length; j++) {
-      if (live(groups[gi].antars[j].start, groups[gi].antars[j].end)) { ai = j; break; }
-    }
-    if (ai < 0) { mdNode.__row.click(); return; }
-    var adNode = mdNode.__kids[ai];
-    adNode.__expand(true);
-    var prats = adNode.__prats || [];
-    var pi = -1;
-    for (var k = 0; k < prats.length; k++) if (live(prats[k].start, prats[k].end)) { pi = k; break; }
-    var target = pi >= 0 ? adNode.__kids[pi] : adNode;
-    target.__row.click();
-    scrollTreeToSelection();
+    select(lords, start, end);
   }
 
-  // Centre the selected row in the dasha tree's scroll box. offsetTop and
-  // clientHeight both read 0 while the panel is hidden, so this is a no-op then
-  // and is re-run when the Dashas tab is first shown.
+  // Centre the selected row in each dasha tree's scroll box. offsetTop and
+  // clientHeight both read 0 while a tree is hidden, so that tree is skipped
+  // then and re-centred when its tab is shown.
   function scrollTreeToSelection() {
-    var tree = document.getElementById('dashaTree');
-    if (!tree || !tree.offsetParent) return false;
-    var row = tree.querySelector('.dt-row.sel');
-    if (!row) return false;
-    tree.scrollTop = Math.max(0, row.offsetTop - tree.clientHeight / 2);
-    return true;
+    var any = false;
+    DASHA_HOSTS.forEach(function (h) {
+      var tree = document.getElementById(h.tree);
+      if (!tree || !tree.offsetParent) return;
+      var row = tree.querySelector('.dt-row.sel');
+      if (!row) return;
+      // measured on screen, since the tree isn't the rows' offset parent
+      var off = row.getBoundingClientRect().top - tree.getBoundingClientRect().top + tree.scrollTop;
+      tree.scrollTop = Math.max(0, off - tree.clientHeight / 2);
+      any = true;
+    });
+    return any;
   }
 
   // ---- show/hide the period tree ----

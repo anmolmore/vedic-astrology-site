@@ -1092,6 +1092,23 @@
   .period-lords-side .pl-pill { font-size: 9.5px; padding: 0 5px; }
   .period-lords-side .pl-role-long { display: none; }
   .period-lords-side .pl-card, .period-lords-side .pl-pair { overflow-wrap: break-word; }
+  /* the Dashas tab's period picker, repeated compactly at the top of the Periods side tab */
+  .dasha-picker-side { margin-bottom: 10px; }
+  /* the period and its two timing chips share one line, each shrunk to fit;
+     the chips drop below only when the panel is too narrow for both */
+  .dasha-picker-side .dasha-row { gap: 5px; margin-bottom: 8px; }
+  .dasha-picker-side .dasha-current { flex: 1 1 140px; min-width: 140px; padding: 5px 8px; }
+  .dasha-picker-side .dasha-current .dc-title { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dasha-picker-side .dasha-current .dc-sub { font-size: 10.5px; margin-top: 2px; }
+  .dasha-picker-side .dc-level { font-size: 9.5px; padding: 0 6px 0 7px; letter-spacing: 0.3px; }
+  .dasha-picker-side .dasha-stats { gap: 5px; width: auto; flex: 0 0 auto; }
+  .dasha-picker-side .stat-chip { flex: 0 0 auto; padding: 4px 7px; min-width: 0; border-radius: 8px; }
+  .dasha-picker-side .stat-chip .k { font-size: 9px; }
+  .dasha-picker-side .stat-chip .v { font-size: 12.5px; white-space: nowrap; }
+  .dasha-picker-side .stat-chip .s { font-size: 9.5px; white-space: nowrap; }
+  .dasha-picker-side .dasha-tree { max-height: 240px; }
+  .dasha-picker-side .dt-row { font-size: 12.5px; gap: 6px; padding: 4px 6px; }
+  .dasha-picker-side .dt-dates { display: none; }
   .ie-interp-wrap { margin-top: 14px; }
   .ie-interp-head { display: block; font-weight: 700; font-size: 12.5px; color: var(--gold-soft); margin-bottom: 4px; }
   .ie-interp-box {
@@ -1756,6 +1773,13 @@
                     </div>
                     <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-periods" aria-labelledby="sideTab-periods">
                       <p class="na-note" id="periodLordsSideNote">Not available: dasha periods need the Moon’s exact degree and a birth date.</p>
+                      <div class="dasha-picker dasha-picker-side">
+                        <div class="dasha-row">
+                          <div class="dasha-current" id="sideDashaCurrent"></div>
+                          <div class="dasha-stats" id="sideDashaStats"></div>
+                        </div>
+                        <div class="dasha-tree" id="sideDashaTree" role="tree"></div>
+                      </div>
                       <div class="period-lords period-lords-side" id="periodLordsSide"></div>
                     </div>
                   </div>
