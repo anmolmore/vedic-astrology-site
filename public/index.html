@@ -1063,6 +1063,26 @@
     text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "D1 · Rashi" title) wants that, this reused Influence Engine content doesn't */
   }
   .side-tabpanel.hidden { display: none; }
+  /* Transit side tab: natal chart nested inside the transit ring. */
+  /* The panel and body are flex columns so the chart takes whatever height
+     is left under the controls and scales down to fit it, instead of
+     making the side panel scroll. */
+  #sidePanel-transit:not(.hidden) { display: flex; flex-direction: column; height: 100%; }
+  .tr-body:not(.hidden) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  .tr-controls { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+  .tr-controls input[type="range"] { flex: 1 1 70px; min-width: 60px; }
+  .tr-controls button { font-family: inherit; font-size: 12px; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); }
+  .tr-status { font-size: 11.5px; color: var(--muted); }
+  .tr-chart { display: block; width: 100%; flex: 1 1 auto; min-height: 160px; max-height: 560px; }
+  .tr-body.tr-large .tr-chart { flex: 0 0 auto; height: 560px; max-width: 560px; margin: 0 auto; }
+  #transitSize[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
+  .tr-cell { fill: var(--bg2); stroke: var(--line); stroke-width: 1; }
+  .tr-natal-cell { fill: var(--house1-fill); stroke: var(--gold); stroke-width: 0.6; }
+  .tr-sign { font-size: 15px; fill: var(--muted); }
+  .tr-transit { font-size: 18px; fill: var(--text); }
+  .tr-natal { font-size: 17px; fill: var(--gold-soft); font-weight: 600; }
+  .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
+  .tr-center { font-size: 16px; fill: var(--muted); }
   /* Period lords (Dashas tab and the chart's side tab — same content). */
   .pl-box { display: flex; flex-direction: column; gap: 10px; text-align: left; }
   .pl-cards, .pl-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
@@ -1798,6 +1818,7 @@
                     <button type="button" role="tab" id="sideTab-facts" aria-controls="sidePanel-facts" aria-selected="true">Facts</button>
                     <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false" title="Yogas formed" aria-label="Yogas formed">Yogas</button>
                     <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false" title="Natal Influences" aria-label="Natal Influences">Natal</button>
+                    <button type="button" role="tab" id="sideTab-transit" aria-controls="sidePanel-transit" aria-selected="false" title="Transits over the natal chart" aria-label="Transit">Transit</button>
                     <button type="button" role="tab" id="sideTab-periods" aria-controls="sidePanel-periods" aria-selected="false" title="Period lords" aria-label="Period lords">Periods</button>
                     <button type="button" role="tab" id="sideTab-remedies" aria-controls="sidePanel-remedies" aria-selected="false" title="Remedies" aria-label="Remedies">Remedies</button>
                   </div>
@@ -1814,6 +1835,20 @@
                       <p class="na-note hidden" id="chartSide2Note">Not available — these narratives need Shadbala and Bhava Bala, which a placed chart doesn't have.</p>
                       <select id="chartSide2Select" class="side-tab2-select" aria-label="House and planet"></select>
                       <div id="chartSide2Content"></div>
+                    </div>
+                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-transit" aria-labelledby="sideTab-transit">
+                      <p class="na-note" id="transitNote">Generate a chart to see transits over it.</p>
+                      <div class="tr-body hidden" id="transitBody">
+                        <div class="tr-controls">
+                          <input type="datetime-local" id="transitWhen" aria-label="Transit date and time">
+                          <button type="button" id="transitNow">Now</button>
+                          <span class="tr-status" id="transitStatus"></span>
+                          <input type="range" id="transitRing" min="70" max="140" step="5" value="90" aria-label="Transit ring width" title="Transit ring width">
+                          <span class="tr-status" id="transitRingOut"></span>
+                          <button type="button" id="transitSize" aria-pressed="false" title="Show the chart at full size; the panel scrolls">Larger</button>
+                        </div>
+                        <svg id="transitChart" class="tr-chart" viewBox="0 0 560 560" role="img" aria-label="Transit planets in the outer ring, natal planets in the inner ring. H is the natal house, R is retrograde."><title>Outer ring: transits. Inner ring: natal. H = natal house, R = retrograde.</title></svg>
+                      </div>
                     </div>
                     <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-periods" aria-labelledby="sideTab-periods">
                       <p class="na-note" id="periodLordsSideNote">Not available: dasha periods need the Moon’s exact degree and a birth date.</p>
@@ -11521,6 +11556,143 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     });
   }
 
+  // The chart's "Transit" side tab: a South Indian chart whose outer ring holds
+  // the transiting planets for a chosen moment (live, redrawn each minute, by
+  // default) with the natal chart nested inside it, sign for sign. Houses are
+  // counted from the natal ascendant; the transit ascendant is left out, since
+  // it changes sign every two hours or so.
+  var TR_POS = [[0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [3, 3], [3, 2], [3, 1], [3, 0], [2, 0], [1, 0], [0, 0]];
+  var TR_ABBR = { Sun: 'Su', Moon: 'Mo', Mars: 'Ma', Mercury: 'Me', Jupiter: 'Ju', Venus: 'Ve', Saturn: 'Sa', Rahu: 'Ra', Ketu: 'Ke' };
+  var TR_RING_KEY = 'vedicTransitRing.v1';
+  var TR_SIZE_KEY = 'vedicTransitSize.v1';
+  var TR_SIZE = 560;
+  var tr = { result: null, when: null, live: true, timer: null };
+
+  function trPlanets(planets) {
+    return Object.keys(TR_ABBR).filter(function (n) { return planets[n]; }).map(function (n) {
+      var p = planets[n];
+      return { label: TR_ABBR[n], sign: p.signIndex, deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
+    });
+  }
+  function trDashaAt(result, when) {
+    if (!result.antardashas || !result.antardashas.length) return '';
+    var t = when.getTime();
+    var ad = result.antardashas.filter(function (x) { return x.start.getTime() <= t && x.end.getTime() > t; })[0];
+    if (!ad) return '';
+    var pd = window.VedicEngine.pratyantardashas(ad, result.antardashas[0].start)
+      .filter(function (x) { return x.start.getTime() <= t && x.end.getTime() > t; })[0];
+    return ad.maha + ' / ' + ad.antar + (pd ? ' / ' + pd.prat : '');
+  }
+  function trLocalInput(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+  function trSvgEl(svg, tag, attrs, text) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    svg.appendChild(e);
+    return e;
+  }
+  function trDraw() {
+    var svg = document.getElementById('transitChart');
+    var result = tr.result;
+    if (!svg || !result) return;
+    var nodeType = result.nodeType === 'true' ? 'true' : 'mean';
+    var sky = window.VedicEngine.computeChart({ date: tr.when, latDeg: 0, lonDeg: 0, nodeType: nodeType });
+    var transit = trPlanets(sky.planets);
+    var ascDeg = result.ascendant.degree;
+    var natal = [{ label: 'As', sign: result.ascendant.signIndex, deg: ascDeg == null ? null : Math.floor(ascDeg), retro: false }]
+      .concat(trPlanets(result.planets));
+    var ring = Number(document.getElementById('transitRing').value) || 90;
+    var W = TR_SIZE, m = (W - 2 * ring) / 2, edges = [0, ring, ring + m, ring + 2 * m, W], cell = (W - 2 * ring) / 4;
+    var asc = result.ascendant.signIndex, SIGNS = window.VedicEngine.SIGNS;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    function lbl(p) { return p.label + (p.deg == null ? '' : ' ' + p.deg + '°') + (p.retro ? ' R' : ''); }
+    for (var s = 0; s < 12; s++) {
+      var r = TR_POS[s][0], c = TR_POS[s][1];
+      var x = edges[c], y = edges[r], w = edges[c + 1] - x, h = edges[r + 1] - y;
+      trSvgEl(svg, 'rect', { x: x, y: y, width: w, height: h, class: 'tr-cell' });
+      var house = ((s - asc + 12) % 12) + 1;
+      trSvgEl(svg, 'text', { x: x + 8, y: y + 20, class: 'tr-sign' }, 'H' + house + ' ' + (w < 120 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
+      var px = x + 10, py = y + 44;
+      transit.filter(function (p) { return p.sign === s; }).forEach(function (p) {
+        if (py > y + h - 6) { py = y + 44; px += 88; }
+        trSvgEl(svg, 'text', { x: px, y: py, class: 'tr-transit' }, lbl(p));
+        py += 22;
+      });
+      var ix = ring + c * cell, iy = ring + r * cell;
+      trSvgEl(svg, 'rect', { x: ix + 2, y: iy + 2, width: cell - 4, height: cell - 4, rx: 5, class: 'tr-natal-cell' });
+      var ny = iy + 28;
+      natal.filter(function (p) { return p.sign === s; }).forEach(function (p) {
+        trSvgEl(svg, 'text', { x: ix + cell / 2, y: ny, class: 'tr-natal', 'text-anchor': 'middle' }, lbl(p));
+        ny += 21;
+      });
+    }
+    var mid = W / 2;
+    trSvgEl(svg, 'text', { x: mid, y: mid - 14, class: 'tr-center-title', 'text-anchor': 'middle' }, SIGNS[asc] + ' ascendant');
+    var dasha = trDashaAt(result, tr.when);
+    if (dasha) trSvgEl(svg, 'text', { x: mid, y: mid + 14, class: 'tr-center', 'text-anchor': 'middle' }, dasha);
+    document.getElementById('transitRingOut').textContent = 'Natal ' + Math.round((W - 2 * ring) / W * 100) + '%';
+    document.getElementById('transitWhen').value = trLocalInput(tr.when);
+    document.getElementById('transitStatus').textContent = tr.live ? 'Live' : 'Fixed';
+    document.getElementById('transitStatus').title = tr.live ? 'Updates every minute' : 'Press Now to return to live transits';
+  }
+  function trVisible() {
+    var panel = document.getElementById('sidePanel-transit');
+    return panel && !panel.classList.contains('hidden');
+  }
+  // Redraw only while the tab is on screen; switching to it catches up.
+  function trTick() {
+    if (!tr.live || !tr.result) return;
+    tr.when = new Date();
+    if (trVisible()) trDraw();
+  }
+  function ensureTransitChart() {
+    if (tr.live) tr.when = new Date();
+    if (trVisible()) trDraw();
+  }
+  function initTransitTab() {
+    var ring = document.getElementById('transitRing');
+    if (!ring || ring.dataset.wired) return;
+    ring.dataset.wired = '1';
+    var saved = Number(prefGet(TR_RING_KEY));
+    if (saved >= 70 && saved <= 140) ring.value = saved;
+    ring.addEventListener('input', function () { prefSet(TR_RING_KEY, ring.value); trDraw(); });
+    document.getElementById('transitWhen').addEventListener('change', function (e) {
+      if (!e.target.value) return;
+      tr.live = false;
+      tr.when = new Date(e.target.value);
+      trDraw();
+    });
+    var sizeBtn = document.getElementById('transitSize');
+    function applySize(large) {
+      document.getElementById('transitBody').classList.toggle('tr-large', large);
+      sizeBtn.setAttribute('aria-pressed', large ? 'true' : 'false');
+      sizeBtn.textContent = large ? 'Fit' : 'Larger';
+    }
+    applySize(prefGet(TR_SIZE_KEY) === 'large');
+    sizeBtn.addEventListener('click', function () {
+      var large = sizeBtn.getAttribute('aria-pressed') !== 'true';
+      prefSet(TR_SIZE_KEY, large ? 'large' : 'fit');
+      applySize(large);
+    });
+    document.getElementById('transitNow').addEventListener('click', function () {
+      tr.live = true;
+      tr.when = new Date();
+      trDraw();
+    });
+    tr.timer = setInterval(trTick, 60000);
+  }
+  function renderTransitTab(result) {
+    initTransitTab();
+    tr.result = result;
+    tr.live = true;
+    tr.when = new Date();
+    document.getElementById('transitNote').classList.add('hidden');
+    document.getElementById('transitBody').classList.remove('hidden');
+    trDraw();
+  }
+
   // Lightweight 2-tab switcher for the South Indian chart's own side panel —
   // deliberately NOT the big multi-tab system's initTabs()/.tabwrap (that's
   // built for many tabs with drag-reorder and localStorage-persisted order,
@@ -11543,6 +11715,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         // the Periods tab's tree can only be centred once it is on screen
         scrollTreeToSelection();
         ensureRemedyCalendar();
+        ensureTransitChart();
       });
     });
   }
@@ -15167,6 +15340,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     renderFacts(result);
     renderInfluenceEngineTab(result, null);
     renderRemedies(result, null, null);
+    renderTransitTab(result);
     resetResearch();
     renderPlanetTable(result, null);
     renderHouseTable(result);
@@ -16196,6 +16370,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         initTreeToggle();
         renderFacts(result);
         renderInfluenceEngineTab(result, shadbala);
+        renderTransitTab(result);
         resetResearch();
         renderShadbala(shadbala);
         renderBhavaBala(result, shadbala);

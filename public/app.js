@@ -2734,6 +2734,143 @@
     });
   }
 
+  // The chart's "Transit" side tab: a South Indian chart whose outer ring holds
+  // the transiting planets for a chosen moment (live, redrawn each minute, by
+  // default) with the natal chart nested inside it, sign for sign. Houses are
+  // counted from the natal ascendant; the transit ascendant is left out, since
+  // it changes sign every two hours or so.
+  var TR_POS = [[0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [3, 3], [3, 2], [3, 1], [3, 0], [2, 0], [1, 0], [0, 0]];
+  var TR_ABBR = { Sun: 'Su', Moon: 'Mo', Mars: 'Ma', Mercury: 'Me', Jupiter: 'Ju', Venus: 'Ve', Saturn: 'Sa', Rahu: 'Ra', Ketu: 'Ke' };
+  var TR_RING_KEY = 'vedicTransitRing.v1';
+  var TR_SIZE_KEY = 'vedicTransitSize.v1';
+  var TR_SIZE = 560;
+  var tr = { result: null, when: null, live: true, timer: null };
+
+  function trPlanets(planets) {
+    return Object.keys(TR_ABBR).filter(function (n) { return planets[n]; }).map(function (n) {
+      var p = planets[n];
+      return { label: TR_ABBR[n], sign: p.signIndex, deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
+    });
+  }
+  function trDashaAt(result, when) {
+    if (!result.antardashas || !result.antardashas.length) return '';
+    var t = when.getTime();
+    var ad = result.antardashas.filter(function (x) { return x.start.getTime() <= t && x.end.getTime() > t; })[0];
+    if (!ad) return '';
+    var pd = window.VedicEngine.pratyantardashas(ad, result.antardashas[0].start)
+      .filter(function (x) { return x.start.getTime() <= t && x.end.getTime() > t; })[0];
+    return ad.maha + ' / ' + ad.antar + (pd ? ' / ' + pd.prat : '');
+  }
+  function trLocalInput(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  }
+  function trSvgEl(svg, tag, attrs, text) {
+    var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.keys(attrs).forEach(function (k) { e.setAttribute(k, attrs[k]); });
+    if (text != null) e.textContent = text;
+    svg.appendChild(e);
+    return e;
+  }
+  function trDraw() {
+    var svg = document.getElementById('transitChart');
+    var result = tr.result;
+    if (!svg || !result) return;
+    var nodeType = result.nodeType === 'true' ? 'true' : 'mean';
+    var sky = window.VedicEngine.computeChart({ date: tr.when, latDeg: 0, lonDeg: 0, nodeType: nodeType });
+    var transit = trPlanets(sky.planets);
+    var ascDeg = result.ascendant.degree;
+    var natal = [{ label: 'As', sign: result.ascendant.signIndex, deg: ascDeg == null ? null : Math.floor(ascDeg), retro: false }]
+      .concat(trPlanets(result.planets));
+    var ring = Number(document.getElementById('transitRing').value) || 90;
+    var W = TR_SIZE, m = (W - 2 * ring) / 2, edges = [0, ring, ring + m, ring + 2 * m, W], cell = (W - 2 * ring) / 4;
+    var asc = result.ascendant.signIndex, SIGNS = window.VedicEngine.SIGNS;
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    function lbl(p) { return p.label + (p.deg == null ? '' : ' ' + p.deg + '°') + (p.retro ? ' R' : ''); }
+    for (var s = 0; s < 12; s++) {
+      var r = TR_POS[s][0], c = TR_POS[s][1];
+      var x = edges[c], y = edges[r], w = edges[c + 1] - x, h = edges[r + 1] - y;
+      trSvgEl(svg, 'rect', { x: x, y: y, width: w, height: h, class: 'tr-cell' });
+      var house = ((s - asc + 12) % 12) + 1;
+      trSvgEl(svg, 'text', { x: x + 8, y: y + 20, class: 'tr-sign' }, 'H' + house + ' ' + (w < 120 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
+      var px = x + 10, py = y + 44;
+      transit.filter(function (p) { return p.sign === s; }).forEach(function (p) {
+        if (py > y + h - 6) { py = y + 44; px += 88; }
+        trSvgEl(svg, 'text', { x: px, y: py, class: 'tr-transit' }, lbl(p));
+        py += 22;
+      });
+      var ix = ring + c * cell, iy = ring + r * cell;
+      trSvgEl(svg, 'rect', { x: ix + 2, y: iy + 2, width: cell - 4, height: cell - 4, rx: 5, class: 'tr-natal-cell' });
+      var ny = iy + 28;
+      natal.filter(function (p) { return p.sign === s; }).forEach(function (p) {
+        trSvgEl(svg, 'text', { x: ix + cell / 2, y: ny, class: 'tr-natal', 'text-anchor': 'middle' }, lbl(p));
+        ny += 21;
+      });
+    }
+    var mid = W / 2;
+    trSvgEl(svg, 'text', { x: mid, y: mid - 14, class: 'tr-center-title', 'text-anchor': 'middle' }, SIGNS[asc] + ' ascendant');
+    var dasha = trDashaAt(result, tr.when);
+    if (dasha) trSvgEl(svg, 'text', { x: mid, y: mid + 14, class: 'tr-center', 'text-anchor': 'middle' }, dasha);
+    document.getElementById('transitRingOut').textContent = 'Natal ' + Math.round((W - 2 * ring) / W * 100) + '%';
+    document.getElementById('transitWhen').value = trLocalInput(tr.when);
+    document.getElementById('transitStatus').textContent = tr.live ? 'Live' : 'Fixed';
+    document.getElementById('transitStatus').title = tr.live ? 'Updates every minute' : 'Press Now to return to live transits';
+  }
+  function trVisible() {
+    var panel = document.getElementById('sidePanel-transit');
+    return panel && !panel.classList.contains('hidden');
+  }
+  // Redraw only while the tab is on screen; switching to it catches up.
+  function trTick() {
+    if (!tr.live || !tr.result) return;
+    tr.when = new Date();
+    if (trVisible()) trDraw();
+  }
+  function ensureTransitChart() {
+    if (tr.live) tr.when = new Date();
+    if (trVisible()) trDraw();
+  }
+  function initTransitTab() {
+    var ring = document.getElementById('transitRing');
+    if (!ring || ring.dataset.wired) return;
+    ring.dataset.wired = '1';
+    var saved = Number(prefGet(TR_RING_KEY));
+    if (saved >= 70 && saved <= 140) ring.value = saved;
+    ring.addEventListener('input', function () { prefSet(TR_RING_KEY, ring.value); trDraw(); });
+    document.getElementById('transitWhen').addEventListener('change', function (e) {
+      if (!e.target.value) return;
+      tr.live = false;
+      tr.when = new Date(e.target.value);
+      trDraw();
+    });
+    var sizeBtn = document.getElementById('transitSize');
+    function applySize(large) {
+      document.getElementById('transitBody').classList.toggle('tr-large', large);
+      sizeBtn.setAttribute('aria-pressed', large ? 'true' : 'false');
+      sizeBtn.textContent = large ? 'Fit' : 'Larger';
+    }
+    applySize(prefGet(TR_SIZE_KEY) === 'large');
+    sizeBtn.addEventListener('click', function () {
+      var large = sizeBtn.getAttribute('aria-pressed') !== 'true';
+      prefSet(TR_SIZE_KEY, large ? 'large' : 'fit');
+      applySize(large);
+    });
+    document.getElementById('transitNow').addEventListener('click', function () {
+      tr.live = true;
+      tr.when = new Date();
+      trDraw();
+    });
+    tr.timer = setInterval(trTick, 60000);
+  }
+  function renderTransitTab(result) {
+    initTransitTab();
+    tr.result = result;
+    tr.live = true;
+    tr.when = new Date();
+    document.getElementById('transitNote').classList.add('hidden');
+    document.getElementById('transitBody').classList.remove('hidden');
+    trDraw();
+  }
+
   // Lightweight 2-tab switcher for the South Indian chart's own side panel —
   // deliberately NOT the big multi-tab system's initTabs()/.tabwrap (that's
   // built for many tabs with drag-reorder and localStorage-persisted order,
@@ -2756,6 +2893,7 @@
         // the Periods tab's tree can only be centred once it is on screen
         scrollTreeToSelection();
         ensureRemedyCalendar();
+        ensureTransitChart();
       });
     });
   }
@@ -6380,6 +6518,7 @@
     renderFacts(result);
     renderInfluenceEngineTab(result, null);
     renderRemedies(result, null, null);
+    renderTransitTab(result);
     resetResearch();
     renderPlanetTable(result, null);
     renderHouseTable(result);
@@ -7409,6 +7548,7 @@
         initTreeToggle();
         renderFacts(result);
         renderInfluenceEngineTab(result, shadbala);
+        renderTransitTab(result);
         resetResearch();
         renderShadbala(shadbala);
         renderBhavaBala(result, shadbala);
