@@ -2914,6 +2914,16 @@
   // so its points are scored only while that planet is a lord of the period in
   // view, and it is listed as dormant (0 points) otherwise. Everything else in
   // the verdict is a standing condition and ignores the period.
+  // Classical Shadbala component minimums (B.V. Raman, after BPHS) — the
+  // total's is Shadbala's own MIN_REQUIRED. Exported so the app's tables
+  // colour each component against the same figures the tree shows.
+  var SB_MIN = {
+    sthana: { Sun: 165, Moon: 133, Mars: 96, Mercury: 165, Jupiter: 165, Venus: 133, Saturn: 96 },
+    dig: { Sun: 35, Moon: 50, Mars: 30, Mercury: 35, Jupiter: 35, Venus: 50, Saturn: 30 },
+    kala: { Sun: 112, Moon: 100, Mars: 67, Mercury: 112, Jupiter: 112, Venus: 100, Saturn: 67 },
+    chesta: { Sun: 50, Moon: 30, Mars: 40, Mercury: 50, Jupiter: 50, Venus: 30, Saturn: 40 },
+    ayana: { Sun: 30, Moon: 40, Mars: 20, Mercury: 30, Jupiter: 30, Venus: 40, Saturn: 20 }
+  };
   function balaFramework(entry, result, sb, H, opts) {
     if (!sb || !sb.results || !sb.context) return null;
     var activeRole = {};
@@ -2982,15 +2992,7 @@
 
     // ---- Shadbala as a collapsible tree for the planet narrative ----
     // Each node: name, Virupas, the most it can score (max) where that is
-    // fixed, and the classical minimum (B.V. Raman, after BPHS) where one
-    // exists — the total, Sthana, Dig, Kala, Chesta and Ayana.
-    var SB_MIN = {
-      sthana: { Sun: 165, Moon: 133, Mars: 96, Mercury: 165, Jupiter: 165, Venus: 133, Saturn: 96 },
-      dig: { Sun: 35, Moon: 50, Mars: 30, Mercury: 35, Jupiter: 35, Venus: 50, Saturn: 30 },
-      kala: { Sun: 112, Moon: 100, Mars: 67, Mercury: 112, Jupiter: 112, Venus: 100, Saturn: 67 },
-      chesta: { Sun: 50, Moon: 30, Mars: 40, Mercury: 50, Jupiter: 50, Venus: 30, Saturn: 40 },
-      ayana: { Sun: 30, Moon: 40, Mars: 20, Mercury: 30, Jupiter: 30, Venus: 40, Saturn: 20 }
-    };
+    // fixed, and the classical minimum (SB_MIN) where one exists.
     function shadbalaTree(name, r) {
       var sd = r.sthanaDetail, kd = r.kalaDetail;
       return {
@@ -3925,7 +3927,7 @@
 
   return {
     grahaChain: grahaChain, bhavaChain: bhavaChain,
-    HOUSE_TEXT: HOUSE_TEXT, KARAKA: KARAKA, KARAKA_OF_HOUSE: KARAKA_OF_HOUSE,
+    HOUSE_TEXT: HOUSE_TEXT, KARAKA: KARAKA, KARAKA_OF_HOUSE: KARAKA_OF_HOUSE, SB_MIN: SB_MIN, HOUSE_DIG_MID: FW_HOUSE_DIG_MID,
     KALA_PURUSHA_HOUSE: KALA_PURUSHA_HOUSE, KALA_PURUSHA_PLANET: KALA_PURUSHA_PLANET,
     SIGN_TRAITS: SIGN_TRAITS, cotenantYogas: cotenantYogas, planetYogas: planetYogas,
     neechaBhangaFor: neechaBhangaFor,

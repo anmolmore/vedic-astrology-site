@@ -2049,9 +2049,10 @@
       // relLinesCell just below), just scoped to one planet's row instead of
       // every ordered pair in the house at once.
       var conjPairs = conjunctPairs(name, result);
-      tr.appendChild(relLinesCell(conjPairs, 'natural'));
-      tr.appendChild(relLinesCell(conjPairs, 'compound'));
+      tr.appendChild(relLinesCell(conjPairs, 'natural', true));
+      tr.appendChild(relLinesCell(conjPairs, 'compound', true));
 
+      hhPaintPlanetRow(tr, name, p, result, sb);
       tbody.appendChild(tr);
     });
   }
@@ -2142,7 +2143,98 @@
     return pairs;
   }
 
-  function relLinesCell(pairs, kind) {
+  // ---- Helping / hurting colours ----
+  // One scheme for the Houses and Strength tabs and the Natal side tab:
+  // a helping value goes green, a hurting one red (the same tints as the
+  // Exalted / Debilitated flags), with the reason on hover; a neutral value
+  // stays plain. A bare text node is wrapped first, so only the value is
+  // tinted.
+  function hhPaint(el, kind, why) {
+    if (!el || !kind) return el;
+    if (el.nodeType === 3) {
+      var s = document.createElement('span');
+      el.parentNode.replaceChild(s, el);
+      s.appendChild(el);
+      el = s;
+    }
+    el.classList.add(kind === 'help' ? 's2-help' : 's2-hurt');
+    if (why) el.title = why;
+    return el;
+  }
+  function hhVersus(v, min) { return v >= min ? 'help' : 'hurt'; }
+  function hhSigned(v) { return v > 0 ? 'help' : v < 0 ? 'hurt' : null; }
+  // Friends (and a planet's own sign) help, enemies hurt, neutral stays plain.
+  function hhRelKind(rel) {
+    return rel === 'Best Friend' || rel === 'Friend' || rel === 'Own sign' ? 'help'
+      : rel === 'Enemy' || rel === 'Worst Enemy' ? 'hurt' : null;
+  }
+
+  // A Planets-table row: its house, name flags, owned signs, dignity,
+  // Avasthas and Shadbala %. The Natal tab copies the row, colours and all.
+  var AV_HELP = { Jagrat: 1, Yuva: 1, Dipta: 1, Swastha: 1, Pramudita: 1, Shanta: 1 };
+  var AV_HURT = { Sushupti: 1, Bala: 1, Vriddha: 1, Mrita: 1, Dina: 1, Duhkhita: 1, Khala: 1, Vikala: 1, Kopa: 1 };
+  function hhPaintPlanetRow(tr, name, p, result, sb) {
+    var beneficMap = (sb && sb.context && sb.context.beneficMap) || window.Interpret.DEFAULT_BENEFIC;
+    var cells = tr.cells;
+
+    // House: Kendra or Trikona helps, a Dusthana hurts, except a natural
+    // malefic in an Upachaya house, Saturn in the 8th and Ketu in the 12th.
+    var h = p.house, hk = null, hWhy = '';
+    if (!window.Interpret.isNaturalBenefic(name, beneficMap) && [3, 6, 11].indexOf(h) >= 0) { hk = 'help'; hWhy = 'A natural malefic in the ' + ordinalWord(h) + ', an Upachaya house'; }
+    else if (name === 'Saturn' && h === 8) { hk = 'help'; hWhy = 'Saturn in the 8th supports longevity'; }
+    else if (name === 'Ketu' && h === 12) { hk = 'help'; hWhy = 'Ketu in the 12th supports liberation'; }
+    else if ([6, 8, 12].indexOf(h) >= 0) { hk = 'hurt'; hWhy = 'The ' + ordinalWord(h) + ' is a Dusthana'; }
+    else if ([1, 4, 7, 10].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Kendra'; }
+    else if ([5, 9].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Trikona'; }
+    hhPaint(cells[0].querySelector('.gr-where'), hk, hWhy);
+    // Flags on the name: Ex, MT, Lord and V help; Deb and C hurt.
+    [].forEach.call(cells[0].querySelectorAll('.name-dg-flag'), function (f) {
+      var kind = /dg-deb/.test(f.className) ? 'hurt' : 'help';
+      f.className = 'dg name-dg-flag';
+      hhPaint(f, kind, f.title);
+    });
+
+    // Owns: ruling the lagna or a Trikona helps, a Dusthana hurts.
+    var owned = (window.Shadbala && window.Shadbala.OWN_SIGNS[name]) || [];
+    if (owned.length) {
+      var ascSign = result.ascendant.signIndex;
+      cells[1].textContent = '';
+      owned.forEach(function (sIdx, i) {
+        var oh = ((sIdx - ascSign + 12) % 12) + 1;
+        if (i) cells[1].appendChild(document.createTextNode(', '));
+        var s = cells[1].appendChild(spanText(E.SIGNS[sIdx] + ' (' + oh + ')', 'own-sign'));
+        if (oh === 1) hhPaint(s, 'help', 'Rules the lagna');
+        else if (oh === 5 || oh === 9) hhPaint(s, 'help', 'Rules the ' + ordinalWord(oh) + ', a Trikona');
+        else if ([6, 8, 12].indexOf(oh) >= 0) hhPaint(s, 'hurt', 'Rules the ' + ordinalWord(oh) + ', a Dusthana');
+      });
+    }
+
+    // Dignity: own sign or a friend's helps, an enemy's hurts.
+    var tier = relDignityTier(name, p, result);
+    cells[2].className = cells[2].className.replace(/\breldig-\S+/g, '');
+    if (tier) {
+      hhPaint(cells[2].firstChild, ['own', 'bf', 'f'].indexOf(tier.k) >= 0 ? 'help' : ['e', 'we'].indexOf(tier.k) >= 0 ? 'hurt' : null, tier.t);
+    }
+
+    // Avasthas: Awake; Adult; Radiant, At ease, Delighted, Calm help. Asleep;
+    // Infant, Old, Dead; Humbled, Distressed, Wicked hurt. Shayanadi is neutral.
+    [].forEach.call(cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi'), function (s) {
+      var skt = s.textContent;
+      s.className = s.className.replace(/\bav-jss-\S+/g, '');
+      hhPaint(s, AV_HELP[skt] ? 'help' : AV_HURT[skt] ? 'hurt' : null, AV_HELP[skt] ? 'A favourable state' : 'An unfavourable state');
+    });
+
+    // Shadbala %: meets its minimum or not.
+    var r = sb && sb.results[name];
+    if (r) {
+      cells[5].classList.remove('pct-strong', 'pct-weak');
+      hhPaint(cells[5].firstChild, r.meetsMinimum ? 'help' : 'hurt', r.meetsMinimum ? 'Meets its Shadbala minimum' : 'Short of its Shadbala minimum');
+    }
+  }
+
+  // paintIt: colour each relationship as helping or hurting (the Houses and
+  // Planets tabs) instead of by its own five-tier colour.
+  function relLinesCell(pairs, kind, paintIt) {
     var cell = document.createElement('td');
     cell.className = 'col-left rel-lines';
     if (!pairs.length) { cell.textContent = '—'; cell.classList.add('dim'); return cell; }
@@ -2156,8 +2248,9 @@
       }
       var v = document.createElement('span');
       var val = p[kind];
-      v.className = relClass(val);
       v.textContent = val || '—';
+      if (paintIt) hhPaint(v, hhRelKind(val));
+      else v.className = relClass(val);
       line.title = p.a + ' (row) regards ' + p.b + ' (column): ' +
         (val
           ? (kind === 'compound'
@@ -2214,13 +2307,15 @@
       // the Dignity chips elsewhere rather than a new color scheme.
       var hcClasses = (window.Interpret && window.Interpret.houseClassesOf) ? window.Interpret.houseClassesOf(h) : [];
       var HC_LABEL = { kendra: 'Kendra', trikona: 'Trikona', dusthana: 'Dusthana', upachaya: 'Upachaya', 'maraka sthana': 'Maraka' };
-      var HC_KEY = { kendra: 'lord', trikona: 'ex', dusthana: 'deb', upachaya: 'mt', 'maraka sthana': 'deb' };
+      // Kendra and Trikona help, Dusthana and Maraka hurt, Upachaya is neutral.
+      var HC_KIND = { kendra: 'help', trikona: 'help', dusthana: 'hurt', 'maraka sthana': 'hurt' };
       var hcCell = td('', 'col-left' + (hcClasses.length ? '' : ' dim'));
       if (hcClasses.length) {
         hcClasses.forEach(function (c) {
           var chip = document.createElement('span');
-          chip.className = 'dg dg-' + HC_KEY[c];
+          chip.className = 'dg';
           chip.textContent = HC_LABEL[c] || c;
+          hhPaint(chip, HC_KIND[c], (HC_LABEL[c] || c) + ' house');
           hcCell.appendChild(chip);
           hcCell.appendChild(document.createTextNode(' '));
         });
@@ -2234,18 +2329,21 @@
       // karaka), same KARAKA_OF_HOUSE table bhavaChain already reads for its
       // own rungs — reused here rather than duplicated, so the two never drift.
       var karakas = (window.Interpret && window.Interpret.KARAKA_OF_HOUSE && window.Interpret.KARAKA_OF_HOUSE[h]) || [];
-      var kCell = td(
-        karakas.length ? karakas.map(function (p) { return PLANET_SYMBOL[p] + ' ' + p; }).join(', ') : '—',
-        'col-left' + (karakas.length ? '' : ' dim')
-      );
+      // A karaka sitting in its own house helps it.
+      var kCell = td(karakas.length ? '' : '—', 'col-left' + (karakas.length ? '' : ' dim'));
+      karakas.forEach(function (p, i) {
+        if (i) kCell.appendChild(document.createTextNode(', '));
+        var ks = kCell.appendChild(spanText(PLANET_SYMBOL[p] + ' ' + p));
+        if (result.planets[p].signIndex === signIdx) hhPaint(ks, 'help', 'The karaka sits in the house');
+      });
       kCell.title = 'Karaka' + (karakas.length > 1 ? 's' : '') + ' (natural significator' +
         (karakas.length > 1 ? 's' : '') + ') of house ' + h;
       tr.appendChild(kCell);
 
       // Pairwise relationships among co-tenants, aligned line-for-line
       var pairs = housePairs(occupants, result);
-      tr.appendChild(relLinesCell(pairs, 'natural'));
-      tr.appendChild(relLinesCell(pairs, 'compound'));
+      tr.appendChild(relLinesCell(pairs, 'natural', true));
+      tr.appendChild(relLinesCell(pairs, 'compound', true));
 
       // Aspects received — each aspecting planet with the sign and house it sits
       // in, and the aspect number, which is what tells a 3rd aspect from a 7th.
@@ -2265,6 +2363,23 @@
           no.className = 'asp-no';
           no.textContent = a.aspect + suffix(a.aspect);
           wrap.appendChild(head); wrap.appendChild(where); wrap.appendChild(no);
+          // Qualified by the aspecting planet's compound relationship to each
+          // occupant, or to the house lord when the house is empty (its own
+          // sign when it is that lord).
+          var targets = occupants.length ? occupants : [E.SIGN_LORDS[signIdx]];
+          targets.forEach(function (t) {
+            var line = document.createElement('span');
+            line.className = 'asp-rel';
+            var key = SHORT[a.planet] + '→' + SHORT[t] + (occupants.length ? '' : ' (lord)') + ': ';
+            line.appendChild(spanText(key, 'pair-key'));
+            var rel = t === a.planet ? null : result.relationships[a.planet] && result.relationships[a.planet][t];
+            var val = t === a.planet ? 'Own sign' : rel ? rel.panchadha : '—';
+            line.title = t === a.planet ? a.planet + ' aspects its own sign'
+              : a.planet + ' regards ' + t + (rel ? ': naisargika ' + rel.natural.toLowerCase() + ' + tatkalika ' +
+                rel.temporary.toLowerCase() + ' = panchadha ' + rel.panchadha : ': not defined');
+            hhPaint(line.appendChild(spanText(val)), hhRelKind(val), line.title);
+            wrap.appendChild(line);
+          });
           aCell.appendChild(wrap);
         });
         aCell.title = asp.map(function (a) {
@@ -2385,9 +2500,29 @@
     });
   }
 
+  // Minimums in the Strength tables: each value carries its own in brackets
+  // underneath, and each header the range across the rows (a single figure
+  // when every row shares it). The base header text is kept so a re-render
+  // doesn't stack brackets.
+  function hhMinTag(cell, text) {
+    cell.appendChild(spanText('(' + text + ')', 'cell-min'));
+    return cell;
+  }
+  function hhHeadMin(tableId, idx, values, unit) {
+    var th = document.querySelectorAll('#' + tableId + ' thead th')[idx];
+    if (!th) return;
+    if (!th.dataset.base) th.dataset.base = th.textContent;
+    var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
+    var fmt = function (v) { return String(Math.round(v * 100) / 100) + (unit || ''); };
+    th.textContent = th.dataset.base + ' (' + (lo === hi ? fmt(lo) : fmt(lo) + '–' + fmt(hi)) + ')';
+    th.title = 'Minimum' + (lo === hi ? '' : ', across the rows') + '; each row’s own is under its value';
+  }
+
   function renderShadbala(sb) {
     var tbody = document.querySelector('#shadbalaTable tbody');
     tbody.innerHTML = '';
+    var MIN = window.Interpret.SB_MIN;
+    var why = function (v, m) { return v >= m ? 'At or above its minimum (' + m + ')' : 'Below its minimum (' + m + ')'; };
     sb.grahas.slice().sort(function (x, y) { return sb.results[x].rank - sb.results[y].rank; }).forEach(function (g) {
       var r = sb.results[g];
       var tr = document.createElement('tr');
@@ -2404,9 +2539,15 @@
         nameCell.appendChild(yFlag);
       }
       tr.appendChild(nameCell);
-      tr.appendChild(td(num(r.total), 'total-cell'));
+      // Each figure against its classical minimum: at or above helps, below
+      // hurts; Drik by its sign; Naisargika (fixed per planet) stays plain.
+      var tMin = r.required * 60;
+      var totalCell = tr.appendChild(td(num(r.total), 'total-cell'));
+      hhPaint(totalCell.firstChild, hhVersus(r.total, tMin), why(r.total, tMin));
+      hhMinTag(totalCell, tMin);
 
-      var pctCell = td(Math.round(r.percent) + '%', 'pct-cell ' + (r.meetsMinimum ? 'pct-strong' : 'pct-weak'));
+      var pctCell = td(Math.round(r.percent) + '%', 'pct-cell');
+      hhPaint(pctCell.firstChild, hhVersus(r.percent, 100), r.meetsMinimum ? 'Meets its Shadbala minimum' : 'Short of its Shadbala minimum');
       var bar = document.createElement('span');
       bar.className = 'pct-bar';
       var fill = document.createElement('i');
@@ -2415,18 +2556,33 @@
       bar.appendChild(fill);
       pctCell.appendChild(bar);
       pctCell.title = g + ': ' + num(r.rupa) + ' Rūpa vs ' + r.required + ' required (rank ' + r.rank + ' of 7)';
+      hhMinTag(pctCell, '100%');
       tr.appendChild(pctCell);
 
-      tr.appendChild(td(num(r.sthana)));
-      tr.appendChild(td(num(r.dig)));
-      tr.appendChild(td(num(r.kala)));
-      tr.appendChild(td(num(r.chesta)));
+      ['sthana', 'dig', 'kala', 'chesta'].forEach(function (k) {
+        var c = tr.appendChild(td(num(r[k])));
+        hhPaint(c.firstChild, hhVersus(r[k], MIN[k][g]), why(r[k], MIN[k][g]));
+        hhMinTag(c, MIN[k][g]);
+      });
       tr.appendChild(td(num(r.naisargika)));
-      tr.appendChild(td(num(r.drik)));
-      tr.appendChild(td(num(r.rupa)));
-      tr.appendChild(td(r.meetsMinimum ? '✓' : '—', r.meetsMinimum ? 'min-yes' : 'min-no'));
+      var drikCell = tr.appendChild(td(num(r.drik)));
+      hhPaint(drikCell.firstChild, hhSigned(r.drik), r.drik > 0 ? 'Net aspects positive' : 'Net aspects negative');
+      var rupaCell = tr.appendChild(td(num(r.rupa)));
+      hhPaint(rupaCell.firstChild, hhVersus(r.rupa, r.required), why(r.rupa, r.required));
+      hhMinTag(rupaCell, r.required);
+      var minCell = tr.appendChild(td(r.meetsMinimum ? '✓' : '—'));
+      hhPaint(minCell.firstChild, r.meetsMinimum ? 'help' : 'hurt', r.meetsMinimum ? 'Meets its minimum' : 'Short of its minimum');
       tbody.appendChild(tr);
     });
+    var req = sb.grahas.map(function (g) { return sb.results[g].required; });
+    var minsOf = function (k) { return sb.grahas.map(function (g) { return MIN[k][g]; }); };
+    hhHeadMin('shadbalaTable', 1, req.map(function (v) { return v * 60; }));
+    hhHeadMin('shadbalaTable', 2, [100], '%');
+    hhHeadMin('shadbalaTable', 3, minsOf('sthana'));
+    hhHeadMin('shadbalaTable', 4, minsOf('dig'));
+    hhHeadMin('shadbalaTable', 5, minsOf('kala'));
+    hhHeadMin('shadbalaTable', 6, minsOf('chesta'));
+    hhHeadMin('shadbalaTable', 9, req);
 
     var sBody = document.querySelector('#sthanaTable tbody');
     sBody.innerHTML = '';
@@ -2434,7 +2590,10 @@
       var d = sb.results[g].sthanaDetail;
       var tr = document.createElement('tr');
       tr.appendChild(td(PLANET_SYMBOL[g] + ' ' + g));
-      tr.appendChild(td(num(d.total), 'total-cell'));
+      var sMin = MIN.sthana[g];
+      var sTot = tr.appendChild(td(num(d.total), 'total-cell'));
+      hhPaint(sTot.firstChild, hhVersus(d.total, sMin), why(d.total, sMin));
+      hhMinTag(sTot, sMin);
       tr.appendChild(td(num(d.uchcha)));
       tr.appendChild(td(num(d.saptavargaja)));
       tr.appendChild(td(num(d.ojhayugma)));
@@ -2442,6 +2601,7 @@
       tr.appendChild(td(num(d.drekkana)));
       sBody.appendChild(tr);
     });
+    hhHeadMin('sthanaTable', 1, minsOf('sthana'));
 
     var kBody = document.querySelector('#kalaTable tbody');
     kBody.innerHTML = '';
@@ -2450,12 +2610,22 @@
       var d = sb.results[g].kalaDetail;
       var tr = document.createElement('tr');
       tr.appendChild(td(PLANET_SYMBOL[g] + ' ' + g));
-      tr.appendChild(td(num(d.total), 'total-cell'));
+      // The total and Ayana have minimums; the other parts have none.
+      var kMin = MIN.kala[g], aMin = MIN.ayana[g];
+      var kTot = tr.appendChild(td(num(d.total), 'total-cell'));
+      hhPaint(kTot.firstChild, hhVersus(d.total, kMin), why(d.total, kMin));
+      hhMinTag(kTot, kMin);
       kKeys.forEach(function (k) {
-        tr.appendChild(td(num(d[k]), d[k] === 0 ? 'dim' : ''));
+        var c = tr.appendChild(td(num(d[k]), d[k] === 0 ? 'dim' : ''));
+        if (k === 'ayana') {
+          hhPaint(c.firstChild, hhVersus(d[k], aMin), why(d[k], aMin));
+          hhMinTag(c, aMin);
+        }
       });
       kBody.appendChild(tr);
     });
+    hhHeadMin('kalaTable', 1, minsOf('kala'));
+    hhHeadMin('kalaTable', 9, minsOf('ayana'));
 
     var ctx = sb.context;
     var ctxBox = document.getElementById('kalaContext');
@@ -2473,37 +2643,61 @@
   // Drishti), so it is computed here from the two pieces already on hand
   // rather than inside window.Shadbala.compute() itself — same division of
   // labour as everything else that reads both result and sb together.
-  function renderBhavaBala(result, sb) {
-    var tbody = document.querySelector('#bhavaBalaTable tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
+  function computeBhava(result, sb) {
     var longitudes = {};
     sb.grahas.forEach(function (g) { longitudes[g] = result.planets[g].longitude; });
-    var bhava = window.Shadbala.bhavaBala({
+    return window.Shadbala.bhavaBala({
       ascSign: result.ascendant.signIndex,
       results: sb.results,
       longitudes: longitudes,
       beneficMap: sb.context.beneficMap,
       ascLon: result.ascendant.longitude, mcLon: sb.context.midheaven, isDay: sb.context.isDay
     });
+  }
+  function renderBhavaBala(result, sb) {
+    var tbody = document.querySelector('#bhavaBalaTable tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    var bhava = computeBhava(result, sb);
     var houses = [1,2,3,4,5,6,7,8,9,10,11,12].sort(function (a, b) {
       return bhava[b].total - bhava[a].total;
     });
+    var benches = [], lordMins = [];
     houses.forEach(function (house) {
       var b = bhava[house];
       var tr = document.createElement('tr');
+      // Against the same benchmark the Influence Engine uses (the lord's
+      // Shadbala minimum plus a mid-range Bhava Dig); the lord's share against
+      // its own minimum; Dig 40+ helps and 20 or less hurts; the signed parts
+      // by their sign.
+      var lordMin = sb.results[b.lord].required * 60;
+      var bench = lordMin + window.Interpret.HOUSE_DIG_MID;
+      benches.push(bench); lordMins.push(lordMin);
+      var benchWhy = b.total >= bench ? 'At or above the benchmark (' + bench + ')' : 'Below the benchmark (' + bench + ')';
       tr.appendChild(td('House ' + house));
-      tr.appendChild(td(num(b.total), 'total-cell'));
-      tr.appendChild(td(num(b.rupa)));
+      var tCell = tr.appendChild(td(num(b.total), 'total-cell'));
+      hhPaint(tCell.firstChild, hhVersus(b.total, bench), benchWhy);
+      hhMinTag(tCell, bench);
+      var rCell = tr.appendChild(td(num(b.rupa)));
+      hhPaint(rCell.firstChild, hhVersus(b.total, bench), benchWhy);
+      hhMinTag(rCell, num(bench / 60));
       tr.appendChild(td(E.SIGNS[b.sign]));
       tr.appendChild(td(b.lord));
-      tr.appendChild(td(num(b.adhipati)));
-      tr.appendChild(td(num(b.dig)));
-      tr.appendChild(td(num(b.drishti)));
-      tr.appendChild(td(num(b.occupation, 0)));
-      tr.appendChild(td(num(b.dayNight, 0)));
+      var aCell = tr.appendChild(td(num(b.adhipati)));
+      hhPaint(aCell.firstChild, hhVersus(b.adhipati, lordMin),
+        b.adhipati >= lordMin ? 'Lord at or above its minimum (' + lordMin + ')' : 'Lord below its minimum (' + lordMin + ')');
+      hhMinTag(aCell, lordMin);
+      hhPaint(tr.appendChild(td(num(b.dig))).firstChild, b.dig >= 40 ? 'help' : b.dig <= 20 ? 'hurt' : null,
+        b.dig >= 40 ? '40 or more of 60' : '20 or less of 60');
+      hhPaint(tr.appendChild(td(num(b.drishti))).firstChild, hhSigned(b.drishti), b.drishti > 0 ? 'Net aspects positive' : 'Net aspects negative');
+      hhPaint(tr.appendChild(td(num(b.occupation, 0))).firstChild, hhSigned(b.occupation),
+        b.occupation > 0 ? 'Jupiter or Mercury in the house' : 'Sun, Mars or Saturn in the house');
+      hhPaint(tr.appendChild(td(num(b.dayNight, 0))).firstChild, b.dayNight > 0 ? 'help' : null, 'Full Day-Night credit');
       tbody.appendChild(tr);
     });
+    hhHeadMin('bhavaBalaTable', 1, benches);
+    hhHeadMin('bhavaBalaTable', 2, benches.map(function (v) { return Math.round(v / 60 * 100) / 100; }));
+    hhHeadMin('bhavaBalaTable', 5, lordMins);
   }
 
   // Viparita Raja Yoga note (Strength tab) — Influence Engine research item
@@ -2561,6 +2755,7 @@
         });
         // the Periods tab's tree can only be centred once it is on screen
         scrollTreeToSelection();
+        ensureRemedyCalendar();
       });
     });
   }
@@ -2639,22 +2834,11 @@
     function addMin(cell, text) {
       cell.appendChild(spanText('(' + text + ')', 's2-min'));
     }
-    // Helping values go green and hurting ones red, with the reason on hover;
-    // neutral ones stay plain. A bare text value is wrapped first so only the
-    // value is tinted, not the minimum in brackets under it.
-    function paint(el, kind, why) {
-      if (!el || !kind) return;
-      if (el.nodeType === 3) {
-        var s = document.createElement('span');
-        el.parentNode.replaceChild(s, el);
-        s.appendChild(el);
-        el = s;
-      }
-      el.classList.add(kind === 'help' ? 's2-help' : 's2-hurt');
-      if (why) el.title = why;
-    }
-    function versus(v, min) { return v >= min ? 'help' : 'hurt'; }
-    function signed(v) { return v > 0 ? 'help' : v < 0 ? 'hurt' : null; }
+    // The shared helping / hurting colours. The Shadbala, Bhava Bala and
+    // Houses rows arrive already coloured from their tables; painting them
+    // again here is harmless, and colours the Natal-only parts (the ranks, the
+    // Total buttons, the Planets row).
+    var paint = hhPaint, versus = hhVersus, signed = hhSigned;
     // A Total cell that shows and hides the breakdown row under it. The tree
     // is a copy, so opening its branches here leaves the narrative's alone.
     function treeToggle(cell, tree, cols) {
@@ -2680,7 +2864,13 @@
       tw.className = 'table-wrap';
       var t = document.createElement('table');
       var hr = document.createElement('tr');
-      headers.forEach(function (h) { var c = th(h[0]); if (h[1]) c.title = h[1]; hr.appendChild(c); });
+      // a newline in a label splits the header over two lines
+      headers.forEach(function (h) {
+        var c = th('');
+        h[0].split('\n').forEach(function (part, i) { if (i) c.appendChild(document.createElement('br')); c.appendChild(document.createTextNode(part)); });
+        if (h[1]) c.title = h[1];
+        hr.appendChild(c);
+      });
       var thead = document.createElement('thead');
       thead.appendChild(hr);
       t.appendChild(thead);
@@ -2689,6 +2879,7 @@
       t.appendChild(tbody);
       tw.appendChild(t);
       wrap.appendChild(tw);
+      return tw;
     }
 
     if (entry.kind === 'planet') {
@@ -2698,75 +2889,36 @@
         pRow = pRow.cloneNode(true);
         while (pRow.cells.length > 8) pRow.deleteCell(-1); // drop the two relationship columns
 
-        // Planet: its house, and the flags riding on its name.
-        var h = p.house, hk = null, hWhy = '';
-        if (!benefic(name) && [3, 6, 11].indexOf(h) >= 0) { hk = 'help'; hWhy = 'A natural malefic in the ' + ordinalWord(h) + ', an Upachaya house'; }
-        else if (name === 'Saturn' && h === 8) { hk = 'help'; hWhy = 'Saturn in the 8th supports longevity'; }
-        else if (name === 'Ketu' && h === 12) { hk = 'help'; hWhy = 'Ketu in the 12th supports liberation'; }
-        else if ([6, 8, 12].indexOf(h) >= 0) { hk = 'hurt'; hWhy = 'The ' + ordinalWord(h) + ' is a Dusthana'; }
-        else if ([1, 4, 7, 10].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Kendra'; }
-        else if ([5, 9].indexOf(h) >= 0) { hk = 'help'; hWhy = 'The ' + ordinalWord(h) + ' is a Trikona'; }
-        paint(pRow.cells[0].querySelector('.gr-where'), hk, hWhy);
-        [].forEach.call(pRow.cells[0].querySelectorAll('.name-dg-flag'), function (f) {
-          var kind = /dg-deb/.test(f.className) ? 'hurt' : 'help';
-          f.className = 'dg name-dg-flag';
-          paint(f, kind, f.title);
-        });
-
-        // Owns: each owned sign over its house, one sign to a line.
-        var ownCell = pRow.cells[1];
-        var owned = (window.Shadbala.OWN_SIGNS[name] || []);
-        if (owned.length) {
-          ownCell.textContent = '';
-          owned.forEach(function (sIdx, i) {
-            var oh = ((sIdx - ascSign + 12) % 12) + 1;
-            var s = document.createElement('span');
-            s.className = 's2-own';
-            if (owned.length > 1) s.textContent = E.SIGNS[sIdx] + ' (' + oh + ')';
-            else { s.textContent = E.SIGNS[sIdx]; s.appendChild(document.createElement('br')); s.appendChild(document.createTextNode('(' + oh + ')')); }
-            ownCell.appendChild(s);
-            if (oh === 1) paint(s, 'help', 'Rules the lagna');
-            else if (oh === 5 || oh === 9) paint(s, 'help', 'Rules the ' + ordinalWord(oh) + ', a Trikona');
-            else if ([6, 8, 12].indexOf(oh) >= 0) paint(s, 'hurt', 'Rules the ' + ordinalWord(oh) + ', a Dusthana');
-          });
-        }
-
-        // Dignity: own sign or a friend's helps, an enemy's hurts.
-        var dCell = pRow.cells[2];
-        var tier = relDignityTier(name, p, result);
-        dCell.className = dCell.className.replace(/\breldig-\S+/g, '');
-        if (tier) {
-          var dk = ['own', 'bf', 'f'].indexOf(tier.k) >= 0 ? 'help' : ['e', 'we'].indexOf(tier.k) >= 0 ? 'hurt' : null;
-          paint(dCell.firstChild, dk, tier.t);
+        // The Planets tab has already coloured this row (hhPaintPlanetRow);
+        // here it only takes the side tab's two-line shape.
+        // Owns: one owned sign over its house, two owned signs one per line.
+        var ownSpans = pRow.cells[1].querySelectorAll('.own-sign');
+        [].forEach.call(pRow.cells[1].childNodes, function (n) { if (n.nodeType === 3) n.textContent = ''; });
+        if (ownSpans.length === 1) {
+          var ownM = /^(.+) (\(\d+\))$/.exec(ownSpans[0].textContent);
+          if (ownM) {
+            ownSpans[0].textContent = ownM[1];
+            ownSpans[0].appendChild(document.createElement('br'));
+            ownSpans[0].appendChild(document.createTextNode(ownM[2]));
+          }
         }
 
         // Sign over its qualities.
         var signName = pRow.cells[3].firstChild;
         if (signName && signName.nextSibling) pRow.cells[3].insertBefore(document.createElement('br'), signName.nextSibling);
 
-        // Avasthas in English (Sanskrit on hover), coloured by state, two and two.
-        var AV_HELP = { Jagrat: 1, Yuva: 1, Dipta: 1, Swastha: 1, Pramudita: 1, Shanta: 1 };
-        var AV_HURT = { Sushupti: 1, Bala: 1, Vriddha: 1, Mrita: 1, Dina: 1, Duhkhita: 1, Khala: 1, Vikala: 1, Kopa: 1 };
+        // Avasthas in English (Sanskrit on hover), two and two.
         [].forEach.call(pRow.cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi, .av-shayanadi'), function (s) {
           var skt = s.textContent, en = AVASTHA_ENGLISH[skt];
           if (!en) return;
-          s.className = s.className.replace(/\bav-jss-\S+/g, '');
           s.textContent = en;
-          var shayanadi = /av-shayanadi/.test(s.className);
-          paint(s, shayanadi ? null : AV_HELP[skt] ? 'help' : AV_HURT[skt] ? 'hurt' : null, skt);
-          s.title = skt;
+          s.title = skt + (s.title && s.title !== skt ? ': ' + s.title : '');
         });
         var avSeps = pRow.cells[4].querySelectorAll('.sign-combo-sep');
         if (avSeps.length === 3) avSeps[1].parentNode.replaceChild(document.createElement('br'), avSeps[1]);
 
-        // SB %: meets its minimum or not.
-        var pctCell = pRow.cells[5];
-        if (pctCell.textContent !== '—') {
-          pctCell.classList.remove('pct-strong', 'pct-weak');
-          var rr = lastSb && lastSb.results[name];
-          if (rr) paint(pctCell.firstChild, rr.meetsMinimum ? 'help' : 'hurt', rr.meetsMinimum ? 'Meets its Shadbala minimum' : 'Short of its Shadbala minimum');
-          addMin(pctCell, '100%');
-        }
+        // SB %: its minimum underneath.
+        if (pRow.cells[5].textContent !== '—') addMin(pRow.cells[5], '100%');
         table([['Planet', 'Planet (Sign, House)'], ['Owns', 'Ownership'], ['Dignity'], ['Sign', 'Sign (Duality, Modality, Element)'],
           ['Avastha'], ['SB %', 'Shadbala %'], ['Deg', 'Degrees'], ['Decl', 'Declination']], [pRow]);
       }
@@ -2775,6 +2927,8 @@
       var sRow = r && trees.planet && sourceRow('shadbalaTable', function (t) { return t.indexOf(name) >= 0; });
       if (sRow) {
         sRow = sRow.cloneNode(true);
+        // the Strength tab's own minimums give way to this row's (added below)
+        [].forEach.call(sRow.querySelectorAll('.cell-min'), function (m) { m.remove(); });
         sRow.deleteCell(-1); // the Min ✓ column, now in brackets on each figure
         sRow.deleteCell(9);  // Rūpa: the Total in Virupas already says it
         sRow.cells[2].classList.remove('pct-strong', 'pct-weak');
@@ -2812,6 +2966,7 @@
       var part = function (prefix) { return hTree.c.filter(function (c) { return c.n.indexOf(prefix) === 0; })[0]; };
       var adh = part('Bhavadhipati'), bDig = part('Bhava Digbala'), bDr = part('Bhava Drishti'), bOcc = part('Occupation'), bDn = part('Day-Night');
       bRow = bRow.cloneNode(true);
+      [].forEach.call(bRow.querySelectorAll('.cell-min'), function (m) { m.remove(); });
       addMin(bRow.cells[1], Math.round(hTree.min));
       paint(bRow.cells[5].firstChild, versus(adh.v, adh.min), adh.v >= adh.min ? 'Lord at or above its minimum' : 'Lord below its minimum');
       addMin(bRow.cells[5], Math.round(adh.min));
@@ -2825,7 +2980,7 @@
       hRankCell.textContent = String(hRank);
       paint(hRankCell.firstChild, hRank <= 4 ? 'help' : hRank >= 9 ? 'hurt' : null, hRank <= 4 ? 'Top four of twelve' : 'Bottom four of twelve');
       hRankCell.appendChild(spanText('(of 12)', 's2-min'));
-      table([['House'], ['Total', 'Against the benchmark: the lord’s Shadbala minimum + 30'],
+      var bhavaTable = table([['House'], ['Total', 'Against the benchmark: the lord’s Shadbala minimum + 30'],
         ['Rank', 'Bhava Bala rank among the twelve houses, by total'], ['Sign'], ['Lord'],
         ['Adhipati', 'Bhavadhipati (the house lord’s Shadbala)'], ['Dig', 'Bhava Dig'], ['Drishti', 'Bhava Drishti'],
         ['Occup', 'Planets in (occupation)'], ['Day/Nt', 'Day-Night']],
@@ -2844,13 +2999,8 @@
         hs.parentNode.removeChild(hs);
         twoLines(hRow.cells[0], hRow.cells[0].textContent.replace(/\s+$/, ''), hsSign);
       }
-      // Class: Kendra and Trikona help, Dusthana and Maraka hurt.
-      [].forEach.call(hRow.cells[1].querySelectorAll('.dg'), function (chip) {
-        var c = chip.textContent;
-        chip.className = 'dg';
-        paint(chip, c === 'Kendra' || c === 'Trikona' ? 'help' : c === 'Dusthana' || c === 'Maraka' ? 'hurt' : null, c + ' house');
-      });
-      // Karakas two to a line; one sitting in the house helps it.
+      // The Houses tab has already coloured this row; the karakas are laid
+      // out again two to a line, one sitting in the house still helping it.
       var kCell = hRow.cells[2];
       var karakas = (window.Interpret.KARAKA_OF_HOUSE && window.Interpret.KARAKA_OF_HOUSE[entry.house]) || [];
       if (karakas.length) {
@@ -2862,24 +3012,10 @@
           if (result.planets[kp].signIndex === houseSign) paint(s, 'help', 'The karaka sits in the house');
         });
       }
-      // Relationships: friends help, enemies hurt.
-      [hRow.cells[3], hRow.cells[4]].forEach(function (cell) {
-        [].forEach.call(cell.querySelectorAll('.r-bf, .r-friend, .r-enemy, .r-we, .r-neutral'), function (s) {
-          var kind = /r-bf|r-friend/.test(s.className) ? 'help' : /r-enemy|r-we/.test(s.className) ? 'hurt' : null;
-          s.className = s.className.replace(/\br-\S+/g, '');
-          paint(s, kind, s.textContent);
-        });
-      });
-      // Aspects: a benefic's helps, a malefic's (the nodes included) hurts.
-      [].forEach.call(hRow.cells[5].querySelectorAll('.asp-item'), function (item) {
-        var who = item.firstChild;
-        if (!who || item.classList.contains('asp-none')) return;
-        var pn = who.textContent.split(' ').pop();
-        if (!result.planets[pn]) return;
-        paint(who, benefic(pn) ? 'help' : 'hurt', benefic(pn) ? 'A natural benefic’s aspect' : 'A natural malefic’s aspect');
-      });
-      table([['House (Pl, Sign)', 'House (Planets, Sign)'], ['Class'], ['Karakas'], ['Nat rel', 'Natural relationship'],
-        ['Cmp rel', 'Compound relationship'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)']], [hRow]);
+      var houseTable = table([['House (Pl, Sign)', 'House (Planets, Sign)'], ['Class'], ['Karakas'], ['Tenants\nNat rel', 'Tenants: natural relationship between the planets sharing the house'],
+        ['Tenants\nCmp rel', 'Tenants: compound relationship between the planets sharing the house'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)']], [hRow]);
+      // The house itself comes before its strength.
+      if (bhavaTable) wrap.insertBefore(houseTable, bhavaTable);
     }
     return wrap;
   }
@@ -2892,7 +3028,7 @@
     }
     var occ = /^its occupant (\w+) /.exec(t);
     if (occ) return entry.kind === 'planet' && occ[1] === entry.key;
-    return /^its karaka | aspects it from house /.test(t);
+    return /^its karaka /.test(t);
   }
   // The Natal tab's Shadbala and Bhava Bala cards: only those helping and
   // hurting factors that the colours in the rows above don't already show.
@@ -3683,8 +3819,6 @@
   // the compound relationship both ways, and any connection (sign
   // exchange, conjunction, aspect, dispositor); then the houses the lords
   // share, from the same buildActivation() the Houses Activated table uses.
-  var PL_REL_WORD = { 'Best Friend': 'Best friend', Friend: 'Friend', Neutral: 'Neutral', Enemy: 'Enemy', 'Worst Enemy': 'Bitter enemy' };
-  var PL_REL_TONE = { 'Best Friend': 'good', Friend: 'good', Neutral: 'neutral', Enemy: 'bad', 'Worst Enemy': 'bad' };
   function plFunctional(name, result) {
     var role = window.Interpret.functionalRoleOf(name, result, interpHelpers());
     var info = role.dual ? role.appConvention : role.classical;
@@ -3773,15 +3907,21 @@
         var pl = plPlacement(a, b, result);
         blk.appendChild(line('Placement', [pill(pl.text, pl.tone), ' ' + pl.note]));
         facts.placements.push(pr[0].role + '→' + pr[1].role + ' ' + pl.text);
-        var ra = result.relationships[a] && result.relationships[a][b];
-        var rb = result.relationships[b] && result.relationships[b][a];
-        var fr = [];
-        if (ra && rb && ra.panchadha === rb.panchadha) fr.push(pill(PL_REL_WORD[ra.panchadha], PL_REL_TONE[ra.panchadha]), ' both ways');
-        else {
-          if (ra) fr.push(pill(PL_REL_WORD[ra.panchadha], PL_REL_TONE[ra.panchadha]), ' ' + a + ' sees ' + b + ' ');
-          if (rb) fr.push(pill(PL_REL_WORD[rb.panchadha], PL_REL_TONE[rb.panchadha]), ' ' + b + ' sees ' + a);
-        }
-        blk.appendChild(line('Friendship', fr));
+        // The compound relationship each way, one line per direction, in the
+        // same form as the Houses tab's tenant columns.
+        var rel = [];
+        [[a, b], [b, a]].forEach(function (d) {
+          var r = result.relationships[d[0]] && result.relationships[d[0]][d[1]];
+          var row = document.createElement('div');
+          row.className = 'pl-rel';
+          row.appendChild(spanText(SHORT[d[0]] + '→' + SHORT[d[1]] + ': ', 'pair-key'));
+          var v = row.appendChild(spanText(r ? r.panchadha : '—'));
+          row.title = d[0] + ' regards ' + d[1] + (r ? ': naisargika ' + r.natural.toLowerCase() + ' + tatkalika ' +
+            r.temporary.toLowerCase() + ' = panchadha ' + r.panchadha : ': not defined');
+          hhPaint(v, hhRelKind(r && r.panchadha), row.title);
+          rel.push(row);
+        });
+        blk.appendChild(line('Relationship', rel));
         var conn = plConnections(a, b, result);
         conn.forEach(function (c) { facts.connections.push(c); });
         blk.appendChild(line('Connection', conn.length ? conn.map(function (c) { return pill(c, 'good'); })
@@ -3828,6 +3968,289 @@
     });
     var note = document.getElementById('periodLordsSideNote');
     if (note) note.classList.toggle('hidden', !!(result && lords && lords.length));
+  }
+
+  // ---- Remedies side tab ----
+  // Remedies.evaluate() decides; this only draws. The natal plan is built once
+  // per chart, with verdicts taken outside any dasha period so the paths don't
+  // shift as periods are picked; the period section redraws on each pick. The
+  // transit scan takes about a second, so it waits until the tab is opened.
+  var REMEDY_OPTIONAL_KEY = 'vedicRemedyOptional.v1';
+  var REMEDY_SCAN_DAYS = 1200;
+  var rm = { result: null, sb: null, ctx: null, plan: null, lords: null, flags: null, scanning: false, verdicts: {}, open: {} };
+
+  function rmVerdict(name) {
+    if (!rm.sb || !rm.sb.results) return null;
+    if (!(name in rm.verdicts)) {
+      var fw = window.Interpret.balaFramework({ kind: 'planet', key: name, house: rm.result.planets[name].house },
+        rm.result, rm.sb, interpHelpers(), { activeLords: [], periodLabel: '' });
+      var block = fw && fw.blocks.filter(function (b) { return b.kind === 'narrative' && b.subject === 'planet'; })[0];
+      rm.verdicts[name] = block ? block.verdict : null;
+    }
+    return rm.verdicts[name];
+  }
+  function rmHead(text) { return spanText(text, 'rm-head'); }
+  function rmPill(text, tone) { return spanText(text, 'rm-pill rm-' + tone); }
+  function rmCheck(key, text, title, optional) {
+    var row = document.createElement('label');
+    row.className = 'rm-step' + (optional ? ' rm-opt' : '');
+    var box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = noteFor(key) === '1';
+    box.addEventListener('change', function () { setNote(key, box.checked ? '1' : ''); });
+    row.appendChild(box);
+    row.appendChild(document.createTextNode(' '));
+    row.appendChild(text);
+    if (title) row.title = title;
+    return row;
+  }
+  function rmNotes(name) {
+    var key = 'remedies:notes:' + name;
+    var wrap = document.createElement('details');
+    wrap.className = 'rm-notes';
+    var sum = document.createElement('summary');
+    sum.textContent = 'Notes';
+    wrap.appendChild(sum);
+    var box = document.createElement('textarea');
+    box.className = 'ie-interp-box';
+    box.value = noteFor(key);
+    if (box.value) wrap.open = true;
+    var timer = null;
+    box.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { setNote(key, box.value); }, 400);
+    });
+    wrap.appendChild(box);
+    return wrap;
+  }
+  function rmSyncAllButton() {
+    var btn = document.getElementById('remedyAllBtn');
+    if (!btn) return;
+    var closed = document.querySelector('#remedyPanel .rm-planet:not(.rm-open)');
+    btn.textContent = closed ? 'Show all' : 'Hide all';
+  }
+  function rmPlanetCard(w) {
+    var card = document.createElement('div');
+    card.className = 'rm-card rm-planet';
+    var top = document.createElement('div');
+    top.className = 'rm-top rm-click';
+    var caret = document.createElement('button');
+    caret.type = 'button';
+    caret.className = 'dt-caret';
+    card.__setOpen = function (open) {
+      rm.open[w.name] = open;
+      card.classList.toggle('rm-open', open);
+      caret.textContent = open ? '▾' : '▸';
+      caret.setAttribute('aria-expanded', open ? 'true' : 'false');
+      caret.setAttribute('aria-label', (open ? 'Hide ' : 'Show ') + w.name + ' remedy');
+    };
+    card.__setOpen(!!rm.open[w.name]);
+    top.addEventListener('click', function () {
+      card.__setOpen(!rm.open[w.name]);
+      rmSyncAllButton();
+    });
+    var title = document.createElement('span');
+    title.appendChild(caret);
+    title.appendChild(spanText(w.rank + '. ' + w.name, 'rm-name'));
+    top.appendChild(title);
+    top.appendChild(rmPill('Severity ' + w.score, w.score >= 6 ? 'hurt' : 'mid'));
+    card.appendChild(top);
+    var why = document.createElement('div');
+    why.className = 'rm-why';
+    why.textContent = w.reasons.map(function (r) { return r.text + ' ' + (r.points > 0 ? '+' : '') + r.points; }).join(' · ');
+    card.appendChild(why);
+
+    var path = document.createElement('div');
+    path.className = 'rm-path';
+    path.appendChild(rmPill(w.name, 'hurt'));
+    w.path.links.forEach(function (l) {
+      path.appendChild(spanText(' → ', 'rm-arrow'));
+      var pill = rmPill(l.target, 'good');
+      pill.title = l.kind;
+      path.appendChild(pill);
+    });
+    if (w.path.digHouse) {
+      path.appendChild(spanText(' → ', 'rm-arrow'));
+      var hp = rmPill('H' + w.path.digHouse, 'good');
+      hp.title = 'Direction step: where ' + w.name + ' is at its strongest';
+      path.appendChild(hp);
+    }
+    card.appendChild(path);
+
+    w.steps.forEach(function (s) {
+      var optional = s.type !== 'behaviour';
+      var text = document.createElement('span');
+      text.appendChild(spanText(s.label + ': ', 'rm-tag'));
+      text.appendChild(document.createTextNode(s.text + (optional ? ' (traditional practice)' : '')));
+      card.appendChild(rmCheck('remedies:' + w.name + ':' + s.id, text, s.source, optional));
+    });
+    if (w.guard) card.appendChild(spanText(w.guard, 'rm-guard'));
+    card.appendChild(rmNotes(w.name));
+    return card;
+  }
+  function rmPeriodSection() {
+    var box = document.getElementById('remedyPeriod');
+    var line = document.getElementById('sideRemedyLine');
+    if (!box) return;
+    box.innerHTML = '';
+    if (line) { line.innerHTML = ''; line.classList.add('hidden'); }
+    var pp = rm.lords && rm.lords.length && rm.sb ? window.Remedies.periodPlan(rm.lords, rm.plan, rm.ctx) : null;
+    if (!pp) {
+      box.appendChild(spanText('Period remedies need dasha periods, which a placed chart does not have.', 'rm-why'));
+      return;
+    }
+    box.appendChild(rmHead('Selected period'));
+    var card = document.createElement('div');
+    card.className = 'rm-card';
+    var top = document.createElement('div');
+    top.className = 'rm-top';
+    top.appendChild(spanText(rm.lords.map(function (l) { return l.lord; }).join(' / '), 'rm-name'));
+    top.appendChild(rmPill(pp.main.tier + ': ' + pp.main.aim, pp.main.tone));
+    card.appendChild(top);
+    pp.pairs.forEach(function (x) {
+      var d = document.createElement('div');
+      d.className = 'rm-why';
+      d.textContent = x.upper + ' → ' + x.lower + ': pair score ' + (x.score > 0 ? '+' : '') + x.score +
+        ', ' + x.lower + ' severity ' + x.severity + ', ' + x.tier;
+      card.appendChild(d);
+    });
+    var periodKey = rm.lords.map(function (l) { return l.lord; }).join('-');
+    pp.steps.forEach(function (s) {
+      card.appendChild(rmCheck('remedies:period:' + periodKey + ':' + s.id, spanText(s.text)));
+    });
+    if (pp.path) card.appendChild(spanText('Follow path ' + pp.path + ' above.', 'rm-guard'));
+    box.appendChild(card);
+
+    box.appendChild(rmHead('Antardashas in this Mahadasha'));
+    var list = document.createElement('div');
+    list.className = 'rm-card';
+    window.Remedies.antardashaTiers(rm.lords[0].lord, rm.plan, rm.ctx).forEach(function (a) {
+      var row = document.createElement('div');
+      row.className = 'rm-ad';
+      row.appendChild(spanText(a.upper + ' / ' + a.lower, a.lower === pp.main.lower ? 'rm-name' : ''));
+      row.appendChild(spanText(fmtDate(a.start) + ' – ' + fmtDate(a.end), 'rm-why'));
+      row.appendChild(rmPill(a.tier + ': ' + a.aim, a.tone));
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+
+    if (line) {
+      line.appendChild(spanText('Remedies: ', 'rm-tag'));
+      line.appendChild(rmPill(pp.main.tier + ': ' + pp.main.aim, pp.main.tone));
+      if (pp.steps[0]) line.appendChild(document.createTextNode(' ' + pp.steps[0].text));
+      line.classList.remove('hidden');
+    }
+  }
+  function rmCalendarSection() {
+    var box = document.getElementById('remedyCalendar');
+    if (!box) return;
+    box.innerHTML = '';
+    if (!rm.sb) return;
+    box.appendChild(rmHead('Calendar: transit flags'));
+    if (!rm.flags) { box.appendChild(spanText('Scanning transits…', 'rm-why')); return; }
+    var card = document.createElement('div');
+    card.className = 'rm-card';
+    if (!rm.flags.length) card.appendChild(spanText('No flags in this window.', 'rm-why'));
+    rm.flags.forEach(function (f) {
+      var row = document.createElement('div');
+      row.className = 'rm-cal';
+      row.appendChild(spanText(fmtDate(f.date), 'rm-name'));
+      row.appendChild(spanText(f.event, 'rm-event'));
+      row.appendChild(spanText(f.advice, 'rm-why'));
+      card.appendChild(row);
+    });
+    box.appendChild(card);
+  }
+  // Runs once the tab is on screen, then keeps its result for the chart.
+  function ensureRemedyCalendar() {
+    var panel = document.getElementById('sidePanel-remedies');
+    if (!rm.result || !rm.sb || rm.flags || rm.scanning || !panel || panel.classList.contains('hidden')) return;
+    rm.scanning = true;
+    var forResult = rm.result;
+    setTimeout(function () {
+      var flags = window.Remedies.transitFlags({ engine: E, result: forResult, weakHouses: rm.plan.houses,
+        from: new Date(), days: REMEDY_SCAN_DAYS, latDeg: 0, lonDeg: 0, nodeType: forResult.nodeType });
+      if (rm.result !== forResult) return;
+      rm.flags = flags;
+      rm.scanning = false;
+      rmCalendarSection();
+    }, 30);
+  }
+  function rmDraw() {
+    var box = document.getElementById('remedyPanel');
+    var note = document.getElementById('remedyNote');
+    if (!box) return;
+    box.innerHTML = '';
+    if (note) note.classList.toggle('hidden', !!rm.plan);
+    if (!rm.plan) return;
+    var optional = prefGet(REMEDY_OPTIONAL_KEY) === '1';
+    box.classList.toggle('rm-show-opt', optional);
+
+    var opt = document.createElement('label');
+    opt.className = 'rm-toggle';
+    var toggle = document.createElement('input');
+    toggle.type = 'checkbox';
+    toggle.checked = optional;
+    toggle.addEventListener('change', function () {
+      prefSet(REMEDY_OPTIONAL_KEY, toggle.checked ? '1' : '0');
+      box.classList.toggle('rm-show-opt', toggle.checked);
+    });
+    opt.appendChild(toggle);
+    opt.appendChild(document.createTextNode(' Show service and devotional steps'));
+    box.appendChild(opt);
+
+    // Every remedy starts hidden, down to its planet and severity; each opens
+    // on its own, like a row of the dasha tree, or all together from here.
+    var head = rmHead('Natal weaknesses');
+    var allBtn = document.createElement('button');
+    allBtn.type = 'button';
+    allBtn.id = 'remedyAllBtn';
+    allBtn.className = 'folders-toggle rm-hide-btn';
+    allBtn.addEventListener('click', function () {
+      var cards = box.querySelectorAll('.rm-planet');
+      var open = [].some.call(cards, function (c) { return !c.classList.contains('rm-open'); });
+      [].forEach.call(cards, function (c) { c.__setOpen(open); });
+      rmSyncAllButton();
+    });
+    head.appendChild(allBtn);
+    box.appendChild(head);
+    if (!rm.plan.weak.length) box.appendChild(spanText('No weak planets found by these rules.', 'rm-why'));
+    rm.plan.weak.forEach(function (w) { box.appendChild(rmPlanetCard(w)); });
+    rmSyncAllButton();
+
+    if (rm.plan.houses.length) {
+      box.appendChild(rmHead('Weak houses'));
+      var grid = document.createElement('div');
+      grid.className = 'rm-houses';
+      rm.plan.houses.forEach(function (h) {
+        var c = document.createElement('div');
+        c.className = 'rm-house';
+        c.appendChild(spanText('H' + h.house + ' ' + h.sign, 'rm-name'));
+        c.appendChild(spanText('Rank ' + h.rank + ', Dig ' + num(h.dig), 'rm-why'));
+        c.appendChild(spanText('Lord ' + h.lord + (h.path ? ': path ' + h.path : ''), 'rm-why'));
+        grid.appendChild(c);
+      });
+      box.appendChild(grid);
+    }
+    var period = document.createElement('div');
+    period.id = 'remedyPeriod';
+    box.appendChild(period);
+    var cal = document.createElement('div');
+    cal.id = 'remedyCalendar';
+    box.appendChild(cal);
+    rmPeriodSection();
+    rmCalendarSection();
+    ensureRemedyCalendar();
+  }
+  function renderRemedies(result, sb, lords) {
+    if (!window.Remedies) return;
+    rm.lords = lords;
+    if (rm.result === result && rm.sb === sb) { rmPeriodSection(); return; }
+    rm.result = result; rm.sb = sb; rm.flags = null; rm.scanning = false; rm.verdicts = {}; rm.open = {};
+    rm.ctx = { result: result, sb: sb, bhava: sb ? computeBhava(result, sb) : null, H: interpHelpers(),
+      Interpret: window.Interpret, data: window.RemedyData, verdictOf: sb ? rmVerdict : null };
+    rm.plan = window.Remedies.evaluate(rm.ctx);
+    rmDraw();
   }
 
   function renderActivation(result, lords) {
@@ -4176,6 +4599,7 @@
 
       renderActivation(result, sel.lords);
       renderPeriodLords(result, sel.lords);
+      renderRemedies(result, sb, sel.lords);
 
       // Keep the South Indian chart's Dasha-activation overlay (if enabled)
       // in sync with whatever's selected here. Uses this closure's own
@@ -5132,6 +5556,46 @@
     var m = Math.round((abs - h) * 60);
     return 'UTC' + sign + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
   }
+
+  // ---- GeoVision chart files (.xml) ----
+  // GeoVision saves one chart per file: BirthInfo holds the name, the birth
+  // moment as a Julian Day number of the LOCAL clock time, and the place.
+  // Its signs run the other way from this app's: east longitudes and zones
+  // east of Greenwich are negative. DST is the hours the clocks were ahead
+  // (India's 1942–45 war time is DST 1). Files are UTF-16 with a byte-order
+  // mark, or plain UTF-8.
+  function decodeGeoVisionBytes(buf) {
+    var b = new Uint8Array(buf);
+    var enc = b[0] === 0xFF && b[1] === 0xFE ? 'utf-16le'
+      : b[0] === 0xFE && b[1] === 0xFF ? 'utf-16be'
+      : b.length > 1 && b[1] === 0 ? 'utf-16le' : 'utf-8';
+    return new TextDecoder(enc).decode(b);
+  }
+  function parseGeoVision(text) {
+    var doc = new DOMParser().parseFromString(text.replace(/^﻿/, ''), 'text/xml');
+    var info = doc.getElementsByTagName('BirthInfo')[0];
+    if (!info || doc.getElementsByTagName('parsererror').length) throw new Error('This is not a GeoVision chart file.');
+    function val(tag) { var el = info.getElementsByTagName(tag)[0]; return el ? el.textContent.trim() : ''; }
+    var jd = parseFloat(val('BirthDate'));
+    var lat = parseFloat(val('Latitude')), lon = parseFloat(val('Longitude'));
+    var zone = parseFloat(val('TimeZone')) || 0, dst = parseFloat(val('DST')) || 0;
+    if (!isFinite(jd) || !isFinite(lat) || !isFinite(lon)) throw new Error('The file has no birth date or place.');
+    // Julian Day of the local clock, to the nearest minute, read back as a
+    // calendar date and time (UTC fields used purely as a clock).
+    var clock = new Date(Math.round((jd - 2440587.5) * 1440) * 60000);
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    var city = val('City'), country = val('Country');
+    return {
+      name: [val('FirstName'), val('LastName')].filter(Boolean).join(' '),
+      date: clock.getUTCFullYear() + '-' + pad(clock.getUTCMonth() + 1) + '-' + pad(clock.getUTCDate()),
+      time: pad(clock.getUTCHours()) + ':' + pad(clock.getUTCMinutes()),
+      offset: Math.round((-zone + dst) * 60) / 60,
+      dst: dst,
+      lat: lat.toFixed(4),
+      lon: (-lon).toFixed(4),
+      place: [city, country].filter(Boolean).join(', ')
+    };
+  }
   // Short zone abbreviation for the collapsed birth-details summary. A UTC
   // offset alone doesn't uniquely identify a named zone (several zones can
   // share +05:30, say), so this only special-cases the one abbreviation this
@@ -5915,6 +6379,7 @@
     renderSimSummary(result);
     renderFacts(result);
     renderInfluenceEngineTab(result, null);
+    renderRemedies(result, null, null);
     resetResearch();
     renderPlanetTable(result, null);
     renderHouseTable(result);
@@ -6687,6 +7152,41 @@
       if (force) closeNameBox();
     }
 
+    // Import a GeoVision chart file into the form, the way a picked saved
+    // profile fills it; Generate Chart then draws it (and saves it by name).
+    var importBtn = document.getElementById('importGeoBtn');
+    var importFile = document.getElementById('importGeoFile');
+    if (importBtn && importFile) {
+      importBtn.addEventListener('click', function () { importFile.value = ''; importFile.click(); });
+      importFile.addEventListener('change', function () {
+        var file = importFile.files && importFile.files[0];
+        if (!file) return;
+        file.arrayBuffer().then(function (buf) {
+          var g = parseGeoVision(decodeGeoVisionBytes(buf));
+          var birthBtn = document.querySelector('[data-entry="birth"]');
+          if (birthBtn && !birthBtn.classList.contains('on')) birthBtn.click();
+          // An offset the list lacks (e.g. local mean time) is added for it.
+          var sel = document.getElementById('offsetInput');
+          var off = String(g.offset);
+          if (!sel.querySelector('option[value="' + off + '"]')) {
+            var opt = document.createElement('option');
+            opt.value = off;
+            opt.textContent = offsetLabel(g.offset) + '  (from file)';
+            sel.appendChild(opt);
+          }
+          applyProfile({ name: g.name, date: g.date, time: g.time, offset: off,
+            place: g.place, lat: g.lat, lon: g.lon }, true);
+          geoStatus.textContent = '✓ Imported ' + file.name + ': ' + g.name + ', ' + g.date + ' ' + g.time +
+            ' ' + offsetLabel(g.offset) + (g.dst ? ' (includes ' + g.dst + ' h daylight saving / war time)' : '') +
+            ', ' + g.place + '. Check the details, then Generate Chart.';
+          geoStatus.className = 'geo-status ok';
+        }).catch(function (err) {
+          geoStatus.textContent = 'Could not import ' + file.name + ': ' + (err && err.message ? err.message : err);
+          geoStatus.className = 'geo-status err';
+        });
+      });
+    }
+
     function renderNameBox(list) {
       nameBox.innerHTML = '';
       nameResults = list;
@@ -6949,6 +7449,7 @@
           updateProfileHint();
         }
         tabApis.forEach(function (a) { a.refreshScope(name ? name.trim().toLowerCase() : 'default', name); });
+        rmDraw(); // its saved progress is per person, like the notes tabs
         collapseForm(name, dateStr, timeRaw, offset);
 
         document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });

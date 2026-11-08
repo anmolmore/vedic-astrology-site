@@ -18,6 +18,12 @@ cd "$(dirname "$0")"
   cat interpret.js
   echo '</script>'
   echo '<script>'
+  cat remedies.js
+  echo '</script>'
+  echo '<script>'
+  cat remedy-data.js
+  echo '</script>'
+  echo '<script>'
   cat app.js
   echo '</script>'
   cat shell_tail.html

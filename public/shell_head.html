@@ -86,6 +86,7 @@
   .entry-switch { margin-left: 0; }
   .entry-switch button { font-size: 12.5px; padding: 6px 16px; }
   .entry-hint { font-size: 12px; color: var(--muted); }
+  .entry-mode .import-btn { margin-left: auto; }
   .sim-fields.hidden { display: none; }
   /* the tokens stack down the left of the board, Lagna first */
   .sim-tray {
@@ -1093,6 +1094,40 @@
   .period-lords-side .pl-role-long { display: none; }
   .period-lords-side .pl-card, .period-lords-side .pl-pair { overflow-wrap: break-word; }
   /* the Dashas tab's period picker, repeated compactly at the top of the Periods side tab */
+  /* Remedies side tab */
+  #remedyPanel { font-size: 12.5px; }
+  .rm-toggle { display: block; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  .rm-hide-btn { float: right; margin-top: -3px; font-weight: 400; }
+  .rm-planet:not(.rm-open) > :not(.rm-top) { display: none; }
+  .rm-click { cursor: pointer; }
+  .rm-head { display: block; font-weight: 700; color: var(--gold-soft); font-size: 13px; margin: 12px 0 6px; }
+  .rm-card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin-bottom: 7px; }
+  .rm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .rm-name { font-weight: 700; }
+  .rm-why { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.5; margin-top: 2px; }
+  .rm-pill { display: inline-block; border-radius: 6px; padding: 1px 7px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .rm-hurt { color: #96302f; background: rgba(176,58,58,0.13); }
+  .rm-good { color: #1d6b46; background: rgba(44,117,72,0.14); }
+  .rm-mid { color: #7d5a1c; background: rgba(179,130,47,0.18); }
+  .rm-plain { color: var(--muted); background: rgba(0,0,0,0.05); }
+  .rm-path { margin: 6px 0 4px; }
+  .rm-arrow { color: var(--muted); }
+  .rm-step { display: block; line-height: 1.5; padding: 2px 0; cursor: pointer; }
+  .rm-tag { color: var(--muted); }
+  .rm-opt { display: none; }
+  .rm-show-opt .rm-opt { display: block; }
+  .rm-guard { display: block; color: var(--muted); font-size: 11.5px; margin-top: 4px; }
+  .rm-notes { margin-top: 4px; font-size: 11.5px; color: var(--muted); }
+  .rm-notes summary { cursor: pointer; }
+  .rm-houses { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; }
+  .rm-house { background: var(--bg2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
+  .rm-ad { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto; gap: 6px; align-items: center; padding: 3px 0; border-bottom: 1px solid var(--line); }
+  .rm-ad:last-child { border-bottom: none; }
+  .rm-ad .rm-why { margin-top: 0; }
+  .rm-cal { padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .rm-cal:last-child { border-bottom: none; }
+  .rm-cal .rm-name { margin-right: 8px; }
+  .rm-line { font-size: 12px; margin: 0 0 8px; }
   .dasha-picker-side { margin-bottom: 10px; }
   /* the period and its two timing chips share one line, each shrunk to fit;
      the chips drop below only when the panel is too narrow for both */
@@ -1385,6 +1420,8 @@
     background: rgba(0,0,0,0.05); border-radius: 999px; padding: 0 6px;
   }
   td.aspects .asp-item.asp-none { color: var(--muted); }
+  /* the aspecting planet's compound relationship to each occupant (or the lord) */
+  td.aspects .asp-rel { display: block; font-size: 11.5px; line-height: 1.5; }
 
   /* relationship dignity — the panchadha tier toward the sign lord */
   td.reldig { font-size: 12.5px; white-space: nowrap; }
@@ -1521,18 +1558,22 @@
   .s2-snap table { font-size: 12px; }
   .s2-snap th { cursor: help; }
   .s2-snap td { vertical-align: top; }
-  /* helping / hurting values, the same tints as the Exalted / Debilitated flags */
-  .s2-snap .s2-help, .s2-snap .s2-hurt { border-radius: 4px; padding: 0 3px; cursor: help; }
-  .s2-snap .s2-help { color: #1d6b46; background: rgba(44,117,72,0.14); }
-  .s2-snap .s2-hurt { color: #96302f; background: rgba(176,58,58,0.13); }
-  .s2-snap .s2-own { display: block; }
+  /* every value and its header centred (the breakdown tree keeps its own layout) */
+  .s2-snap td:not(.s2-tree), .s2-snap th { text-align: center !important; }
+  /* helping / hurting values (Houses, Strength and Natal tabs), the same tints as the Exalted / Debilitated flags */
+  .s2-help, .s2-hurt { border-radius: 4px; padding: 0 3px; cursor: help; }
+  .s2-help { color: #1d6b46; background: rgba(44,117,72,0.14); }
+  .s2-hurt { color: #96302f; background: rgba(176,58,58,0.13); }
+  .s2-snap .own-sign { display: block; }
   .s2-snap .gr-where { display: block; margin-left: 0; }
-  .s2-snap td.reldig .rd-lord { display: table; margin: 2px 0 0; }
+  .s2-snap td.reldig .rd-lord { display: table; margin: 2px auto 0; }
   .s2-snap td.aspects .asp-item { display: block; margin-right: 0; }
   .s2-snap td.aspects .asp-item + .asp-item { margin-top: 4px; }
-  .s2-snap td.aspects .asp-item > span:first-child { display: block; }
-  .s2-snap td.aspects .asp-where { margin-left: 0; }
+  /* planet, its sign and house, and the aspect stay on one line (nowrap); the relationship lines sit below */
+  .s2-snap td.aspects .asp-where { margin-left: 4px; }
   .s2-snap .s2-min { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+  /* each Strength-tab value's own minimum, under it */
+  .cell-min { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
   .s2-snap .s2-toggle { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: pointer; box-shadow: none; }
   .s2-snap td.s2-tree { text-align: left; padding: 6px 10px; }
   .ie-yogas { display: flex; flex-direction: column; gap: 4px; margin-bottom: 20px; }
@@ -1629,6 +1670,8 @@
         <button type="button" data-entry="sim">Simulation Chart</button>
       </div>
       <span class="entry-hint" id="entryHint">Enter a date, time and place.</span>
+      <button type="button" class="fc-edit import-btn" id="importGeoBtn" title="Fill the form from a GeoVision chart file (.xml)">Import GeoVision file</button>
+      <input type="file" id="importGeoFile" accept=".xml,text/xml" hidden>
     </div>
     <div class="form-grid" id="birthFields">
       <div class="field span2">
@@ -1756,6 +1799,7 @@
                     <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false" title="Yogas formed" aria-label="Yogas formed">Yogas</button>
                     <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false" title="Natal Influences" aria-label="Natal Influences">Natal</button>
                     <button type="button" role="tab" id="sideTab-periods" aria-controls="sidePanel-periods" aria-selected="false" title="Period lords" aria-label="Period lords">Periods</button>
+                    <button type="button" role="tab" id="sideTab-remedies" aria-controls="sidePanel-remedies" aria-selected="false" title="Remedies" aria-label="Remedies">Remedies</button>
                   </div>
                   <div class="side-panelbox">
                     <div class="side-tabpanel" role="tabpanel" id="sidePanel-facts" aria-labelledby="sideTab-facts">
@@ -1778,9 +1822,14 @@
                           <div class="dasha-current" id="sideDashaCurrent"></div>
                           <div class="dasha-stats" id="sideDashaStats"></div>
                         </div>
-                        <div class="dasha-tree" id="sideDashaTree" role="tree"></div>
+                        <div class="dasha-tree hidden" id="sideDashaTree" role="tree"></div>
                       </div>
+                      <div class="rm-line hidden" id="sideRemedyLine"></div>
                       <div class="period-lords period-lords-side" id="periodLordsSide"></div>
+                    </div>
+                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-remedies" aria-labelledby="sideTab-remedies">
+                      <p class="na-note" id="remedyNote">Generate a chart to see its remedies.</p>
+                      <div id="remedyPanel"></div>
                     </div>
                   </div>
                 </div>
@@ -1876,8 +1925,8 @@
             <th class="col-left">House (Planets, Sign)</th>
             <th class="col-left">Class</th>
             <th class="col-left">Karakas</th>
-            <th class="col-left">Natural reln</th>
-            <th class="col-left">Compound reln</th>
+            <th class="col-left" title="Natural relationship between the planets sharing the house">Tenants – Nat reln</th>
+            <th class="col-left" title="Compound relationship between the planets sharing the house">Tenants – Comp reln</th>
             <th class="col-left">Aspected by Planet (Sign, House)</th>
           </tr></thead>
           <tbody></tbody>
