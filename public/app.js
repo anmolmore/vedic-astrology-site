@@ -1959,32 +1959,26 @@
       // already do.
       var avCell = document.createElement('td');
       avCell.className = 'avastha-combo';
+      // Each state shows in English; its Sanskrit name stays in data-skt
+      // (read by the help/hurt colouring) and on hover.
+      function avSpan(skt, cls) {
+        var s = spanText(skt ? (AVASTHA_ENGLISH[skt] || skt) : '—', cls);
+        if (skt) { s.dataset.skt = skt; s.title = skt; }
+        return s;
+      }
       if (window.Shadbala) {
         var jss = window.Shadbala.jagratAvastha(name, p.signIndex, p.degree, result.relationships);
         var av9 = window.Shadbala.deeptadiAvastha(name, p.signIndex, result.planets, result.relationships, sb && sb.context && sb.context.beneficMap);
-        var jssSpan = document.createElement('span');
-        jssSpan.className = 'av-jss av-jss-' + jss.toLowerCase();
-        jssSpan.textContent = jss;
-        avCell.appendChild(jssSpan);
+        avCell.appendChild(avSpan(jss, 'av-jss av-jss-' + jss.toLowerCase()));
         avCell.appendChild(spanText(', ', 'sign-combo-sep'));
         var isNode = (name === 'Rahu' || name === 'Ketu');
-        if (p.baladiAvastha) {
-          var baladiSpan = document.createElement('span');
-          baladiSpan.className = 'av-baladi';
-          baladiSpan.textContent = p.baladiAvastha;
-          avCell.appendChild(baladiSpan);
-        } else {
-          avCell.appendChild(spanText('—', 'av-baladi'));
-        }
+        avCell.appendChild(avSpan(p.baladiAvastha, 'av-baladi'));
         avCell.appendChild(spanText(', ', 'sign-combo-sep'));
-        var av9Span = document.createElement('span');
-        av9Span.className = 'av-deeptadi';
-        av9Span.textContent = av9 || '—';
-        avCell.appendChild(av9Span);
+        avCell.appendChild(avSpan(av9, 'av-deeptadi'));
         // Av12 (Shayanadi) needs the moment of birth, so only with Shadbala.
         var av12 = sb && sb.context ? window.Shadbala.shayanadiAvastha(name, p.longitude, sb.context) : null;
         avCell.appendChild(spanText(', ', 'sign-combo-sep'));
-        avCell.appendChild(spanText(av12 || '—', 'av-shayanadi'));
+        avCell.appendChild(avSpan(av12, 'av-shayanadi'));
         avCell.title = name + ' — ' + jss + ' Avastha (own sign or exaltation, else the natural relationship to its dispositor). ' +
           'Baladi: ' + (p.baladiAvastha || 'needs an exact degree, unavailable in Simulation mode') +
           (p.baladiAvastha && p.degreeFormatted !== '—' ? ', ' + p.degreeFormatted + ' into ' + p.sign : '') +
@@ -2219,9 +2213,11 @@
     // Avasthas: Awake; Adult; Radiant, At ease, Delighted, Calm help. Asleep;
     // Infant, Old, Dead; Humbled, Distressed, Wicked hurt. Shayanadi is neutral.
     [].forEach.call(cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi'), function (s) {
-      var skt = s.textContent;
+      var skt = s.dataset.skt || s.textContent;
       s.className = s.className.replace(/\bav-jss-\S+/g, '');
-      hhPaint(s, AV_HELP[skt] ? 'help' : AV_HURT[skt] ? 'hurt' : null, AV_HELP[skt] ? 'A favourable state' : 'An unfavourable state');
+      var kind = AV_HELP[skt] ? 'help' : AV_HURT[skt] ? 'hurt' : null;
+      hhPaint(s, kind, kind === 'help' ? 'A favourable state' : 'An unfavourable state');
+      if (kind && s.dataset.skt) s.title = skt + ': ' + s.title;
     });
 
     // Shadbala %: meets its minimum or not.
@@ -2734,7 +2730,7 @@
     });
   }
 
-  // The chart's "Transit" side tab: a South Indian chart whose outer ring holds
+  // The Transit chart card (beside the South Indian chart): its outer ring holds
   // the transiting planets for a chosen moment (live, redrawn each minute, by
   // default) with the natal chart nested inside it, sign for sign. Houses are
   // counted from the natal ascendant; the transit ascendant is left out, since
@@ -2742,7 +2738,6 @@
   var TR_POS = [[0, 1], [0, 2], [0, 3], [1, 3], [2, 3], [3, 3], [3, 2], [3, 1], [3, 0], [2, 0], [1, 0], [0, 0]];
   var TR_ABBR = { Sun: 'Su', Moon: 'Mo', Mars: 'Ma', Mercury: 'Me', Jupiter: 'Ju', Venus: 'Ve', Saturn: 'Sa', Rahu: 'Ra', Ketu: 'Ke' };
   var TR_RING_KEY = 'vedicTransitRing.v1';
-  var TR_SIZE_KEY = 'vedicTransitSize.v1';
   var TR_SIZE = 560;
   var tr = { result: null, when: null, live: true, timer: null };
 
@@ -2781,23 +2776,53 @@
     var ascDeg = result.ascendant.degree;
     var natal = [{ label: 'As', sign: result.ascendant.signIndex, deg: ascDeg == null ? null : Math.floor(ascDeg), retro: false }]
       .concat(trPlanets(result.planets));
-    var ring = Number(document.getElementById('transitRing').value) || 90;
-    var W = TR_SIZE, m = (W - 2 * ring) / 2, edges = [0, ring, ring + m, ring + 2 * m, W], cell = (W - 2 * ring) / 4;
+    var ring = Number(document.getElementById('transitRing').value) || 100;
+    var W = TR_SIZE, cell = (W - 2 * ring) / 4;
     var asc = result.ascendant.signIndex, SIGNS = window.VedicEngine.SIGNS;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     function lbl(p) { return p.label + (p.deg == null ? '' : ' ' + p.deg + '°') + (p.retro ? ' R' : ''); }
+    // Header, then the sign's transit planets in as many columns as the box
+    // needs; a smaller font and spaceless labels once the columns get narrow.
+    function fill(x, y, w, h, s, planets) {
+      var house = ((s - asc + 12) % 12) + 1;
+      trSvgEl(svg, 'text', { x: x + 7, y: y + 18, class: 'tr-sign' }, 'H' + house + ' ' + (w < 130 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
+      function layout(step, top) {
+        var rows = Math.max(1, Math.floor((h - top - 4) / step) + 1);
+        var cols = Math.ceil(planets.length / rows);
+        return { step: step, top: top, rows: rows, colW: w / Math.max(cols, 1), cols: cols };
+      }
+      var lay = layout(18, 36), narrow = lay.cols > 1 && lay.colW < 78;
+      if (narrow) lay = layout(14, 34);
+      // a crowded sign (four or more planets in a small box) drops the degrees
+      var bare = narrow && lay.colW < 46;
+      planets.forEach(function (p, i) {
+        var col = Math.floor(i / lay.rows), row = i % lay.rows;
+        var text = bare ? p.label + (p.retro ? 'R' : '') : narrow ? lbl(p).replace(/ /g, '') : lbl(p);
+        trSvgEl(svg, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step, class: narrow ? 'tr-transit tr-transit-sm' : 'tr-transit' }, text);
+      });
+    }
+    // Outer boxes line up with the natal boxes inside them: the two middle
+    // signs on each side are one natal box wide (or tall), and each corner
+    // sign is the L-shaped piece left over, wrapping its natal corner box.
+    var L = ring + cell;
     for (var s = 0; s < 12; s++) {
       var r = TR_POS[s][0], c = TR_POS[s][1];
-      var x = edges[c], y = edges[r], w = edges[c + 1] - x, h = edges[r + 1] - y;
-      trSvgEl(svg, 'rect', { x: x, y: y, width: w, height: h, class: 'tr-cell' });
-      var house = ((s - asc + 12) % 12) + 1;
-      trSvgEl(svg, 'text', { x: x + 8, y: y + 20, class: 'tr-sign' }, 'H' + house + ' ' + (w < 120 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
-      var px = x + 10, py = y + 44;
-      transit.filter(function (p) { return p.sign === s; }).forEach(function (p) {
-        if (py > y + h - 6) { py = y + 44; px += 88; }
-        trSvgEl(svg, 'text', { x: px, y: py, class: 'tr-transit' }, lbl(p));
-        py += 22;
-      });
+      var here = transit.filter(function (p) { return p.sign === s; });
+      if ((r === 0 || r === 3) && (c === 0 || c === 3)) {
+        var fx = function (v) { return c === 3 ? W - v : v; }, fy = function (v) { return r === 3 ? W - v : v; };
+        var pts = [[0, 0], [L, 0], [L, ring], [ring, ring], [ring, L], [0, L]]
+          .map(function (q) { return fx(q[0]) + ',' + fy(q[1]); }).join(' ');
+        trSvgEl(svg, 'polygon', { points: pts, class: 'tr-cell' });
+        fill(c === 3 ? W - L : 0, r === 3 ? W - ring : 0, L, ring, s, here);
+      } else if (r === 0 || r === 3) {
+        var bx = ring + c * cell, by = r === 3 ? W - ring : 0;
+        trSvgEl(svg, 'rect', { x: bx, y: by, width: cell, height: ring, class: 'tr-cell' });
+        fill(bx, by, cell, ring, s, here);
+      } else {
+        var sx = c === 3 ? W - ring : 0, sy = ring + r * cell;
+        trSvgEl(svg, 'rect', { x: sx, y: sy, width: ring, height: cell, class: 'tr-cell' });
+        fill(sx, sy, ring, cell, s, here);
+      }
       var ix = ring + c * cell, iy = ring + r * cell;
       trSvgEl(svg, 'rect', { x: ix + 2, y: iy + 2, width: cell - 4, height: cell - 4, rx: 5, class: 'tr-natal-cell' });
       var ny = iy + 28;
@@ -2814,12 +2839,188 @@
     document.getElementById('transitWhen').value = trLocalInput(tr.when);
     document.getElementById('transitStatus').textContent = tr.live ? 'Live' : 'Fixed';
     document.getElementById('transitStatus').title = tr.live ? 'Updates every minute' : 'Press Now to return to live transits';
+    trdDraw();
+  }
+
+  // Date dial beside the Transit chart: concentric rings for minutes, hours,
+  // days, weeks of the month, months and years, each turned so the chart's
+  // moment sits under the marker at the top. Dragging a ring steps that unit
+  // (rolling over into the next, so 23:59 plus a minute is the next day),
+  // clicking a segment jumps to it, arrow keys step a focused ring, and the
+  // centre opens the date box above. Times are the browser's local time,
+  // the same as that date box. Weeks are fixed 7-day blocks (days 1-7, 8-14…).
+  var TRD_KEY = 'vedicTransitDial.v1';
+  var TRD_C = 260;
+  var TRD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var TRD_RINGS = [
+    { key: 'minute', r0: 62, r1: 96, label: 'Minutes', fs: 12 },
+    { key: 'hour', r0: 98, r1: 132, label: 'Hours', fs: 13 },
+    { key: 'day', r0: 134, r1: 168, label: 'Days', fs: 13 },
+    { key: 'week', r0: 170, r1: 198, label: 'Weeks of the month', fs: 13 },
+    { key: 'month', r0: 200, r1: 228, label: 'Months', fs: 14 },
+    { key: 'year', r0: 230, r1: 258, label: 'Years', fs: 13 }
+  ];
+  var trd = { groups: null, marker: null, play: null };
+  function trdPad(n) { return String(n).padStart(2, '0'); }
+  function trdDim(y, m) { return new Date(y, m + 1, 0).getDate(); }
+  function trdSet(d) {
+    tr.live = false;
+    tr.when = d;
+    trDraw();
+  }
+  function trdSetYMD(y, m, d) {
+    var w = tr.when;
+    trdSet(new Date(y, m, Math.min(d, trdDim(y, m)), w.getHours(), w.getMinutes()));
+  }
+  function trdStep(key, k) {
+    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes();
+    if (key === 'minute') trdSet(new Date(y, m, d, h, mi + k));
+    else if (key === 'hour') trdSet(new Date(y, m, d, h + k, mi));
+    else if (key === 'day') trdSet(new Date(y, m, d + k, h, mi));
+    else if (key === 'week') trdSet(new Date(y, m, d + 7 * k, h, mi));
+    else if (key === 'month') { var t = new Date(y, m + k, 1); trdSetYMD(t.getFullYear(), t.getMonth(), d); }
+    else trdSetYMD(y + k, m, d);
+  }
+  function trdSegments(key) {
+    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes();
+    var out = [], i;
+    function seg(label, sel, pick) { out.push({ label: label, sel: sel, pick: pick }); }
+    if (key === 'minute') {
+      // every fifth minute is labelled, except right beside the selected one
+      for (i = 0; i < 60; i++) {
+        var gap = Math.min((i - mi + 60) % 60, (mi - i + 60) % 60);
+        seg(i === mi || (i % 5 === 0 && gap > 2) ? trdPad(i) : '', i === mi,
+          (function (v) { return function () { trdSet(new Date(y, m, d, h, v)); }; })(i));
+      }
+    } else if (key === 'hour') {
+      for (i = 0; i < 24; i++) seg(String(i), i === h, (function (v) { return function () { trdSet(new Date(y, m, d, v, mi)); }; })(i));
+    } else if (key === 'day') {
+      for (i = 1; i <= trdDim(y, m); i++) seg(String(i), i === d, (function (v) { return function () { trdSetYMD(y, m, v); }; })(i));
+    } else if (key === 'week') {
+      var weeks = Math.ceil(trdDim(y, m) / 7), cur = Math.ceil(d / 7), off = (d - 1) % 7;
+      for (i = 1; i <= weeks; i++) seg('Wk ' + i, i === cur, (function (v) { return function () { trdSetYMD(y, m, (v - 1) * 7 + off + 1); }; })(i));
+    } else if (key === 'month') {
+      for (i = 0; i < 12; i++) seg(TRD_MONTHS[i], i === m, (function (v) { return function () { trdSetYMD(y, v, d); }; })(i));
+    } else {
+      // a window of years around the selected one, re-centred as it moves
+      for (i = -5; i <= 6; i++) seg(String(y + i), i === 0, (function (v) { return function () { trdSetYMD(v, m, d); }; })(y + i));
+    }
+    return out;
+  }
+  function trdPt(r, a) {
+    var t = a * Math.PI / 180;
+    return [TRD_C + r * Math.sin(t), TRD_C - r * Math.cos(t)];
+  }
+  function trdSector(r0, r1, a0, a1) {
+    var p = [trdPt(r1, a0), trdPt(r1, a1), trdPt(r0, a1), trdPt(r0, a0)], big = a1 - a0 > 180 ? 1 : 0;
+    return 'M' + p[0] + ' A' + r1 + ',' + r1 + ' 0 ' + big + ' 1 ' + p[1] + ' L' + p[2] +
+      ' A' + r0 + ',' + r0 + ' 0 ' + big + ' 0 ' + p[3] + ' Z';
+  }
+  function trdBuild(svg) {
+    trd.groups = {};
+    TRD_RINGS.forEach(function (ring) {
+      var g = trSvgEl(svg, 'g', { tabindex: 0, role: 'slider', 'aria-label': ring.label, class: 'trd-ring' });
+      trd.groups[ring.key] = g;
+      g.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { trdStep(ring.key, 1); e.preventDefault(); }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { trdStep(ring.key, -1); e.preventDefault(); }
+      });
+      var drag = null;
+      function angleOf(e) {
+        var b = svg.getBoundingClientRect(), s = 520 / b.width;
+        return Math.atan2((e.clientX - b.left) * s - TRD_C, TRD_C - (e.clientY - b.top) * s) * 180 / Math.PI;
+      }
+      g.addEventListener('pointerdown', function (e) {
+        drag = { last: angleOf(e), acc: 0, moved: false, pick: e.target.trdPick };
+        g.setPointerCapture(e.pointerId);
+      });
+      g.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        var a = angleOf(e), da = a - drag.last;
+        if (da > 180) da -= 360;
+        if (da < -180) da += 360;
+        drag.last = a;
+        drag.acc += da;
+        if (Math.abs(drag.acc) > 3) drag.moved = true;
+        var seg = 360 / trdSegments(ring.key).length;
+        // turning a ring clockwise brings the earlier value under the marker
+        while (drag.acc <= -seg) { drag.acc += seg; trdStep(ring.key, 1); }
+        while (drag.acc >= seg) { drag.acc -= seg; trdStep(ring.key, -1); }
+      });
+      g.addEventListener('pointerup', function () {
+        if (drag && !drag.moved && drag.pick) drag.pick();
+        drag = null;
+      });
+      g.addEventListener('pointercancel', function () { drag = null; });
+    });
+    trd.marker = trSvgEl(svg, 'path', { d: 'M' + (TRD_C - 9) + ',0 L' + (TRD_C + 9) + ',0 L' + TRD_C + ',13 Z', class: 'trd-marker' });
+  }
+  function trdDraw() {
+    var box = document.getElementById('transitDialBox'), svg = document.getElementById('transitDial');
+    if (!box || box.classList.contains('hidden') || !tr.when) return;
+    if (!trd.groups) trdBuild(svg);
+    TRD_RINGS.forEach(function (ring) {
+      var g = trd.groups[ring.key];
+      while (g.firstChild) g.removeChild(g.firstChild);
+      var segs = trdSegments(ring.key), seg = 360 / segs.length;
+      var selIdx = segs.findIndex(function (s) { return s.sel; });
+      segs.forEach(function (s, i) {
+        var mid = (i - selIdx) * seg;
+        var path = trSvgEl(g, 'path', { d: trdSector(ring.r0, ring.r1, mid - seg / 2, mid + seg / 2), class: s.sel ? 'trd-seg trd-sel' : 'trd-seg' });
+        path.trdPick = s.pick;
+        if (!s.label) return;
+        var p = trdPt((ring.r0 + ring.r1) / 2, mid), a = ((mid % 360) + 360) % 360;
+        var rot = a > 90 && a < 270 ? a + 180 : a;
+        trSvgEl(g, 'text', {
+          x: p[0], y: p[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': ring.fs,
+          transform: 'rotate(' + rot + ' ' + p[0] + ' ' + p[1] + ')', class: s.sel ? 'trd-label trd-sel' : 'trd-label'
+        }, s.label);
+      });
+    });
+    svg.appendChild(trd.marker);
+    var w = tr.when;
+    document.getElementById('trdTime').textContent = trdPad(w.getHours()) + ':' + trdPad(w.getMinutes());
+    document.getElementById('trdDate').textContent = w.getDate() + ' ' + TRD_MONTHS[w.getMonth()] + ' ' + w.getFullYear();
+  }
+  function trdStopPlay() {
+    clearInterval(trd.play);
+    trd.play = null;
+    var btn = document.getElementById('transitPlay');
+    btn.textContent = '▶ Play';
+    btn.setAttribute('aria-pressed', 'false');
+  }
+  function initTransitDial() {
+    var toggle = document.getElementById('transitDialToggle'), box = document.getElementById('transitDialBox');
+    function applyShown(shown) {
+      box.classList.toggle('hidden', !shown);
+      toggle.setAttribute('aria-pressed', shown ? 'true' : 'false');
+      if (!shown && trd.play) trdStopPlay();
+      trdDraw();
+    }
+    applyShown(prefGet(TRD_KEY) === 'shown');
+    toggle.addEventListener('click', function () {
+      var shown = box.classList.contains('hidden');
+      prefSet(TRD_KEY, shown ? 'shown' : 'hidden');
+      applyShown(shown);
+    });
+    document.getElementById('transitDialCenter').addEventListener('click', function () {
+      var inp = document.getElementById('transitWhen');
+      try { if (inp.showPicker) { inp.showPicker(); return; } } catch (e) {}
+      inp.focus();
+    });
+    var playBtn = document.getElementById('transitPlay'), playStep = document.getElementById('transitPlayStep');
+    playBtn.addEventListener('click', function () {
+      if (trd.play) { trdStopPlay(); return; }
+      playBtn.textContent = '❚❚ Pause';
+      playBtn.setAttribute('aria-pressed', 'true');
+      trd.play = setInterval(function () { trdStep(playStep.value, 1); }, 400);
+    });
   }
   function trVisible() {
-    var panel = document.getElementById('sidePanel-transit');
-    return panel && !panel.classList.contains('hidden');
+    var card = document.getElementById('transitCardD1');
+    return card && !card.classList.contains('hidden');
   }
-  // Redraw only while the tab is on screen; switching to it catches up.
+  // Redraw only while the card is on screen; showing it catches up.
   function trTick() {
     if (!tr.live || !tr.result) return;
     tr.when = new Date();
@@ -2829,12 +3030,12 @@
     if (tr.live) tr.when = new Date();
     if (trVisible()) trDraw();
   }
-  function initTransitTab() {
+  function initTransitChart() {
     var ring = document.getElementById('transitRing');
     if (!ring || ring.dataset.wired) return;
     ring.dataset.wired = '1';
     var saved = Number(prefGet(TR_RING_KEY));
-    if (saved >= 70 && saved <= 140) ring.value = saved;
+    if (saved >= 80 && saved <= 140) ring.value = saved;
     ring.addEventListener('input', function () { prefSet(TR_RING_KEY, ring.value); trDraw(); });
     document.getElementById('transitWhen').addEventListener('change', function (e) {
       if (!e.target.value) return;
@@ -2842,32 +3043,21 @@
       tr.when = new Date(e.target.value);
       trDraw();
     });
-    var sizeBtn = document.getElementById('transitSize');
-    function applySize(large) {
-      document.getElementById('transitBody').classList.toggle('tr-large', large);
-      sizeBtn.setAttribute('aria-pressed', large ? 'true' : 'false');
-      sizeBtn.textContent = large ? 'Fit' : 'Larger';
-    }
-    applySize(prefGet(TR_SIZE_KEY) === 'large');
-    sizeBtn.addEventListener('click', function () {
-      var large = sizeBtn.getAttribute('aria-pressed') !== 'true';
-      prefSet(TR_SIZE_KEY, large ? 'large' : 'fit');
-      applySize(large);
-    });
     document.getElementById('transitNow').addEventListener('click', function () {
+      if (trd.play) trdStopPlay();
       tr.live = true;
       tr.when = new Date();
       trDraw();
     });
+    initTransitDial();
     tr.timer = setInterval(trTick, 60000);
   }
-  function renderTransitTab(result) {
-    initTransitTab();
+  function renderTransitChart(result) {
+    initTransitChart();
+    if (trd.play) trdStopPlay();
     tr.result = result;
     tr.live = true;
     tr.when = new Date();
-    document.getElementById('transitNote').classList.add('hidden');
-    document.getElementById('transitBody').classList.remove('hidden');
     trDraw();
   }
 
@@ -2893,7 +3083,6 @@
         // the Periods tab's tree can only be centred once it is on screen
         scrollTreeToSelection();
         ensureRemedyCalendar();
-        ensureTransitChart();
       });
     });
   }
@@ -3045,13 +3234,7 @@
         var signName = pRow.cells[3].firstChild;
         if (signName && signName.nextSibling) pRow.cells[3].insertBefore(document.createElement('br'), signName.nextSibling);
 
-        // Avasthas in English (Sanskrit on hover), two and two.
-        [].forEach.call(pRow.cells[4].querySelectorAll('.av-jss, .av-baladi, .av-deeptadi, .av-shayanadi'), function (s) {
-          var skt = s.textContent, en = AVASTHA_ENGLISH[skt];
-          if (!en) return;
-          s.textContent = en;
-          s.title = skt + (s.title && s.title !== skt ? ': ' + s.title : '');
-        });
+        // Avasthas (already in English, Sanskrit on hover), two and two.
         var avSeps = pRow.cells[4].querySelectorAll('.sign-combo-sep');
         if (avSeps.length === 3) avSeps[1].parentNode.replaceChild(document.createElement('br'), avSeps[1]);
 
@@ -6518,7 +6701,7 @@
     renderFacts(result);
     renderInfluenceEngineTab(result, null);
     renderRemedies(result, null, null);
-    renderTransitTab(result);
+    renderTransitChart(result);
     resetResearch();
     renderPlanetTable(result, null);
     renderHouseTable(result);
@@ -6828,15 +7011,20 @@
     applyKalaVisible(prefGet(KALA_VISIBLE_KEY) !== '0');
   }
 
-  // ---- South / North / Both — which D1 chart card(s) are shown ----
+  // ---- South / Transit / Both — which D1 chart card(s) are shown. The
+  // Transit card took the North Indian card's place; North stays in the page,
+  // hidden, so its renderer and the form's chart-style option are untouched.
+  // A saved 'north' view from before the switch reads as 'transit'. ----
   var CHART_VIEW_KEY = 'vedicChartD1View.v1';
 
   function applyChartView(view) {
+    if (view === 'north') view = 'transit';
     var southCard = document.getElementById('southCardD1');
-    var northCard = document.getElementById('northCardD1');
-    if (!southCard || !northCard) return;
-    southCard.classList.toggle('hidden', view === 'north');
-    northCard.classList.toggle('hidden', view === 'south');
+    var transitCard = document.getElementById('transitCardD1');
+    if (!southCard || !transitCard) return;
+    southCard.classList.toggle('hidden', view === 'transit');
+    transitCard.classList.toggle('hidden', view === 'south');
+    ensureTransitChart();
     var box = document.getElementById('chartViewSwitch');
     if (box) {
       [].slice.call(box.querySelectorAll('button')).forEach(function (b) {
@@ -7548,7 +7736,7 @@
         initTreeToggle();
         renderFacts(result);
         renderInfluenceEngineTab(result, shadbala);
-        renderTransitTab(result);
+        renderTransitChart(result);
         resetResearch();
         renderShadbala(shadbala);
         renderBhavaBala(result, shadbala);

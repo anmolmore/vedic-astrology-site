@@ -1063,26 +1063,53 @@
     text-align: left; /* .chart-card, its ancestor, centers text by default — its own content (the "D1 · Rashi" title) wants that, this reused Influence Engine content doesn't */
   }
   .side-tabpanel.hidden { display: none; }
-  /* Transit side tab: natal chart nested inside the transit ring. */
-  /* The panel and body are flex columns so the chart takes whatever height
-     is left under the controls and scales down to fit it, instead of
-     making the side panel scroll. */
-  #sidePanel-transit:not(.hidden) { display: flex; flex-direction: column; height: 100%; }
-  .tr-body:not(.hidden) { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  /* Transit chart card: natal chart nested inside the transit ring. Its svg
+     takes the same width tiers as the other chart cards (.chart-band
+     .chart-card svg); width 0 + min-width 100% lets the controls wrap to
+     that width instead of widening the card. */
+  .tr-card { order: 3; }
+  .tr-card .tr-controls { width: 0; min-width: 100%; }
   .tr-controls { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 12px; color: var(--muted); }
   .tr-controls input[type="range"] { flex: 1 1 70px; min-width: 60px; }
   .tr-controls button { font-family: inherit; font-size: 12px; cursor: pointer; padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); }
   .tr-status { font-size: 11.5px; color: var(--muted); }
-  .tr-chart { display: block; width: 100%; flex: 1 1 auto; min-height: 160px; max-height: 560px; }
-  .tr-body.tr-large .tr-chart { flex: 0 0 auto; height: 560px; max-width: 560px; margin: 0 auto; }
-  #transitSize[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
+  .tr-chart { display: block; height: auto; margin: 0 auto; }
   .tr-cell { fill: var(--bg2); stroke: var(--line); stroke-width: 1; }
   .tr-natal-cell { fill: var(--house1-fill); stroke: var(--gold); stroke-width: 0.6; }
-  .tr-sign { font-size: 15px; fill: var(--muted); }
-  .tr-transit { font-size: 18px; fill: var(--text); }
+  .tr-sign { font-size: 14px; fill: var(--muted); }
+  .tr-transit { font-size: 16px; fill: var(--text); }
+  .tr-transit-sm { font-size: 13px; }
   .tr-natal { font-size: 17px; fill: var(--gold-soft); font-weight: 600; }
   .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
   .tr-center { font-size: 16px; fill: var(--muted); }
+  #transitDialToggle[aria-pressed="true"], #transitPlay[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
+  /* Date dial to the right of the Transit chart (it wraps below when the row
+     is too narrow). Its svg takes the same width tiers as the chart beside
+     it; the centre button sits over the dial's empty middle. */
+  .tr-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: center; }
+  .tr-row .tr-chart { margin: 0; }
+  .trd-wrap { position: relative; width: fit-content; margin: 0 auto; }
+  .trd-svg { display: block; height: auto; touch-action: none; user-select: none; }
+  .trd-ring { cursor: grab; outline: none; }
+  .trd-ring:active { cursor: grabbing; }
+  .trd-ring:focus-visible .trd-seg { stroke: var(--gold); }
+  .trd-seg { fill: var(--panel2); stroke: var(--line); stroke-width: 1; }
+  .trd-seg.trd-sel { fill: var(--house1-fill); }
+  .trd-label { fill: var(--muted); pointer-events: none; }
+  .trd-label.trd-sel { fill: var(--gold-soft); font-weight: 700; }
+  .trd-marker { fill: var(--gold); }
+  .trd-center {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 23%; aspect-ratio: 1 / 1; border-radius: 50%; border: none; background: transparent;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: inherit; cursor: pointer; color: var(--text); padding: 0;
+  }
+  .trd-center:focus-visible { outline: 2px solid var(--gold); }
+  .trd-time { font-size: 17px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .trd-date { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  .trd-pick { font-size: 10.5px; color: var(--gold-soft); }
+  .trd-play { justify-content: center; margin: 6px 0 0; }
+  .trd-play select { font-family: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); }
   /* Period lords (Dashas tab and the chart's side tab — same content). */
   .pl-box { display: flex; flex-direction: column; gap: 10px; text-align: left; }
   .pl-cards, .pl-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
@@ -1781,7 +1808,7 @@
           <div class="chart-controls-row">
             <div class="chart-view-switch" id="chartViewSwitch" role="group" aria-label="Which chart to show">
               <button type="button" data-view="south">South Indian</button>
-              <button type="button" data-view="north">North Indian</button>
+              <button type="button" data-view="transit">Transit</button>
               <button type="button" data-view="both" class="on">Both</button>
             </div>
             <button type="button" id="chartExpandToggle" class="folders-toggle chart-expand-toggle" aria-pressed="false">Expand charts</button>
@@ -1818,7 +1845,6 @@
                     <button type="button" role="tab" id="sideTab-facts" aria-controls="sidePanel-facts" aria-selected="true">Facts</button>
                     <button type="button" role="tab" id="sideTab-yogas" aria-controls="sidePanel-yogas" aria-selected="false" title="Yogas formed" aria-label="Yogas formed">Yogas</button>
                     <button type="button" role="tab" id="sideTab-2" aria-controls="sidePanel-2" aria-selected="false" title="Natal Influences" aria-label="Natal Influences">Natal</button>
-                    <button type="button" role="tab" id="sideTab-transit" aria-controls="sidePanel-transit" aria-selected="false" title="Transits over the natal chart" aria-label="Transit">Transit</button>
                     <button type="button" role="tab" id="sideTab-periods" aria-controls="sidePanel-periods" aria-selected="false" title="Period lords" aria-label="Period lords">Periods</button>
                     <button type="button" role="tab" id="sideTab-remedies" aria-controls="sidePanel-remedies" aria-selected="false" title="Remedies" aria-label="Remedies">Remedies</button>
                   </div>
@@ -1835,20 +1861,6 @@
                       <p class="na-note hidden" id="chartSide2Note">Not available — these narratives need Shadbala and Bhava Bala, which a placed chart doesn't have.</p>
                       <select id="chartSide2Select" class="side-tab2-select" aria-label="House and planet"></select>
                       <div id="chartSide2Content"></div>
-                    </div>
-                    <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-transit" aria-labelledby="sideTab-transit">
-                      <p class="na-note" id="transitNote">Generate a chart to see transits over it.</p>
-                      <div class="tr-body hidden" id="transitBody">
-                        <div class="tr-controls">
-                          <input type="datetime-local" id="transitWhen" aria-label="Transit date and time">
-                          <button type="button" id="transitNow">Now</button>
-                          <span class="tr-status" id="transitStatus"></span>
-                          <input type="range" id="transitRing" min="70" max="140" step="5" value="90" aria-label="Transit ring width" title="Transit ring width">
-                          <span class="tr-status" id="transitRingOut"></span>
-                          <button type="button" id="transitSize" aria-pressed="false" title="Show the chart at full size; the panel scrolls">Larger</button>
-                        </div>
-                        <svg id="transitChart" class="tr-chart" viewBox="0 0 560 560" role="img" aria-label="Transit planets in the outer ring, natal planets in the inner ring. H is the natal house, R is retrograde."><title>Outer ring: transits. Inner ring: natal. H = natal house, R = retrograde.</title></svg>
-                      </div>
                     </div>
                     <div class="side-tabpanel hidden" role="tabpanel" id="sidePanel-periods" aria-labelledby="sideTab-periods">
                       <p class="na-note" id="periodLordsSideNote">Not available: dasha periods need the Moon’s exact degree and a birth date.</p>
@@ -1870,8 +1882,37 @@
                 </div>
               </div>
             </div>
-            <div class="chart-card" id="northCardD1">
+            <div class="chart-card hidden" id="northCardD1">
               <svg id="northChartD1" viewBox="0 0 300 300"></svg>
+            </div>
+            <div class="chart-card tr-card" id="transitCardD1">
+              <div class="tr-controls">
+                <input type="datetime-local" id="transitWhen" aria-label="Transit date and time">
+                <button type="button" id="transitNow">Now</button>
+                <span class="tr-status" id="transitStatus"></span>
+                <input type="range" id="transitRing" min="80" max="140" step="5" value="100" aria-label="Transit ring width" title="Transit ring width">
+                <span class="tr-status" id="transitRingOut"></span>
+                <button type="button" id="transitDialToggle" aria-pressed="false" aria-controls="transitDialBox" title="Show a dial for stepping the date and time">Dial</button>
+              </div>
+              <div class="tr-row">
+              <svg id="transitChart" class="tr-chart" viewBox="0 0 560 560" role="img" aria-label="Transit planets in the outer ring, natal planets in the inner ring. H is the natal house, R is retrograde."><title>Outer ring: transits. Inner ring: natal. H = natal house, R = retrograde.</title></svg>
+              <div class="trd hidden" id="transitDialBox">
+                <div class="trd-wrap">
+                  <svg id="transitDial" class="trd-svg" viewBox="0 0 520 520" role="group" aria-label="Date and time dial: minutes, hours, days, weeks of the month, months and years, from the inside out"></svg>
+                  <button type="button" class="trd-center" id="transitDialCenter" title="Pick a date and time"><span class="trd-time" id="trdTime"></span><span class="trd-date" id="trdDate"></span><span class="trd-pick">Pick ▾</span></button>
+                </div>
+                <div class="tr-controls trd-play">
+                  <button type="button" id="transitPlay" aria-pressed="false">▶ Play</button>
+                  <select id="transitPlayStep" aria-label="Play step">
+                    <option value="minute">by minute</option>
+                    <option value="hour" selected>by hour</option>
+                    <option value="day">by day</option>
+                    <option value="month">by month</option>
+                    <option value="year">by year</option>
+                  </select>
+                </div>
+              </div>
+              </div>
             </div>
           </div>
         </div>
