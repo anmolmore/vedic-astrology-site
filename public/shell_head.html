@@ -1105,11 +1105,13 @@
     font-family: inherit; cursor: pointer; color: var(--text); padding: 0;
   }
   .trd-center:focus-visible { outline: 2px solid var(--gold); }
-  .trd-time { font-size: 17px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .trd-time { font-size: 15px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
   .trd-date { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
   .trd-pick { font-size: 10.5px; color: var(--gold-soft); }
   .trd-play { justify-content: center; margin: 6px 0 0; }
   .trd-play select { font-family: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); }
+  .trd-ring.trd-hover .trd-seg { stroke: var(--gold); stroke-width: 1.5; }
+  .trd-event { min-height: 1.4em; margin: 4px 0 0; text-align: center; font-size: 12px; color: var(--gold-soft); font-weight: 600; }
   /* Period lords (Dashas tab and the chart's side tab — same content). */
   .pl-box { display: flex; flex-direction: column; gap: 10px; text-align: left; }
   .pl-cards, .pl-pairs { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; }
@@ -1887,7 +1889,7 @@
             </div>
             <div class="chart-card tr-card" id="transitCardD1">
               <div class="tr-controls">
-                <input type="datetime-local" id="transitWhen" aria-label="Transit date and time">
+                <input type="datetime-local" id="transitWhen" step="1" aria-label="Transit date and time">
                 <button type="button" id="transitNow">Now</button>
                 <span class="tr-status" id="transitStatus"></span>
                 <input type="range" id="transitRing" min="80" max="140" step="5" value="100" aria-label="Transit ring width" title="Transit ring width">
@@ -1904,6 +1906,7 @@
                 <div class="tr-controls trd-play">
                   <button type="button" id="transitPlay" aria-pressed="false">▶ Play</button>
                   <select id="transitPlayStep" aria-label="Play step">
+                    <option value="second">by second</option>
                     <option value="minute">by minute</option>
                     <option value="hour" selected>by hour</option>
                     <option value="day">by day</option>
@@ -1911,6 +1914,22 @@
                     <option value="year">by year</option>
                   </select>
                 </div>
+                <div class="tr-controls trd-play">
+                  <button type="button" id="transitPrev" aria-label="Jump to the previous event">◂ Prev</button>
+                  <select id="transitEventKind" aria-label="Event to jump to">
+                    <option value="Moon">Moon changes sign</option>
+                    <option value="Sun">Sun changes sign</option>
+                    <option value="Mars">Mars changes sign</option>
+                    <option value="Jupiter" selected>Jupiter changes sign</option>
+                    <option value="Saturn">Saturn changes sign</option>
+                    <option value="Rahu">Rahu–Ketu change sign</option>
+                    <option value="md">Mahadasha changes</option>
+                    <option value="ad">Antardasha changes</option>
+                    <option value="pd">Pratyantardasha changes</option>
+                  </select>
+                  <button type="button" id="transitNext" aria-label="Jump to the next event">Next ▸</button>
+                </div>
+                <p class="trd-event" id="transitEvent" aria-live="polite"></p>
               </div>
               </div>
             </div>

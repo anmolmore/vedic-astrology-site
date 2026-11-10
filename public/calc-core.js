@@ -414,6 +414,19 @@
     Mars: 'Mars', Jupiter: 'Jupiter', Saturn: 'Saturn'
   };
 
+  // Sidereal longitude of one body at one moment, worked out exactly as
+  // computeChart does for every planet. For callers that need a single body
+  // many times over, such as the Transit dial's search for the next sign
+  // change. nodeType 'true' or 'mean' applies to Rahu and Ketu only.
+  function siderealLongitude(name, date, nodeType) {
+    var ayan = ayanamsa(date);
+    if (name === 'Rahu' || name === 'Ketu') {
+      var rahu = norm360((nodeType === 'true' ? trueLunarNodeTropical(date) : meanLunarNodeTropical(date)) - ayan);
+      return name === 'Ketu' ? norm360(rahu + 180) : rahu;
+    }
+    return norm360(geoEclLonOfDate(Astronomy.Body[PLANET_BODY[name]], date) - ayan);
+  }
+
   function computeChart(opts) {
     // opts: { date (UTC JS Date), latDeg, lonDeg }
     var date = opts.date, lat = opts.latDeg, lon = opts.lonDeg;
@@ -513,6 +526,7 @@
     SIGNS: SIGNS, SIGNS_SKT: SIGNS_SKT, SIGN_LORDS: SIGN_LORDS, SIGN_COLORDS: SIGN_COLORDS,
     NAKSHATRAS: NAKSHATRAS, CLASSICAL_GRAHAS: CLASSICAL_GRAHAS, RELATIONSHIP_GRAHAS: RELATIONSHIP_GRAHAS,
     computeChart: computeChart,
+    siderealLongitude: siderealLongitude,
     pratyantardashas: pratyantardashas,
     norm360: norm360,
     formatDeg: formatDeg,

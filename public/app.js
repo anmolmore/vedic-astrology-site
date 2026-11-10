@@ -2731,7 +2731,7 @@
   }
 
   // The Transit chart card (beside the South Indian chart): its outer ring holds
-  // the transiting planets for a chosen moment (live, redrawn each minute, by
+  // the transiting planets for a chosen moment (live, redrawn every second, by
   // default) with the natal chart nested inside it, sign for sign. Houses are
   // counted from the natal ascendant; the transit ascendant is left out, since
   // it changes sign every two hours or so.
@@ -2757,7 +2757,7 @@
     return ad.maha + ' / ' + ad.antar + (pd ? ' / ' + pd.prat : '');
   }
   function trLocalInput(d) {
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
   }
   function trSvgEl(svg, tag, attrs, text) {
     var e = document.createElementNS('http://www.w3.org/2000/svg', tag);
@@ -2836,9 +2836,11 @@
     var dasha = trDashaAt(result, tr.when);
     if (dasha) trSvgEl(svg, 'text', { x: mid, y: mid + 14, class: 'tr-center', 'text-anchor': 'middle' }, dasha);
     document.getElementById('transitRingOut').textContent = 'Natal ' + Math.round((W - 2 * ring) / W * 100) + '%';
-    document.getElementById('transitWhen').value = trLocalInput(tr.when);
+    // leave the date box alone while someone is typing in it
+    var whenBox = document.getElementById('transitWhen');
+    if (document.activeElement !== whenBox) whenBox.value = trLocalInput(tr.when);
     document.getElementById('transitStatus').textContent = tr.live ? 'Live' : 'Fixed';
-    document.getElementById('transitStatus').title = tr.live ? 'Updates every minute' : 'Press Now to return to live transits';
+    document.getElementById('transitStatus').title = tr.live ? 'Updates every second' : 'Press Now to return to live transits';
     trdDraw();
   }
 
@@ -2860,8 +2862,9 @@
     { key: 'month', r0: 200, r1: 228, label: 'Months', fs: 14 },
     { key: 'year', r0: 230, r1: 258, label: 'Years', fs: 13 }
   ];
-  var trd = { groups: null, marker: null, play: null };
+  var trd = { groups: null, marker: null, play: null, event: null };
   function trdPad(n) { return String(n).padStart(2, '0'); }
+  function trdClock(d) { return trdPad(d.getHours()) + ':' + trdPad(d.getMinutes()) + ':' + trdPad(d.getSeconds()); }
   function trdDim(y, m) { return new Date(y, m + 1, 0).getDate(); }
   function trdSet(d) {
     tr.live = false;
@@ -2870,19 +2873,20 @@
   }
   function trdSetYMD(y, m, d) {
     var w = tr.when;
-    trdSet(new Date(y, m, Math.min(d, trdDim(y, m)), w.getHours(), w.getMinutes()));
+    trdSet(new Date(y, m, Math.min(d, trdDim(y, m)), w.getHours(), w.getMinutes(), w.getSeconds()));
   }
   function trdStep(key, k) {
-    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes();
-    if (key === 'minute') trdSet(new Date(y, m, d, h, mi + k));
-    else if (key === 'hour') trdSet(new Date(y, m, d, h + k, mi));
-    else if (key === 'day') trdSet(new Date(y, m, d + k, h, mi));
-    else if (key === 'week') trdSet(new Date(y, m, d + 7 * k, h, mi));
+    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes(), sec = w.getSeconds();
+    if (key === 'second') trdSet(new Date(y, m, d, h, mi, sec + k));
+    else if (key === 'minute') trdSet(new Date(y, m, d, h, mi + k, sec));
+    else if (key === 'hour') trdSet(new Date(y, m, d, h + k, mi, sec));
+    else if (key === 'day') trdSet(new Date(y, m, d + k, h, mi, sec));
+    else if (key === 'week') trdSet(new Date(y, m, d + 7 * k, h, mi, sec));
     else if (key === 'month') { var t = new Date(y, m + k, 1); trdSetYMD(t.getFullYear(), t.getMonth(), d); }
     else trdSetYMD(y + k, m, d);
   }
   function trdSegments(key) {
-    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes();
+    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes(), sec = w.getSeconds();
     var out = [], i;
     function seg(label, sel, pick) { out.push({ label: label, sel: sel, pick: pick }); }
     if (key === 'minute') {
@@ -2890,10 +2894,10 @@
       for (i = 0; i < 60; i++) {
         var gap = Math.min((i - mi + 60) % 60, (mi - i + 60) % 60);
         seg(i === mi || (i % 5 === 0 && gap > 2) ? trdPad(i) : '', i === mi,
-          (function (v) { return function () { trdSet(new Date(y, m, d, h, v)); }; })(i));
+          (function (v) { return function () { trdSet(new Date(y, m, d, h, v, sec)); }; })(i));
       }
     } else if (key === 'hour') {
-      for (i = 0; i < 24; i++) seg(String(i), i === h, (function (v) { return function () { trdSet(new Date(y, m, d, v, mi)); }; })(i));
+      for (i = 0; i < 24; i++) seg(String(i), i === h, (function (v) { return function () { trdSet(new Date(y, m, d, v, mi, sec)); }; })(i));
     } else if (key === 'day') {
       for (i = 1; i <= trdDim(y, m); i++) seg(String(i), i === d, (function (v) { return function () { trdSetYMD(y, m, v); }; })(i));
     } else if (key === 'week') {
@@ -2925,6 +2929,17 @@
         if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { trdStep(ring.key, 1); e.preventDefault(); }
         if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { trdStep(ring.key, -1); e.preventDefault(); }
       });
+      // Scroll wheel or two-finger swipe over a ring: about 40px per step,
+      // forward on scrolling down. The ring under the pointer is outlined.
+      var wheelAcc = 0;
+      g.addEventListener('wheel', function (e) {
+        e.preventDefault();
+        wheelAcc += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
+        while (wheelAcc >= 40) { wheelAcc -= 40; trdStep(ring.key, 1); }
+        while (wheelAcc <= -40) { wheelAcc += 40; trdStep(ring.key, -1); }
+      }, { passive: false });
+      g.addEventListener('pointerenter', function () { g.classList.add('trd-hover'); });
+      g.addEventListener('pointerleave', function () { g.classList.remove('trd-hover'); wheelAcc = 0; });
       var drag = null;
       function angleOf(e) {
         var b = svg.getBoundingClientRect(), s = 520 / b.width;
@@ -2979,8 +2994,82 @@
     });
     svg.appendChild(trd.marker);
     var w = tr.when;
-    document.getElementById('trdTime').textContent = trdPad(w.getHours()) + ':' + trdPad(w.getMinutes());
+    document.getElementById('trdTime').textContent = trdClock(w);
     document.getElementById('trdDate').textContent = w.getDate() + ' ' + TRD_MONTHS[w.getMonth()] + ' ' + w.getFullYear();
+    // The note about the last jump stays only while the chart is still there.
+    if (trd.event && trd.event.t !== w.getTime()) trd.event = null;
+    document.getElementById('transitEvent').textContent = trd.event ? trd.event.text : '';
+  }
+
+  // Prev / Next on the dial: jump to the moment a planet changes sign (a
+  // retrograde move back into the previous sign counts too) or a dasha
+  // period begins. Sign changes are found by stepping in the given direction
+  // until the sign differs, then halving the gap down to under a second.
+  var TRD_SEARCH_DAYS = { Moon: 0.25, Sun: 1, Mars: 1, Jupiter: 2, Saturn: 3, Rahu: 3 };
+  var trdDashaCache = { result: null, md: null, ad: null, pd: null };
+  var TRD_DASHA_NAMES = { md: 'Mahadasha', ad: 'Antardasha', pd: 'Pratyantardasha' };
+  function trdSignAt(name, t) {
+    var nodeType = tr.result && tr.result.nodeType === 'true' ? 'true' : 'mean';
+    return Math.floor(window.VedicEngine.siderealLongitude(name, new Date(t), nodeType) / 30);
+  }
+  function trdFindIngress(name, t, dir) {
+    // going back, start just before the current moment so a jump that landed
+    // on a sign change finds the one before it
+    var from = dir > 0 ? t : t - 2000, s0 = trdSignAt(name, from), a = from, b = null;
+    var stride = TRD_SEARCH_DAYS[name] * 86400000 * dir;
+    for (var i = 0; i < 4000; i++) {
+      var next = a + stride;
+      if (trdSignAt(name, next) !== s0) { b = next; break; }
+      a = next;
+    }
+    if (b === null) return null;
+    while (Math.abs(b - a) > 500) {
+      var mid = (a + b) / 2;
+      if (trdSignAt(name, mid) === s0) a = mid; else b = mid;
+    }
+    var land = Math.ceil(Math.max(a, b) / 1000) * 1000;
+    return { t: land, sign: trdSignAt(name, land) };
+  }
+  function trdDashaStarts(kind) {
+    var result = tr.result;
+    if (trdDashaCache.result !== result) trdDashaCache = { result: result, md: null, ad: null, pd: null };
+    if (!trdDashaCache[kind]) {
+      var ads = result.antardashas || [], birth = ads.length ? ads[0].start : null;
+      trdDashaCache[kind] = kind === 'md'
+        ? (result.dasha || []).map(function (p) { return { t: p.start.getTime(), names: [p.lord] }; })
+        : kind === 'ad'
+        ? ads.map(function (a) { return { t: a.start.getTime(), names: [a.maha, a.antar] }; })
+        : [].concat.apply([], ads.map(function (a) {
+            return window.VedicEngine.pratyantardashas(a, birth).map(function (p) { return { t: p.start.getTime(), names: [p.maha, p.antar, p.prat] }; });
+          }));
+    }
+    return trdDashaCache[kind];
+  }
+  function trdJump(dir) {
+    if (!tr.result || !tr.when) return;
+    var kind = document.getElementById('transitEventKind').value, t = tr.when.getTime(), hit = null, text = '';
+    var asc = tr.result.ascendant.signIndex, SIGNS = window.VedicEngine.SIGNS;
+    function inHouse(sign) { return SIGNS[sign] + ' (H' + (((sign - asc + 12) % 12) + 1) + ')'; }
+    if (TRD_DASHA_NAMES[kind]) {
+      var list = trdDashaStarts(kind);
+      hit = dir > 0 ? list.filter(function (x) { return x.t > t + 1000; })[0]
+        : list.filter(function (x) { return x.t < t - 1000; }).slice(-1)[0];
+      if (hit) text = TRD_DASHA_NAMES[kind] + ' begins: ' + hit.names.join(' / ');
+    } else {
+      hit = trdFindIngress(kind, t, dir);
+      if (hit) {
+        text = kind === 'Rahu'
+          ? 'Rahu enters ' + inHouse(hit.sign) + ', Ketu enters ' + inHouse((hit.sign + 6) % 12)
+          : kind + ' enters ' + inHouse(hit.sign);
+      }
+    }
+    if (!hit) {
+      document.getElementById('transitEvent').textContent = 'No ' + (dir > 0 ? 'later' : 'earlier') + ' change found';
+      return;
+    }
+    var when = new Date(Math.ceil(hit.t / 1000) * 1000);
+    trd.event = { t: when.getTime(), text: text };
+    trdSet(when);
   }
   function trdStopPlay() {
     clearInterval(trd.play);
@@ -3015,12 +3104,15 @@
       playBtn.setAttribute('aria-pressed', 'true');
       trd.play = setInterval(function () { trdStep(playStep.value, 1); }, 400);
     });
+    document.getElementById('transitPrev').addEventListener('click', function () { if (trd.play) trdStopPlay(); trdJump(-1); });
+    document.getElementById('transitNext').addEventListener('click', function () { if (trd.play) trdStopPlay(); trdJump(1); });
   }
   function trVisible() {
     var card = document.getElementById('transitCardD1');
     return card && !card.classList.contains('hidden');
   }
-  // Redraw only while the card is on screen; showing it catches up.
+  // Live mode redraws every second (the chart, the dial and the date box),
+  // but only while the card is on screen; showing it catches up.
   function trTick() {
     if (!tr.live || !tr.result) return;
     tr.when = new Date();
@@ -3050,7 +3142,7 @@
       trDraw();
     });
     initTransitDial();
-    tr.timer = setInterval(trTick, 60000);
+    tr.timer = setInterval(trTick, 1000);
   }
   function renderTransitChart(result) {
     initTransitChart();
