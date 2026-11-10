@@ -2844,164 +2844,121 @@
     trdDraw();
   }
 
-  // Date dial beside the Transit chart: concentric rings for minutes, hours,
-  // days, weeks of the month, months and years, each turned so the chart's
-  // moment sits under the marker at the top. Dragging a ring steps that unit
-  // (rolling over into the next, so 23:59 plus a minute is the next day),
-  // clicking a segment jumps to it, arrow keys step a focused ring, and the
-  // centre opens the date box above. Times are the browser's local time,
-  // the same as that date box. Weeks are fixed 7-day blocks (days 1-7, 8-14…).
+  // Time strips beside the Transit chart: one vertical strip per unit (year,
+  // month, week of the month, day, hour, minute, second), each showing the
+  // chart's moment in a shaded band with the two values either side of it.
+  // Scrolling over a strip or dragging it up and down steps that unit
+  // (rolling over into the next, so 23:59:59 plus a second is the next day),
+  // clicking a value jumps to it, and arrow keys step a focused strip. Times
+  // are the browser's local time, the same as the date box above. Weeks are
+  // fixed 7-day blocks (days 1-7, 8-14…).
   var TRD_KEY = 'vedicTransitDial.v1';
-  var TRD_C = 260;
+  var TRD_ROW = 34;
   var TRD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  var TRD_RINGS = [
-    { key: 'minute', r0: 62, r1: 96, label: 'Minutes', fs: 12 },
-    { key: 'hour', r0: 98, r1: 132, label: 'Hours', fs: 13 },
-    { key: 'day', r0: 134, r1: 168, label: 'Days', fs: 13 },
-    { key: 'week', r0: 170, r1: 198, label: 'Weeks of the month', fs: 13 },
-    { key: 'month', r0: 200, r1: 228, label: 'Months', fs: 14 },
-    { key: 'year', r0: 230, r1: 258, label: 'Years', fs: 13 }
+  var TRD_UNITS = [
+    { key: 'year', head: 'Year', fmt: function (d) { return String(d.getFullYear()); } },
+    { key: 'month', head: 'Month', fmt: function (d) { return TRD_MONTHS[d.getMonth()]; } },
+    { key: 'week', head: 'Week', fmt: function (d) { return 'Wk ' + Math.ceil(d.getDate() / 7); } },
+    { key: 'day', head: 'Day', fmt: function (d) { return String(d.getDate()); } },
+    { key: 'hour', head: 'Hr', fmt: function (d) { return trdPad(d.getHours()); } },
+    { key: 'minute', head: 'Min', fmt: function (d) { return trdPad(d.getMinutes()); } },
+    { key: 'second', head: 'Sec', fmt: function (d) { return trdPad(d.getSeconds()); } }
   ];
-  var trd = { groups: null, marker: null, play: null, event: null };
+  var trd = { strips: null, play: null, event: null };
   function trdPad(n) { return String(n).padStart(2, '0'); }
-  function trdClock(d) { return trdPad(d.getHours()) + ':' + trdPad(d.getMinutes()) + ':' + trdPad(d.getSeconds()); }
   function trdDim(y, m) { return new Date(y, m + 1, 0).getDate(); }
   function trdSet(d) {
     tr.live = false;
     tr.when = d;
     trDraw();
   }
-  function trdSetYMD(y, m, d) {
-    var w = tr.when;
-    trdSet(new Date(y, m, Math.min(d, trdDim(y, m)), w.getHours(), w.getMinutes(), w.getSeconds()));
-  }
-  function trdStep(key, k) {
+  // The moment k units away from the chart's; months and years keep the day
+  // where they can (31 Mar + 1 month = 30 Apr).
+  function trdShifted(key, k) {
     var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes(), sec = w.getSeconds();
-    if (key === 'second') trdSet(new Date(y, m, d, h, mi, sec + k));
-    else if (key === 'minute') trdSet(new Date(y, m, d, h, mi + k, sec));
-    else if (key === 'hour') trdSet(new Date(y, m, d, h + k, mi, sec));
-    else if (key === 'day') trdSet(new Date(y, m, d + k, h, mi, sec));
-    else if (key === 'week') trdSet(new Date(y, m, d + 7 * k, h, mi, sec));
-    else if (key === 'month') { var t = new Date(y, m + k, 1); trdSetYMD(t.getFullYear(), t.getMonth(), d); }
-    else trdSetYMD(y + k, m, d);
+    if (key === 'second') return new Date(y, m, d, h, mi, sec + k);
+    if (key === 'minute') return new Date(y, m, d, h, mi + k, sec);
+    if (key === 'hour') return new Date(y, m, d, h + k, mi, sec);
+    if (key === 'day') return new Date(y, m, d + k, h, mi, sec);
+    if (key === 'week') return new Date(y, m, d + 7 * k, h, mi, sec);
+    var t = key === 'month' ? new Date(y, m + k, 1) : new Date(y + k, m, 1);
+    return new Date(t.getFullYear(), t.getMonth(), Math.min(d, trdDim(t.getFullYear(), t.getMonth())), h, mi, sec);
   }
-  function trdSegments(key) {
-    var w = tr.when, y = w.getFullYear(), m = w.getMonth(), d = w.getDate(), h = w.getHours(), mi = w.getMinutes(), sec = w.getSeconds();
-    var out = [], i;
-    function seg(label, sel, pick) { out.push({ label: label, sel: sel, pick: pick }); }
-    if (key === 'minute') {
-      // every fifth minute is labelled, except right beside the selected one
-      for (i = 0; i < 60; i++) {
-        var gap = Math.min((i - mi + 60) % 60, (mi - i + 60) % 60);
-        seg(i === mi || (i % 5 === 0 && gap > 2) ? trdPad(i) : '', i === mi,
-          (function (v) { return function () { trdSet(new Date(y, m, d, h, v, sec)); }; })(i));
-      }
-    } else if (key === 'hour') {
-      for (i = 0; i < 24; i++) seg(String(i), i === h, (function (v) { return function () { trdSet(new Date(y, m, d, v, mi, sec)); }; })(i));
-    } else if (key === 'day') {
-      for (i = 1; i <= trdDim(y, m); i++) seg(String(i), i === d, (function (v) { return function () { trdSetYMD(y, m, v); }; })(i));
-    } else if (key === 'week') {
-      var weeks = Math.ceil(trdDim(y, m) / 7), cur = Math.ceil(d / 7), off = (d - 1) % 7;
-      for (i = 1; i <= weeks; i++) seg('Wk ' + i, i === cur, (function (v) { return function () { trdSetYMD(y, m, (v - 1) * 7 + off + 1); }; })(i));
-    } else if (key === 'month') {
-      for (i = 0; i < 12; i++) seg(TRD_MONTHS[i], i === m, (function (v) { return function () { trdSetYMD(y, v, d); }; })(i));
-    } else {
-      // a window of years around the selected one, re-centred as it moves
-      for (i = -5; i <= 6; i++) seg(String(y + i), i === 0, (function (v) { return function () { trdSetYMD(v, m, d); }; })(y + i));
-    }
-    return out;
-  }
-  function trdPt(r, a) {
-    var t = a * Math.PI / 180;
-    return [TRD_C + r * Math.sin(t), TRD_C - r * Math.cos(t)];
-  }
-  function trdSector(r0, r1, a0, a1) {
-    var p = [trdPt(r1, a0), trdPt(r1, a1), trdPt(r0, a1), trdPt(r0, a0)], big = a1 - a0 > 180 ? 1 : 0;
-    return 'M' + p[0] + ' A' + r1 + ',' + r1 + ' 0 ' + big + ' 1 ' + p[1] + ' L' + p[2] +
-      ' A' + r0 + ',' + r0 + ' 0 ' + big + ' 0 ' + p[3] + ' Z';
-  }
-  function trdBuild(svg) {
-    trd.groups = {};
-    TRD_RINGS.forEach(function (ring) {
-      var g = trSvgEl(svg, 'g', { tabindex: 0, role: 'slider', 'aria-label': ring.label, class: 'trd-ring' });
-      trd.groups[ring.key] = g;
-      g.addEventListener('keydown', function (e) {
-        if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { trdStep(ring.key, 1); e.preventDefault(); }
-        if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { trdStep(ring.key, -1); e.preventDefault(); }
+  function trdStep(key, k) { if (k) trdSet(trdShifted(key, k)); }
+  function trdBuild(box) {
+    trd.strips = {};
+    TRD_UNITS.forEach(function (u) {
+      var col = document.createElement('div');
+      col.appendChild(spanText(u.head, 'trd-head'));
+      var strip = document.createElement('div');
+      strip.className = 'trd-strip';
+      strip.tabIndex = 0;
+      strip.setAttribute('role', 'slider');
+      strip.setAttribute('aria-label', u.head);
+      col.appendChild(strip);
+      box.appendChild(col);
+      trd.strips[u.key] = strip;
+      strip.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown') { trdStep(u.key, 1); e.preventDefault(); }
+        if (e.key === 'ArrowUp') { trdStep(u.key, -1); e.preventDefault(); }
       });
-      // Scroll wheel or two-finger swipe over a ring: about 40px per step,
-      // forward on scrolling down. The ring under the pointer is outlined.
+      // scroll wheel or two-finger swipe: about 40px per step, forward on
+      // scrolling down
       var wheelAcc = 0;
-      g.addEventListener('wheel', function (e) {
+      strip.addEventListener('wheel', function (e) {
         e.preventDefault();
         wheelAcc += e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
-        while (wheelAcc >= 40) { wheelAcc -= 40; trdStep(ring.key, 1); }
-        while (wheelAcc <= -40) { wheelAcc += 40; trdStep(ring.key, -1); }
+        while (wheelAcc >= 40) { wheelAcc -= 40; trdStep(u.key, 1); }
+        while (wheelAcc <= -40) { wheelAcc += 40; trdStep(u.key, -1); }
       }, { passive: false });
-      g.addEventListener('pointerenter', function () { g.classList.add('trd-hover'); });
-      g.addEventListener('pointerleave', function () { g.classList.remove('trd-hover'); wheelAcc = 0; });
+      strip.addEventListener('pointerleave', function () { wheelAcc = 0; });
+      // dragging up brings later values into the band, like a phone's time
+      // picker; a press that doesn't move is a click on that value
       var drag = null;
-      function angleOf(e) {
-        var b = svg.getBoundingClientRect(), s = 520 / b.width;
-        return Math.atan2((e.clientX - b.left) * s - TRD_C, TRD_C - (e.clientY - b.top) * s) * 180 / Math.PI;
-      }
-      g.addEventListener('pointerdown', function (e) {
-        drag = { last: angleOf(e), acc: 0, moved: false, pick: e.target.trdPick };
-        g.setPointerCapture(e.pointerId);
+      strip.addEventListener('pointerdown', function (e) {
+        drag = { y: e.clientY, acc: 0, moved: false, k: Number(e.target.dataset && e.target.dataset.k) };
+        try { strip.setPointerCapture(e.pointerId); } catch (err) {}
       });
-      g.addEventListener('pointermove', function (e) {
+      strip.addEventListener('pointermove', function (e) {
         if (!drag) return;
-        var a = angleOf(e), da = a - drag.last;
-        if (da > 180) da -= 360;
-        if (da < -180) da += 360;
-        drag.last = a;
-        drag.acc += da;
-        if (Math.abs(drag.acc) > 3) drag.moved = true;
-        var seg = 360 / trdSegments(ring.key).length;
-        // turning a ring clockwise brings the earlier value under the marker
-        while (drag.acc <= -seg) { drag.acc += seg; trdStep(ring.key, 1); }
-        while (drag.acc >= seg) { drag.acc -= seg; trdStep(ring.key, -1); }
+        drag.acc += drag.y - e.clientY;
+        drag.y = e.clientY;
+        if (Math.abs(drag.acc) > 4) drag.moved = true;
+        var stride = TRD_ROW * 0.6;
+        while (drag.acc >= stride) { drag.acc -= stride; trdStep(u.key, 1); }
+        while (drag.acc <= -stride) { drag.acc += stride; trdStep(u.key, -1); }
       });
-      g.addEventListener('pointerup', function () {
-        if (drag && !drag.moved && drag.pick) drag.pick();
+      strip.addEventListener('pointerup', function () {
+        if (drag && !drag.moved && !isNaN(drag.k)) trdStep(u.key, drag.k);
         drag = null;
       });
-      g.addEventListener('pointercancel', function () { drag = null; });
+      strip.addEventListener('pointercancel', function () { drag = null; });
     });
-    trd.marker = trSvgEl(svg, 'path', { d: 'M' + (TRD_C - 9) + ',0 L' + (TRD_C + 9) + ',0 L' + TRD_C + ',13 Z', class: 'trd-marker' });
   }
   function trdDraw() {
-    var box = document.getElementById('transitDialBox'), svg = document.getElementById('transitDial');
+    var box = document.getElementById('transitDialBox'), stripsBox = document.getElementById('transitStrips');
     if (!box || box.classList.contains('hidden') || !tr.when) return;
-    if (!trd.groups) trdBuild(svg);
-    TRD_RINGS.forEach(function (ring) {
-      var g = trd.groups[ring.key];
-      while (g.firstChild) g.removeChild(g.firstChild);
-      var segs = trdSegments(ring.key), seg = 360 / segs.length;
-      var selIdx = segs.findIndex(function (s) { return s.sel; });
-      segs.forEach(function (s, i) {
-        var mid = (i - selIdx) * seg;
-        var path = trSvgEl(g, 'path', { d: trdSector(ring.r0, ring.r1, mid - seg / 2, mid + seg / 2), class: s.sel ? 'trd-seg trd-sel' : 'trd-seg' });
-        path.trdPick = s.pick;
-        if (!s.label) return;
-        var p = trdPt((ring.r0 + ring.r1) / 2, mid), a = ((mid % 360) + 360) % 360;
-        var rot = a > 90 && a < 270 ? a + 180 : a;
-        trSvgEl(g, 'text', {
-          x: p[0], y: p[1], 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': ring.fs,
-          transform: 'rotate(' + rot + ' ' + p[0] + ' ' + p[1] + ')', class: s.sel ? 'trd-label trd-sel' : 'trd-label'
-        }, s.label);
-      });
+    if (!trd.strips) trdBuild(stripsBox);
+    TRD_UNITS.forEach(function (u) {
+      var strip = trd.strips[u.key];
+      strip.textContent = '';
+      var band = document.createElement('div');
+      band.className = 'trd-band';
+      strip.appendChild(band);
+      for (var k = -2; k <= 2; k++) {
+        var row = spanText(u.fmt(trdShifted(u.key, k)), 'trd-row' + (k === 0 ? ' trd-sel' : Math.abs(k) === 2 ? ' trd-far' : ''));
+        row.style.top = (2 * TRD_ROW + k * TRD_ROW) + 'px';
+        row.dataset.k = k;
+        strip.appendChild(row);
+      }
+      strip.setAttribute('aria-valuetext', u.fmt(tr.when));
     });
-    svg.appendChild(trd.marker);
-    var w = tr.when;
-    document.getElementById('trdTime').textContent = trdClock(w);
-    document.getElementById('trdDate').textContent = w.getDate() + ' ' + TRD_MONTHS[w.getMonth()] + ' ' + w.getFullYear();
     // The note about the last jump stays only while the chart is still there.
-    if (trd.event && trd.event.t !== w.getTime()) trd.event = null;
+    if (trd.event && trd.event.t !== tr.when.getTime()) trd.event = null;
     document.getElementById('transitEvent').textContent = trd.event ? trd.event.text : '';
   }
 
-  // Prev / Next on the dial: jump to the moment a planet changes sign (a
+  // Prev / Next under the strips: jump to the moment a planet changes sign (a
   // retrograde move back into the previous sign counts too) or a dasha
   // period begins. Sign changes are found by stepping in the given direction
   // until the sign differs, then halving the gap down to under a second.
@@ -3091,11 +3048,6 @@
       var shown = box.classList.contains('hidden');
       prefSet(TRD_KEY, shown ? 'shown' : 'hidden');
       applyShown(shown);
-    });
-    document.getElementById('transitDialCenter').addEventListener('click', function () {
-      var inp = document.getElementById('transitWhen');
-      try { if (inp.showPicker) { inp.showPicker(); return; } } catch (e) {}
-      inp.focus();
     });
     var playBtn = document.getElementById('transitPlay'), playStep = document.getElementById('transitPlayStep');
     playBtn.addEventListener('click', function () {

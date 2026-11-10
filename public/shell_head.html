@@ -1083,34 +1083,21 @@
   .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
   .tr-center { font-size: 16px; fill: var(--muted); }
   #transitDialToggle[aria-pressed="true"], #transitPlay[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
-  /* Date dial to the right of the Transit chart (it wraps below when the row
-     is too narrow). Its svg takes the same width tiers as the chart beside
-     it; the centre button sits over the dial's empty middle. */
+  /* Time strips to the right of the Transit chart (they wrap below when the
+     row is too narrow): one strip per unit, the chosen value in the band. */
   .tr-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: center; }
   .tr-row .tr-chart { margin: 0; }
-  .trd-wrap { position: relative; width: fit-content; margin: 0 auto; }
-  .trd-svg { display: block; height: auto; touch-action: none; user-select: none; }
-  .trd-ring { cursor: grab; outline: none; }
-  .trd-ring:active { cursor: grabbing; }
-  .trd-ring:focus-visible .trd-seg { stroke: var(--gold); }
-  .trd-seg { fill: var(--panel2); stroke: var(--line); stroke-width: 1; }
-  .trd-seg.trd-sel { fill: var(--house1-fill); }
-  .trd-label { fill: var(--muted); pointer-events: none; }
-  .trd-label.trd-sel { fill: var(--gold-soft); font-weight: 700; }
-  .trd-marker { fill: var(--gold); }
-  .trd-center {
-    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    width: 23%; aspect-ratio: 1 / 1; border-radius: 50%; border: none; background: transparent;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-family: inherit; cursor: pointer; color: var(--text); padding: 0;
-  }
-  .trd-center:focus-visible { outline: 2px solid var(--gold); }
-  .trd-time { font-size: 15px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .trd-date { font-size: 10.5px; color: var(--muted); white-space: nowrap; }
-  .trd-pick { font-size: 10.5px; color: var(--gold-soft); }
+  .trd-strips { display: grid; grid-template-columns: 1.25fr 1fr 0.9fr 0.9fr 0.8fr 0.8fr 0.8fr; gap: 4px; width: 300px; max-width: 100%; }
+  .trd-head { display: block; font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 3px; }
+  .trd-strip { position: relative; height: 170px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); overflow: hidden; cursor: grab; touch-action: none; user-select: none; outline: none; }
+  .trd-strip:hover, .trd-strip:focus-visible { border-color: var(--gold); }
+  .trd-strip:active { cursor: grabbing; }
+  .trd-row { position: absolute; left: 0; right: 0; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .trd-row.trd-far { font-size: 11px; opacity: 0.75; }
+  .trd-row.trd-sel { color: var(--gold-soft); font-weight: 700; font-size: 15px; }
+  .trd-band { position: absolute; left: 0; right: 0; top: 68px; height: 34px; background: var(--house1-fill); pointer-events: none; }
   .trd-play { justify-content: center; margin: 6px 0 0; }
   .trd-play select { font-family: inherit; font-size: 12px; padding: 2px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); color: var(--text); }
-  .trd-ring.trd-hover .trd-seg { stroke: var(--gold); stroke-width: 1.5; }
   .trd-event { min-height: 1.4em; margin: 4px 0 0; text-align: center; font-size: 12px; color: var(--gold-soft); font-weight: 600; }
   /* Period lords (Dashas tab and the chart's side tab — same content). */
   .pl-box { display: flex; flex-direction: column; gap: 10px; text-align: left; }
@@ -1894,15 +1881,12 @@
                 <span class="tr-status" id="transitStatus"></span>
                 <input type="range" id="transitRing" min="80" max="140" step="5" value="100" aria-label="Transit ring width" title="Transit ring width">
                 <span class="tr-status" id="transitRingOut"></span>
-                <button type="button" id="transitDialToggle" aria-pressed="false" aria-controls="transitDialBox" title="Show a dial for stepping the date and time">Dial</button>
+                <button type="button" id="transitDialToggle" aria-pressed="false" aria-controls="transitDialBox" title="Show strips for stepping the date and time">Dial</button>
               </div>
               <div class="tr-row">
               <svg id="transitChart" class="tr-chart" viewBox="0 0 560 560" role="img" aria-label="Transit planets in the outer ring, natal planets in the inner ring. H is the natal house, R is retrograde."><title>Outer ring: transits. Inner ring: natal. H = natal house, R = retrograde.</title></svg>
               <div class="trd hidden" id="transitDialBox">
-                <div class="trd-wrap">
-                  <svg id="transitDial" class="trd-svg" viewBox="0 0 520 520" role="group" aria-label="Date and time dial: minutes, hours, days, weeks of the month, months and years, from the inside out"></svg>
-                  <button type="button" class="trd-center" id="transitDialCenter" title="Pick a date and time"><span class="trd-time" id="trdTime"></span><span class="trd-date" id="trdDate"></span><span class="trd-pick">Pick ▾</span></button>
-                </div>
+                <div class="trd-strips" id="transitStrips" role="group" aria-label="Time strips: year, month, week, day, hour, minute and second"></div>
                 <div class="tr-controls trd-play">
                   <button type="button" id="transitPlay" aria-pressed="false">▶ Play</button>
                   <select id="transitPlayStep" aria-label="Play step">
