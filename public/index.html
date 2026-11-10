@@ -1083,10 +1083,13 @@
   .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
   .tr-center { font-size: 16px; fill: var(--muted); }
   #transitDialToggle[aria-pressed="true"], #transitPlay[aria-pressed="true"] { color: var(--gold-soft); border-color: var(--gold); }
-  /* Time strips to the right of the Transit chart (they wrap below when the
+  /* Time strips to the right of the Transit chart, centred on its height (they wrap below when the
      row is too narrow): one strip per unit, the chosen value in the band. */
-  .tr-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; justify-content: center; }
+  .tr-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
   .tr-row .tr-chart { margin: 0; }
+  /* The control bar sits in the chart's column, so it stays the chart's
+     width whether or not the strips are open. */
+  .tr-col { min-width: 0; }
   .trd-strips { display: grid; grid-template-columns: 1.25fr 1fr 0.9fr 0.9fr 0.8fr 0.8fr 0.8fr; gap: 4px; width: 300px; max-width: 100%; }
   .trd-head { display: block; font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 3px; }
   .trd-strip { position: relative; height: 170px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); overflow: hidden; cursor: grab; touch-action: none; user-select: none; outline: none; }
@@ -1875,6 +1878,8 @@
               <svg id="northChartD1" viewBox="0 0 300 300"></svg>
             </div>
             <div class="chart-card tr-card" id="transitCardD1">
+              <div class="tr-row">
+              <div class="tr-col">
               <div class="tr-controls">
                 <input type="datetime-local" id="transitWhen" step="1" aria-label="Transit date and time">
                 <button type="button" id="transitNow">Now</button>
@@ -1883,8 +1888,8 @@
                 <span class="tr-status" id="transitRingOut"></span>
                 <button type="button" id="transitDialToggle" aria-pressed="false" aria-controls="transitDialBox" title="Show strips for stepping the date and time">Dial</button>
               </div>
-              <div class="tr-row">
               <svg id="transitChart" class="tr-chart" viewBox="0 0 560 560" role="img" aria-label="Transit planets in the outer ring, natal planets in the inner ring. H is the natal house, R is retrograde."><title>Outer ring: transits. Inner ring: natal. H = natal house, R = retrograde.</title></svg>
+              </div>
               <div class="trd hidden" id="transitDialBox">
                 <div class="trd-strips" id="transitStrips" role="group" aria-label="Time strips: year, month, week, day, hour, minute and second"></div>
                 <div class="tr-controls trd-play">
