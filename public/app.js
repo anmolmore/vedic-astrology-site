@@ -419,6 +419,11 @@
     svg.appendChild(lg);
   }
 
+  // The D1 chart and the Transit chart's natal ring, always redrawn together.
+  function renderD1Charts(result, sb) {
+    renderSouthChart('southChartD1', result, false, sb);
+    trNatalRedraw();
+  }
   function renderSouthChart(svgId, result, varga, sb) {
     var svg = document.getElementById(svgId);
     hideChartTooltip();
@@ -467,7 +472,7 @@
             networkFocusPlanet = null;
             if (networkSelectedSigns[sIdx]) delete networkSelectedSigns[sIdx];
             else networkSelectedSigns[sIdx] = true;
-            renderSouthChart(svgId, result, varga, sb);
+            renderD1Charts(result, sb);
           };
         })(s));
       }
@@ -2766,6 +2771,40 @@
     svg.appendChild(e);
     return e;
   }
+  // The Transit chart's three layers: the transit boxes (redrawn every
+  // second in live mode), the natal ring, and the centre text on top. The
+  // natal ring is kept between redraws, so hovering or clicking it isn't
+  // interrupted by the live clock.
+  function trLayers(svg) {
+    var natal = document.getElementById('transitNatalChart');
+    if (!natal) {
+      while (svg.firstChild) svg.removeChild(svg.firstChild);
+      trSvgEl(svg, 'g', { class: 'tr-outer' });
+      natal = trSvgEl(svg, 'svg', { id: 'transitNatalChart', viewBox: '0 0 320 320', overflow: 'visible' });
+      trSvgEl(svg, 'g', { class: 'tr-centre', 'pointer-events': 'none' });
+    }
+    return { outer: svg.querySelector('g.tr-outer'), natal: natal, centre: svg.querySelector('g.tr-centre') };
+  }
+  // Draws the natal ring with renderSouthChart, the South Indian chart's own
+  // renderer, so it has every one of its features (dignity marks, hover
+  // narratives, sign selection, the network and Dasha overlays) and reads the
+  // same state. renderD1Charts() calls this whenever the South chart redraws,
+  // which is what keeps the two in step.
+  function trNatalRedraw() {
+    var natal = document.getElementById('transitNatalChart');
+    if (!natal || !tr.result) return;
+    renderSouthChart('transitNatalChart', tr.result, false, tr.result === lastResult ? lastSb : null);
+    // ids must stay unique in the page, since the South chart uses the same
+    // ones (its arrow markers would vanish here whenever it is hidden)
+    [].forEach.call(natal.querySelectorAll('[id]'), function (el) { el.id += '-tr'; });
+    [].forEach.call(natal.querySelectorAll('[marker-start], [marker-end]'), function (el) {
+      ['marker-start', 'marker-end'].forEach(function (a) {
+        var v = el.getAttribute(a);
+        if (v) el.setAttribute(a, v.replace(/\)$/, '-tr)'));
+      });
+    });
+    tr.natalFor = tr.result;
+  }
   function trDraw() {
     var svg = document.getElementById('transitChart');
     var result = tr.result;
@@ -2773,19 +2812,23 @@
     var nodeType = result.nodeType === 'true' ? 'true' : 'mean';
     var sky = window.VedicEngine.computeChart({ date: tr.when, latDeg: 0, lonDeg: 0, nodeType: nodeType });
     var transit = trPlanets(sky.planets);
-    var ascDeg = result.ascendant.degree;
-    var natal = [{ label: 'As', sign: result.ascendant.signIndex, deg: ascDeg == null ? null : Math.floor(ascDeg), retro: false }]
-      .concat(trPlanets(result.planets));
     var ring = Number(document.getElementById('transitRing').value) || 100;
     var W = TR_SIZE, cell = (W - 2 * ring) / 4;
     var asc = result.ascendant.signIndex, SIGNS = window.VedicEngine.SIGNS;
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    var layers = trLayers(svg), outer = layers.outer, centre = layers.centre;
+    while (outer.firstChild) outer.removeChild(outer.firstChild);
+    while (centre.firstChild) centre.removeChild(centre.firstChild);
+    // The natal ring is the South Indian chart itself, drawn by the same code
+    // into a nested svg sized to the inner boxes; only its size changes here.
+    ['x', 'y'].forEach(function (k) { layers.natal.setAttribute(k, ring); });
+    ['width', 'height'].forEach(function (k) { layers.natal.setAttribute(k, 4 * cell); });
+    if (tr.natalFor !== result) trNatalRedraw();
     function lbl(p) { return p.label + (p.deg == null ? '' : ' ' + p.deg + '°') + (p.retro ? ' R' : ''); }
     // Header, then the sign's transit planets in as many columns as the box
     // needs; a smaller font and spaceless labels once the columns get narrow.
     function fill(x, y, w, h, s, planets) {
       var house = ((s - asc + 12) % 12) + 1;
-      trSvgEl(svg, 'text', { x: x + 7, y: y + 18, class: 'tr-sign' }, 'H' + house + ' ' + (w < 130 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
+      trSvgEl(outer, 'text', { x: x + 7, y: y + 18, class: 'tr-sign' }, 'H' + house + ' ' + (w < 130 ? SIGNS[s].slice(0, 3) : SIGNS[s]));
       function layout(step, top) {
         var rows = Math.max(1, Math.floor((h - top - 4) / step) + 1);
         var cols = Math.ceil(planets.length / rows);
@@ -2798,7 +2841,7 @@
       planets.forEach(function (p, i) {
         var col = Math.floor(i / lay.rows), row = i % lay.rows;
         var text = bare ? p.label + (p.retro ? 'R' : '') : narrow ? lbl(p).replace(/ /g, '') : lbl(p);
-        trSvgEl(svg, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step, class: narrow ? 'tr-transit tr-transit-sm' : 'tr-transit' }, text);
+        trSvgEl(outer, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step, class: narrow ? 'tr-transit tr-transit-sm' : 'tr-transit' }, text);
       });
     }
     // Outer boxes line up with the natal boxes inside them: the two middle
@@ -2812,29 +2855,22 @@
         var fx = function (v) { return c === 3 ? W - v : v; }, fy = function (v) { return r === 3 ? W - v : v; };
         var pts = [[0, 0], [L, 0], [L, ring], [ring, ring], [ring, L], [0, L]]
           .map(function (q) { return fx(q[0]) + ',' + fy(q[1]); }).join(' ');
-        trSvgEl(svg, 'polygon', { points: pts, class: 'tr-cell' });
+        trSvgEl(outer, 'polygon', { points: pts, class: 'tr-cell' });
         fill(c === 3 ? W - L : 0, r === 3 ? W - ring : 0, L, ring, s, here);
       } else if (r === 0 || r === 3) {
         var bx = ring + c * cell, by = r === 3 ? W - ring : 0;
-        trSvgEl(svg, 'rect', { x: bx, y: by, width: cell, height: ring, class: 'tr-cell' });
+        trSvgEl(outer, 'rect', { x: bx, y: by, width: cell, height: ring, class: 'tr-cell' });
         fill(bx, by, cell, ring, s, here);
       } else {
         var sx = c === 3 ? W - ring : 0, sy = ring + r * cell;
-        trSvgEl(svg, 'rect', { x: sx, y: sy, width: ring, height: cell, class: 'tr-cell' });
+        trSvgEl(outer, 'rect', { x: sx, y: sy, width: ring, height: cell, class: 'tr-cell' });
         fill(sx, sy, ring, cell, s, here);
       }
-      var ix = ring + c * cell, iy = ring + r * cell;
-      trSvgEl(svg, 'rect', { x: ix + 2, y: iy + 2, width: cell - 4, height: cell - 4, rx: 5, class: 'tr-natal-cell' });
-      var ny = iy + 28;
-      natal.filter(function (p) { return p.sign === s; }).forEach(function (p) {
-        trSvgEl(svg, 'text', { x: ix + cell / 2, y: ny, class: 'tr-natal', 'text-anchor': 'middle' }, lbl(p));
-        ny += 21;
-      });
     }
     var mid = W / 2;
-    trSvgEl(svg, 'text', { x: mid, y: mid - 14, class: 'tr-center-title', 'text-anchor': 'middle' }, SIGNS[asc] + ' ascendant');
+    trSvgEl(centre, 'text', { x: mid, y: mid - 14, class: 'tr-center-title', 'text-anchor': 'middle' }, SIGNS[asc] + ' ascendant');
     var dasha = trDashaAt(result, tr.when);
-    if (dasha) trSvgEl(svg, 'text', { x: mid, y: mid + 14, class: 'tr-center', 'text-anchor': 'middle' }, dasha);
+    if (dasha) trSvgEl(centre, 'text', { x: mid, y: mid + 14, class: 'tr-center', 'text-anchor': 'middle' }, dasha);
     document.getElementById('transitRingOut').textContent = 'Natal ' + Math.round((W - 2 * ring) / W * 100) + '%';
     // leave the date box alone while someone is typing in it
     var whenBox = document.getElementById('transitWhen');
@@ -3473,7 +3509,7 @@
       networkSelectedSigns = {};
       networkSelectedSigns[(lastResult.ascendant.signIndex + entry.house - 1) % 12] = true;
       networkFocusPlanet = entry.kind === 'planet' ? entry.key : null;
-      renderSouthChart('southChartD1', lastResult, false, lastSb);
+      renderD1Charts(lastResult, lastSb);
     }
     select.onchange = function () {
       var entry = entries[Number(select.value)];
@@ -4975,7 +5011,7 @@
       // module vars here could momentarily redraw the *previous* chart's
       // South Indian grid under the *new* chart's dasha data.
       lastDashaSelection = { lords: sel.lords, start: sel.start, end: sel.end };
-      if (dashaActivationEnabled || networkEnabled) renderSouthChart('southChartD1', result, false, sb);
+      if (dashaActivationEnabled || networkEnabled) renderD1Charts(result, sb);
       // Yogas score only for the lords of the period in view, so the Influence
       // Engine tab's verdicts are recomputed for it too.
       renderBalaFramework(result, sb);
@@ -6758,7 +6794,7 @@
     southCard.style.order = style === 'north' ? '2' : '1';
     northCard.style.order = style === 'north' ? '1' : '2';
     networkSelectedSigns = {}; networkFocusPlanet = null;
-    renderSouthChart('southChartD1', result, false, null);
+    renderD1Charts(result, null);
     renderNorthChart('northChartD1', result, false, null);
 
     collapseForm({ simulated: true, asc: result.ascendant.sign });
@@ -7210,14 +7246,14 @@
       networkSelectedSigns = {};
       networkFocusPlanet = null;
       syncDirBoxes();
-      if (lastResult) renderSouthChart('southChartD1', lastResult, false, lastSb);
+      if (lastResult) renderD1Charts(lastResult, lastSb);
     });
     [[inBox, 'in'], [outBox, 'out']].forEach(function (pair) {
       if (!pair[0]) return;
       pair[0].addEventListener('change', function () {
         if (pair[1] === 'in') networkShowIn = pair[0].checked;
         else networkShowOut = pair[0].checked;
-        if (lastResult) renderSouthChart('southChartD1', lastResult, false, lastSb);
+        if (lastResult) renderD1Charts(lastResult, lastSb);
       });
     });
   }
@@ -7234,7 +7270,7 @@
       // Safe to use the module-level lastResult/lastSb here (unlike the hook
       // inside showDetail) — a checkbox click only ever happens once a chart
       // is already on screen, so they're guaranteed to match what's shown.
-      if (lastResult) renderSouthChart('southChartD1', lastResult, false, lastSb);
+      if (lastResult) renderD1Charts(lastResult, lastSb);
     });
   }
 
@@ -7799,7 +7835,7 @@
         southCard.style.order = style === 'north' ? '2' : '1';
         northCard.style.order = style === 'north' ? '1' : '2';
         networkSelectedSigns = {}; networkFocusPlanet = null;
-        renderSouthChart('southChartD1', result, false, shadbala);
+        renderD1Charts(result, shadbala);
         renderNorthChart('northChartD1', result, false, shadbala);
         renderVargaCanvas(result, shadbala);
 
