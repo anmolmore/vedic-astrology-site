@@ -4464,14 +4464,24 @@
     var path = document.createElement('div');
     path.className = 'rm-path';
     path.appendChild(rmPill(w.name, 'hurt'));
+    // each arrow carries the reason for that connection, above the arrow;
+    // every link is a connection to the weak planet, which the hover says
+    function arrow(why, hover) {
+      var a = document.createElement('span');
+      a.className = 'rm-arrow';
+      a.title = hover;
+      a.appendChild(spanText(why, 'rm-arrow-why'));
+      a.appendChild(spanText('→', 'rm-arrow-mark'));
+      return a;
+    }
     w.path.links.forEach(function (l) {
-      path.appendChild(spanText(' → ', 'rm-arrow'));
+      path.appendChild(arrow(l.kind, l.target + ' is linked to ' + w.name + ': ' + l.kind.toLowerCase()));
       var pill = rmPill(l.target, 'good');
       pill.title = l.kind;
       path.appendChild(pill);
     });
     if (w.path.digHouse) {
-      path.appendChild(spanText(' → ', 'rm-arrow'));
+      path.appendChild(arrow('Strongest direction', 'H' + w.path.digHouse + ' is where ' + w.name + ' is at its strongest'));
       var hp = rmPill('H' + w.path.digHouse, 'good');
       hp.title = 'Direction step: where ' + w.name + ' is at its strongest';
       path.appendChild(hp);

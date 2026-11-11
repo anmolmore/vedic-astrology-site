@@ -1147,8 +1147,14 @@
   .rm-good { color: #1d6b46; background: rgba(44,117,72,0.14); }
   .rm-mid { color: #7d5a1c; background: rgba(179,130,47,0.18); }
   .rm-plain { color: var(--muted); background: rgba(0,0,0,0.05); }
-  .rm-path { margin: 6px 0 4px; }
-  .rm-arrow { color: var(--muted); }
+  .rm-path { margin: 6px 0 4px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 2px 4px; }
+  /* The reason sits on top of a drawn arrow as long as the reason itself,
+     the arrow lined up with the middle of the pills either side. */
+  .rm-arrow { display: inline-flex; flex-direction: column; align-items: stretch; min-width: 30px; padding: 0 3px; }
+  .rm-arrow-why { font-size: 10.5px; line-height: 1.25; white-space: nowrap; text-align: center; color: var(--gold-soft); font-weight: 600; }
+  .rm-arrow-mark { position: relative; height: 9px; margin-bottom: 6px; font-size: 0; color: transparent; }
+  .rm-arrow-mark::before { content: ''; position: absolute; left: 0; right: 5px; top: 4px; border-top: 1.5px solid var(--muted); }
+  .rm-arrow-mark::after { content: ''; position: absolute; right: 0; top: 0.5px; border-left: 7px solid var(--muted); border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; }
   .rm-step { display: block; line-height: 1.5; padding: 2px 0; cursor: pointer; }
   .rm-tag { color: var(--muted); }
   .rm-opt { display: none; }
@@ -13347,14 +13353,24 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     var path = document.createElement('div');
     path.className = 'rm-path';
     path.appendChild(rmPill(w.name, 'hurt'));
+    // each arrow carries the reason for that connection, above the arrow;
+    // every link is a connection to the weak planet, which the hover says
+    function arrow(why, hover) {
+      var a = document.createElement('span');
+      a.className = 'rm-arrow';
+      a.title = hover;
+      a.appendChild(spanText(why, 'rm-arrow-why'));
+      a.appendChild(spanText('→', 'rm-arrow-mark'));
+      return a;
+    }
     w.path.links.forEach(function (l) {
-      path.appendChild(spanText(' → ', 'rm-arrow'));
+      path.appendChild(arrow(l.kind, l.target + ' is linked to ' + w.name + ': ' + l.kind.toLowerCase()));
       var pill = rmPill(l.target, 'good');
       pill.title = l.kind;
       path.appendChild(pill);
     });
     if (w.path.digHouse) {
-      path.appendChild(spanText(' → ', 'rm-arrow'));
+      path.appendChild(arrow('Strongest direction', 'H' + w.path.digHouse + ' is where ' + w.name + ' is at its strongest'));
       var hp = rmPill('H' + w.path.digHouse, 'good');
       hp.title = 'Direction step: where ' + w.name + ' is at its strongest';
       path.appendChild(hp);
