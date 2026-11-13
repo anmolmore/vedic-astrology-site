@@ -1088,6 +1088,14 @@
   /* The control bar sits in the chart's column, so it stays the chart's
      width whether or not the strips are open. */
   .tr-col { min-width: 0; }
+  /* The Transit chart in front (clicked in the Both view, or shown alone):
+     it takes the South chart's place, with the side panel beside it. */
+  .tr-card.tr-swappable #transitChart { cursor: pointer; }
+  #chartBand .tr-card.tr-lead { flex: 1 1 0; min-width: 0; }
+  #chartBand #southCardD1.d1-aside { flex: 0 1 auto; }
+  .tr-card.tr-lead .tr-row { justify-content: flex-start; align-items: stretch; }
+  .tr-card.tr-lead .tr-row > .tr-col, .tr-card.tr-lead .tr-row > .trd { align-self: center; }
+  .tr-card.tr-lead .tr-row > .side-tabwrap { text-align: left; }
   .trd-strips { display: grid; grid-template-columns: 1.25fr 1fr 0.9fr 0.9fr 0.8fr 0.8fr 0.8fr; gap: 4px; width: 300px; max-width: 100%; }
   .trd-head { display: block; font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 3px; }
   .trd-strip { position: relative; height: 170px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); overflow: hidden; cursor: grab; touch-action: none; user-select: none; outline: none; }
@@ -12012,6 +12020,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       tr.when = new Date(e.target.value);
       trDraw();
     });
+    // A click on the Transit chart brings it to the front, or puts the South
+    // chart back; while the network is on, a click on a natal house selects
+    // that sign instead.
+    document.getElementById('transitChart').addEventListener('click', function (e) {
+      if (networkEnabled && e.target.closest && e.target.closest('.house-hit')) return;
+      toggleD1Lead();
+    });
     document.getElementById('transitNow').addEventListener('click', function () {
       if (trd.play) trdStopPlay();
       tr.live = true;
@@ -15996,6 +16011,31 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
   // A saved 'north' view from before the switch reads as 'transit'. ----
   var CHART_VIEW_KEY = 'vedicChartD1View.v1';
 
+  // ---- Which D1 chart leads: it comes first in the row, with the side
+  // panel (Facts, Yogas, Natal…) and the network notes beside it. In the
+  // Both view a click on the Transit chart swaps the two; a single-chart
+  // view leads with the chart it shows. ----
+  var D1_LEAD_KEY = 'vedicTransitLeads.v1';
+  var d1View = 'both';
+  function applyD1Lead() {
+    var south = document.getElementById('southCardD1'), transit = document.getElementById('transitCardD1');
+    if (!south || !transit) return;
+    var transitLeads = d1View === 'transit' || (d1View === 'both' && prefGet(D1_LEAD_KEY) === '1');
+    var home = transitLeads ? transit.querySelector('.tr-row') : south.querySelector('.chart-body-row');
+    [document.querySelector('.chart-notes-col'), document.getElementById('chartSideTabs')].forEach(function (el) {
+      if (el && el.parentNode !== home) home.appendChild(el);
+    });
+    transit.classList.toggle('tr-lead', transitLeads);
+    transit.classList.toggle('tr-swappable', d1View === 'both');
+    south.classList.toggle('d1-aside', transitLeads);
+    transit.style.order = transitLeads ? '0' : '';
+  }
+  function toggleD1Lead() {
+    if (d1View !== 'both') return;
+    prefSet(D1_LEAD_KEY, prefGet(D1_LEAD_KEY) === '1' ? '0' : '1');
+    applyD1Lead();
+  }
+
   function applyChartView(view) {
     if (view === 'north') view = 'transit';
     var southCard = document.getElementById('southCardD1');
@@ -16003,6 +16043,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     if (!southCard || !transitCard) return;
     southCard.classList.toggle('hidden', view === 'transit');
     transitCard.classList.toggle('hidden', view === 'south');
+    d1View = view;
+    applyD1Lead();
     ensureTransitChart();
     var box = document.getElementById('chartViewSwitch');
     if (box) {

@@ -3123,6 +3123,13 @@
       tr.when = new Date(e.target.value);
       trDraw();
     });
+    // A click on the Transit chart brings it to the front, or puts the South
+    // chart back; while the network is on, a click on a natal house selects
+    // that sign instead.
+    document.getElementById('transitChart').addEventListener('click', function (e) {
+      if (networkEnabled && e.target.closest && e.target.closest('.house-hit')) return;
+      toggleD1Lead();
+    });
     document.getElementById('transitNow').addEventListener('click', function () {
       if (trd.play) trdStopPlay();
       tr.live = true;
@@ -7107,6 +7114,31 @@
   // A saved 'north' view from before the switch reads as 'transit'. ----
   var CHART_VIEW_KEY = 'vedicChartD1View.v1';
 
+  // ---- Which D1 chart leads: it comes first in the row, with the side
+  // panel (Facts, Yogas, Natal…) and the network notes beside it. In the
+  // Both view a click on the Transit chart swaps the two; a single-chart
+  // view leads with the chart it shows. ----
+  var D1_LEAD_KEY = 'vedicTransitLeads.v1';
+  var d1View = 'both';
+  function applyD1Lead() {
+    var south = document.getElementById('southCardD1'), transit = document.getElementById('transitCardD1');
+    if (!south || !transit) return;
+    var transitLeads = d1View === 'transit' || (d1View === 'both' && prefGet(D1_LEAD_KEY) === '1');
+    var home = transitLeads ? transit.querySelector('.tr-row') : south.querySelector('.chart-body-row');
+    [document.querySelector('.chart-notes-col'), document.getElementById('chartSideTabs')].forEach(function (el) {
+      if (el && el.parentNode !== home) home.appendChild(el);
+    });
+    transit.classList.toggle('tr-lead', transitLeads);
+    transit.classList.toggle('tr-swappable', d1View === 'both');
+    south.classList.toggle('d1-aside', transitLeads);
+    transit.style.order = transitLeads ? '0' : '';
+  }
+  function toggleD1Lead() {
+    if (d1View !== 'both') return;
+    prefSet(D1_LEAD_KEY, prefGet(D1_LEAD_KEY) === '1' ? '0' : '1');
+    applyD1Lead();
+  }
+
   function applyChartView(view) {
     if (view === 'north') view = 'transit';
     var southCard = document.getElementById('southCardD1');
@@ -7114,6 +7146,8 @@
     if (!southCard || !transitCard) return;
     southCard.classList.toggle('hidden', view === 'transit');
     transitCard.classList.toggle('hidden', view === 'south');
+    d1View = view;
+    applyD1Lead();
     ensureTransitChart();
     var box = document.getElementById('chartViewSwitch');
     if (box) {

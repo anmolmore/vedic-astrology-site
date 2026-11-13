@@ -1088,6 +1088,14 @@
   /* The control bar sits in the chart's column, so it stays the chart's
      width whether or not the strips are open. */
   .tr-col { min-width: 0; }
+  /* The Transit chart in front (clicked in the Both view, or shown alone):
+     it takes the South chart's place, with the side panel beside it. */
+  .tr-card.tr-swappable #transitChart { cursor: pointer; }
+  #chartBand .tr-card.tr-lead { flex: 1 1 0; min-width: 0; }
+  #chartBand #southCardD1.d1-aside { flex: 0 1 auto; }
+  .tr-card.tr-lead .tr-row { justify-content: flex-start; align-items: stretch; }
+  .tr-card.tr-lead .tr-row > .tr-col, .tr-card.tr-lead .tr-row > .trd { align-self: center; }
+  .tr-card.tr-lead .tr-row > .side-tabwrap { text-align: left; }
   .trd-strips { display: grid; grid-template-columns: 1.25fr 1fr 0.9fr 0.9fr 0.8fr 0.8fr 0.8fr; gap: 4px; width: 300px; max-width: 100%; }
   .trd-head { display: block; font-size: 11px; color: var(--muted); text-align: center; padding-bottom: 3px; }
   .trd-strip { position: relative; height: 170px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel2); overflow: hidden; cursor: grab; touch-action: none; user-select: none; outline: none; }
