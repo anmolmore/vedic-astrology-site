@@ -1325,6 +1325,12 @@
   .chart-tooltip .ct-sub .ct-stat { margin: 5px 0 0; padding-top: 0; border-top: none; }
   .chart-tooltip .ct-sub .ct-stat.ct-ishta { color: #1d6b46; margin-top: 2px; }
   .chart-tooltip .ct-sub .ct-stat.ct-kashta { color: #96302f; margin-top: 2px; }
+  /* Dignity, co-tenant relationships and aspects under a planet card's title */
+  .chart-tooltip .ct-facts { margin: 5px 0 0; font-weight: 400; color: var(--text); font-size: 11.5px; line-height: 1.55; }
+  .chart-tooltip .ct-fact + .ct-fact { margin-top: 2px; }
+  .chart-tooltip .ct-fact-label { font-weight: 700; }
+  .chart-tooltip .ct-fact-item { padding-left: 10px; }
+  .chart-tooltip .ct-fact-dim { color: var(--muted); }
   .chart-tooltip .ct-line { margin: 0 0 4px; }
   .chart-tooltip .ct-line b { color: var(--text); font-weight: 700; }
   .chart-tooltip .ct-rel { margin: 6px 0 0; color: var(--muted); }
@@ -9595,14 +9601,75 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     return d;
   }
 
+  // The facts block under a planet card's title: its Dignity (Planets table),
+  // its compound relationship to each co-tenant and the planets aspecting it
+  // (Houses table), coloured helping / hurting the same way those tables are.
+  function ctPlanetFacts(pname, signIdx, planets, result) {
+    var box = document.createElement('div');
+    box.className = 'ct-facts';
+    function row(label) {
+      var d = document.createElement('div');
+      d.className = 'ct-fact';
+      d.appendChild(spanText(label + ' — ', 'ct-fact-label'));
+      box.appendChild(d);
+      return d;
+    }
+
+    // Each row appears only when it has a value: no "—" placeholders.
+    // Dignity
+    var p = result.planets[pname];
+    var tier = p && relDignityTier(pname, p, result);
+    if (tier) {
+      var dRow = row('Dignity');
+      var kind = ['own', 'bf', 'f'].indexOf(tier.k) >= 0 ? 'help' : ['e', 'we'].indexOf(tier.k) >= 0 ? 'hurt' : null;
+      hhPaint(dRow.appendChild(spanText(tier.t)), kind, tier.k === 'own' ? pname + ' rules ' + p.sign
+        : pname + ' sits in ' + p.sign + ', ruled by ' + tier.lord + ': naisargika ' + tier.rel.natural.toLowerCase() +
+          ' + tatkalika ' + tier.rel.temporary.toLowerCase() + ' = panchadha ' + tier.rel.panchadha);
+      if (tier.k !== 'own') dRow.appendChild(spanText(' (' + tier.lord + ')', 'ct-fact-dim'));
+    }
+
+    // Tenants: compound relationship to each co-tenant
+    var pairs = conjunctPairs(pname, result);
+    var tRow = pairs.length ? row('Tenants cmp rel') : null;
+    pairs.forEach(function (pr) {
+      var line = document.createElement('div');
+      line.className = 'ct-fact-item';
+      line.appendChild(spanText(pr.key + ': ', 'ct-fact-dim'));
+      hhPaint(line.appendChild(spanText(pr.compound || '—')), hhRelKind(pr.compound),
+        pr.compound ? 'naisargika ' + (pr.natural || '?').toLowerCase() + ' + tatkalika ' +
+          pr.temporary.toLowerCase() + ' = panchadha ' + pr.compound : 'not defined');
+      tRow.appendChild(line);
+    });
+
+    // Aspected by: each aspecting planet (sign, house), aspect number, and
+    // its compound relationship to this planet.
+    var asp = aspectsOntoSign(signIdx, result);
+    var aRow = asp.length ? row('Aspected by') : null;
+    asp.forEach(function (a) {
+      var src = result.planets[a.planet];
+      var line = document.createElement('div');
+      line.className = 'ct-fact-item';
+      line.appendChild(document.createTextNode(PLANET_SYMBOL[a.planet] + ' ' + a.planet + ' '));
+      line.appendChild(spanText('(' + src.sign + ', ' + src.house + ') ' + a.aspect + suffix(a.aspect), 'ct-fact-dim'));
+      line.appendChild(spanText(' · ' + SHORT[a.planet] + '→' + SHORT[pname] + ': ', 'ct-fact-dim'));
+      var rel = a.planet === pname ? null : result.relationships[a.planet] && result.relationships[a.planet][pname];
+      var val = a.planet === pname ? 'Own sign' : rel ? rel.panchadha : '—';
+      hhPaint(line.appendChild(spanText(val)), hhRelKind(val), rel
+        ? a.planet + ' regards ' + pname + ': naisargika ' + rel.natural.toLowerCase() + ' + tatkalika ' +
+          rel.temporary.toLowerCase() + ' = panchadha ' + rel.panchadha : '');
+      aRow.appendChild(line);
+    });
+    return box;
+  }
+
   // Chart hover tooltip: one self-contained reference card per occupant
   // planet, plus a House-level card that's always present (the only card
-  // shown for an empty house). Each card opens with its trait lines (Planet,
-  // Sign, House, then Kalapurusha body parts for the planet and for the
-  // house — five direct table lookups for a planet card, three for the
-  // House-level card), then, for a planet card, its compound relationship to
-  // any co-tenant(s) in bold, its Shadbala standing, and — only when
-  // relevant — a named yoga formed with that co-tenant. Deliberately
+  // shown for an empty house). A planet card's title block carries its
+  // verdict, then its Dignity, co-tenant compound relationships and the
+  // planets aspecting it (ctPlanetFacts), then its Shadbala standing. Each
+  // card then lists its trait lines (Planet, Sign, House for a planet card;
+  // Sign, House for the House-level card) and — only when relevant — a
+  // named yoga. Deliberately
   // structured data (label — table lookup, stat — computed number), not the
   // narrative-chain prose the tooltip used before, so it reads as a quick
   // reference rather than a paragraph to parse.
@@ -9624,6 +9691,9 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       // block, above its underline.
       var pPill = ctVerdictPill(bfPlanetNarrative(pname));
       if (pPill) sub.appendChild(pPill);
+      // Dignity, co-tenant relationships and aspects received, as the
+      // Planets and Houses tables show them, above the Shadbala standing.
+      sub.appendChild(ctPlanetFacts(pname, signIdx, planets, result));
       if (!sb) {
         sub.appendChild(ctStatLine('Shadbala — needs an exact birth time (unavailable in Simulation mode)'));
       } else if (!sb.results[pname]) {
@@ -9645,31 +9715,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       section.appendChild(ctTraitLine(pname, IP.KARAKA[pname]));
       section.appendChild(ctTraitLine(signName, IP.SIGN_TRAITS[signName]));
       section.appendChild(ctTraitLine('House ' + houseNum, IP.HOUSE_TEXT[houseNum]));
-      // Kalapurusha body parts — the planet's own naisargika body-part
-      // karakatva (Rahu/Ketu have none classically agreed on, so this reads
-      // "—" for them, same empty-state convention as every other trait line
-      // here) plus the body part governed by the house it's sitting in.
-      section.appendChild(ctTraitLine('Kala Purusha (' + pname + ')',
-        IP.KALA_PURUSHA_PLANET[pname] || 'not classically assigned to either node'));
-      section.appendChild(ctTraitLine('Kala Purusha (House ' + houseNum + ')', IP.KALA_PURUSHA_HOUSE[houseNum]));
 
       var coTenants = planets.filter(function (o) { return o !== pname; });
-
-      // Compound (panchadha) relationship to each co-tenant, tier in bold —
-      // reuses REL_TIER's tier→css-code map (Planet table's Dignity column)
-      // so the color coding matches the rest of the app, not a new palette.
-      coTenants.forEach(function (other) {
-        var rel = result.relationships && result.relationships[pname] && result.relationships[pname][other];
-        var relLine = document.createElement('div');
-        relLine.className = 'ct-rel';
-        relLine.appendChild(document.createTextNode(pname + ' - ' + other + ': '));
-        var b = document.createElement('b');
-        var tier = rel && REL_TIER[rel.panchadha];
-        if (tier) b.className = 'reldig-' + tier.k;
-        b.textContent = rel ? rel.panchadha : 'unknown';
-        relLine.appendChild(b);
-        section.appendChild(relLine);
-      });
 
       // Any named yoga formed purely by this co-tenancy (Gajakesari,
       // Budhaditya, Chandra-Mangala — see COTENANT_YOGAS in interpret.js),
@@ -9725,7 +9772,6 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
 
     hSection.appendChild(ctTraitLine(signName, IP.SIGN_TRAITS[signName]));
     hSection.appendChild(ctTraitLine('House ' + houseNum, IP.HOUSE_TEXT[houseNum]));
-    hSection.appendChild(ctTraitLine('Kala Purusha (House ' + houseNum + ')', IP.KALA_PURUSHA_HOUSE[houseNum]));
 
 
     body.appendChild(hSection);
