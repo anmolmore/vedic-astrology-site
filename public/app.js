@@ -727,7 +727,7 @@
 
     // Tenants: compound relationship to each co-tenant
     var pairs = conjunctPairs(pname, result);
-    var tRow = pairs.length ? row('Tenants cmp rel') : null;
+    var tRow = pairs.length ? row('Co-Tenants') : null;
     pairs.forEach(function (pr) {
       var line = document.createElement('div');
       line.className = 'ct-fact-item';
