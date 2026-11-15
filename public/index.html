@@ -2030,6 +2030,7 @@
             <th class="col-left" title="Natural relationship between the planets sharing the house">Tenants – Nat reln</th>
             <th class="col-left" title="Compound relationship between the planets sharing the house">Tenants – Comp reln</th>
             <th class="col-left">Aspected by Planet (Sign, House)</th>
+            <th class="col-left" title="Planets sitting in signs ruled by this house's occupants, with how each regards its dispositor">Disposes Planet (Sign, House)</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -11184,6 +11185,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     if (!pairs.length) { cell.textContent = '—'; cell.classList.add('dim'); return cell; }
     pairs.forEach(function (p) {
       var line = document.createElement('div');
+      line.dataset.a = p.a;
+      line.dataset.b = p.b;
       if (kind === 'natural') {
         var k = document.createElement('span');
         k.className = 'pair-key';
@@ -11314,6 +11317,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           targets.forEach(function (t) {
             var line = document.createElement('span');
             line.className = 'asp-rel';
+            line.dataset.a = a.planet;
+            line.dataset.b = t;
             var key = SHORT[a.planet] + '→' + SHORT[t] + (occupants.length ? '' : ' (lord)') + ': ';
             line.appendChild(spanText(key, 'pair-key'));
             var rel = t === a.planet ? null : result.relationships[a.planet] && result.relationships[a.planet][t];
@@ -11335,6 +11340,48 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         aCell.title = 'No planet aspects this house.';
       }
       tr.appendChild(aCell);
+
+      // Disposes: the planets sitting in signs this house's occupants rule —
+      // each with its sign and house, then how the disposed planet regards its
+      // dispositor. The reverse is already shown by the planet's dignity in
+      // its sign.
+      var disposed = [];
+      occupants.forEach(function (host) {
+        PLANET_ORDER.forEach(function (g) {
+          if (g !== host && E.SIGN_LORDS[result.planets[g].signIndex] === host) disposed.push({ host: host, planet: g });
+        });
+      });
+      var dCell = td('', 'col-left aspects' + (disposed.length ? '' : ' dim'));
+      if (disposed.length) {
+        disposed.forEach(function (d) {
+          var src = result.planets[d.planet];
+          var wrap = document.createElement('span');
+          wrap.className = 'asp-item';
+          wrap.appendChild(spanText(PLANET_SYMBOL[d.planet] + ' ' + d.planet));
+          wrap.appendChild(spanText('(' + src.sign + ', ' + src.house + ')', 'asp-where'));
+          [[d.planet, d.host]].forEach(function (pr) {
+            var line = document.createElement('span');
+            line.className = 'asp-rel';
+            line.dataset.a = pr[0];
+            line.dataset.b = pr[1];
+            line.appendChild(spanText(SHORT[pr[0]] + '→' + SHORT[pr[1]] + ': ', 'pair-key'));
+            var rel = result.relationships[pr[0]] && result.relationships[pr[0]][pr[1]];
+            var val = rel ? rel.panchadha : '—';
+            line.title = pr[0] + ' regards ' + pr[1] + (rel ? ': naisargika ' + rel.natural.toLowerCase() + ' + tatkalika ' +
+              rel.temporary.toLowerCase() + ' = panchadha ' + rel.panchadha : ': not defined');
+            hhPaint(line.appendChild(spanText(val)), hhRelKind(val), line.title);
+            wrap.appendChild(line);
+          });
+          dCell.appendChild(wrap);
+        });
+        dCell.title = disposed.map(function (d) {
+          return d.host + ' disposes ' + d.planet + ' in ' + result.planets[d.planet].sign + ' (house ' + result.planets[d.planet].house + ')';
+        }).join('\n');
+      } else {
+        dCell.textContent = '—';
+        dCell.title = occupants.length ? 'No other planet sits in a sign ruled by this house’s occupants.' : 'No occupants, so nothing is disposed from here.';
+      }
+      tr.appendChild(dCell);
 
       tbody.appendChild(tr);
     }
@@ -12342,6 +12389,22 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     var hRow = document.querySelectorAll('#houseTable tbody tr')[entry.house - 1];
     if (hRow) {
       hRow = hRow.cloneNode(true);
+      // For a planet, keep only the relationships coming into it: tenants
+      // that regard it, aspecting planets' view of it, and the planets it
+      // disposes regarding it. An aspect or disposed planet left with no line
+      // goes too, and a cell left empty reads "—".
+      if (entry.kind === 'planet') {
+        [].forEach.call(hRow.querySelectorAll('[data-b]'), function (l) {
+          if (l.dataset.b !== entry.key) l.parentNode.removeChild(l);
+        });
+        [].forEach.call(hRow.querySelectorAll('.asp-item'), function (it) {
+          if (!it.querySelector('[data-b]')) it.parentNode.removeChild(it);
+        });
+        [3, 4, 5, 6].forEach(function (i) {
+          var c = hRow.cells[i];
+          if (c && !c.querySelector('[data-b]')) { c.textContent = '—'; c.classList.add('dim'); }
+        });
+      }
       // "2 (☽ Moon, ♃ Jupiter · Libra)" becomes the house and its occupants
       // over the sign.
       var hs = hRow.cells[0].querySelector('.hs-sign');
@@ -12364,7 +12427,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         });
       }
       var houseTable = table([['House (Pl, Sign)', 'House (Planets, Sign)'], ['Class'], ['Karakas'], ['Tenants\nNat rel', 'Tenants: natural relationship between the planets sharing the house'],
-        ['Tenants\nCmp rel', 'Tenants: compound relationship between the planets sharing the house'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)']], [hRow]);
+        ['Tenants\nCmp rel', 'Tenants: compound relationship between the planets sharing the house'], ['Aspected by (Sign, H)', 'Aspected by Planet (Sign, House)'],
+        ['Disposes (Sign, H)', 'Disposes Planet (Sign, House): planets in signs ruled by this house’s occupants']], [hRow]);
       // The house itself comes before its strength.
       if (bhavaTable) wrap.insertBefore(houseTable, bhavaTable);
     }
