@@ -2030,7 +2030,7 @@
             <th class="col-left" title="Natural relationship between the planets sharing the house">Tenants – Nat reln</th>
             <th class="col-left" title="Compound relationship between the planets sharing the house">Tenants – Comp reln</th>
             <th class="col-left">Aspected by Planet (Sign, House)</th>
-            <th class="col-left" title="Planets sitting in signs ruled by this house's occupants, with how each regards its dispositor">Disposes Planet (Sign, House)</th>
+            <th class="col-left" title="Planets sitting in signs ruled by this house's occupants, with how each occupant regards the planet it disposes">Disposes Planet (Sign, House)</th>
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -11310,21 +11310,22 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           no.className = 'asp-no';
           no.textContent = a.aspect + suffix(a.aspect);
           wrap.appendChild(head); wrap.appendChild(where); wrap.appendChild(no);
-          // Qualified by the aspecting planet's compound relationship to each
-          // occupant, or to the house lord when the house is empty (its own
-          // sign when it is that lord).
+          // Qualified by each occupant's compound relationship to the
+          // aspecting planet, or the house lord's when the house is empty
+          // (its own sign when it is that lord) — the planet in the house
+          // first.
           var targets = occupants.length ? occupants : [E.SIGN_LORDS[signIdx]];
           targets.forEach(function (t) {
             var line = document.createElement('span');
             line.className = 'asp-rel';
-            line.dataset.a = a.planet;
-            line.dataset.b = t;
-            var key = SHORT[a.planet] + '→' + SHORT[t] + (occupants.length ? '' : ' (lord)') + ': ';
+            line.dataset.a = t;
+            line.dataset.b = a.planet;
+            var key = SHORT[t] + (occupants.length ? '' : ' (lord)') + '→' + SHORT[a.planet] + ': ';
             line.appendChild(spanText(key, 'pair-key'));
-            var rel = t === a.planet ? null : result.relationships[a.planet] && result.relationships[a.planet][t];
+            var rel = t === a.planet ? null : result.relationships[t] && result.relationships[t][a.planet];
             var val = t === a.planet ? 'Own sign' : rel ? rel.panchadha : '—';
             line.title = t === a.planet ? a.planet + ' aspects its own sign'
-              : a.planet + ' regards ' + t + (rel ? ': naisargika ' + rel.natural.toLowerCase() + ' + tatkalika ' +
+              : t + ' regards ' + a.planet + (rel ? ': naisargika ' + rel.natural.toLowerCase() + ' + tatkalika ' +
                 rel.temporary.toLowerCase() + ' = panchadha ' + rel.panchadha : ': not defined');
             hhPaint(line.appendChild(spanText(val)), hhRelKind(val), line.title);
             wrap.appendChild(line);
@@ -11342,9 +11343,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       tr.appendChild(aCell);
 
       // Disposes: the planets sitting in signs this house's occupants rule —
-      // each with its sign and house, then how the disposed planet regards its
-      // dispositor. The reverse is already shown by the planet's dignity in
-      // its sign.
+      // each with its sign and house, then how the dispositor in the house
+      // regards the planet it disposes (the planet in the house first).
       var disposed = [];
       occupants.forEach(function (host) {
         PLANET_ORDER.forEach(function (g) {
@@ -11359,7 +11359,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           wrap.className = 'asp-item';
           wrap.appendChild(spanText(PLANET_SYMBOL[d.planet] + ' ' + d.planet));
           wrap.appendChild(spanText('(' + src.sign + ', ' + src.house + ')', 'asp-where'));
-          [[d.planet, d.host]].forEach(function (pr) {
+          [[d.host, d.planet]].forEach(function (pr) {
             var line = document.createElement('span');
             line.className = 'asp-rel';
             line.dataset.a = pr[0];
@@ -12389,13 +12389,14 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     var hRow = document.querySelectorAll('#houseTable tbody tr')[entry.house - 1];
     if (hRow) {
       hRow = hRow.cloneNode(true);
-      // For a planet, keep only the relationships coming into it: tenants
-      // that regard it, aspecting planets' view of it, and the planets it
-      // disposes regarding it. An aspect or disposed planet left with no line
-      // goes too, and a cell left empty reads "—".
+      // For a planet, keep only its own relationships, read with the picked
+      // planet first: how it regards each co-tenant, each planet aspecting
+      // it, and each planet it disposes — the lines the Houses row already
+      // leads with it. An aspect or disposed planet left with no line goes
+      // too, and a cell left empty reads "—".
       if (entry.kind === 'planet') {
-        [].forEach.call(hRow.querySelectorAll('[data-b]'), function (l) {
-          if (l.dataset.b !== entry.key) l.parentNode.removeChild(l);
+        [].forEach.call(hRow.querySelectorAll('[data-a]'), function (l) {
+          if (l.dataset.a !== entry.key) l.parentNode.removeChild(l);
         });
         [].forEach.call(hRow.querySelectorAll('.asp-item'), function (it) {
           if (!it.querySelector('[data-b]')) it.parentNode.removeChild(it);
