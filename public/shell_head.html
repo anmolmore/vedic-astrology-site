@@ -25,6 +25,7 @@
     --self: #dcd3c4;
     --net-primary: #000000;
     --net-secondary: #5b9bd5;
+    --net-karaka: #8a4fb8;
     /* Arrowhead-only colors for the network overlay's nature-coding — see
        drawNetworkOverlay in app.js. Reuse the same green/red already used
        for Exalted/Debilitated flags (.dg-ex/.dg-deb, the chart planet
@@ -1255,6 +1256,9 @@
      same dispositor's actual placement. Solid light-blue, distinct from the
      primary dispositor edge's solid black. */
   .chart-card svg .net-edge-secondary { stroke: var(--net-secondary); stroke-width: 1.6; color: var(--net-secondary); }
+  /* Karaka: a house's natural significator reaching it — solid purple. */
+  .chart-card svg .net-edge-karaka { stroke: var(--net-karaka); stroke-width: 1.4; color: var(--net-karaka); }
+  .chart-card svg .net-self-loop path:first-child { stroke-width: 1.1; }
   /* The line's own stroke color/style above still conveys *type* (dispositor,
      aspect, exchange, secondary) — but the arrowhead at each line's tip no
      longer matches it. Per a later request, the arrowhead alone is colored
@@ -1826,6 +1830,7 @@
               <div class="net-toggle-line">
                 <label class="net-toggle-row" title="Dispositor lines: each sign's lord, sign exchanges, and the other signs a lord rules"><input type="checkbox" id="networkToggle"> Dispositor</label>
                 <label class="net-toggle-row" title="Aspect lines: the aspects planets cast onto signs"><input type="checkbox" id="networkAspToggle"> Aspects</label>
+                <label class="net-toggle-row" title="Karaka lines for a clicked house: from where each of its natural significators stands, and from its planets to the houses they signify"><input type="checkbox" id="networkKarakaToggle"> Karaka</label>
                 <label class="net-toggle-row net-dir" title="Show influences coming into the selected sign(s)"><input type="checkbox" id="networkInToggle" disabled> In</label>
                 <label class="net-toggle-row net-dir" title="Show influences going out of the selected sign(s)"><input type="checkbox" id="networkOutToggle" disabled> Out</label>
               </div>

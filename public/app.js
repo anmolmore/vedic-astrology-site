@@ -24,7 +24,7 @@
   // Which line families the network draws: dispositor (lords, exchanges and
   // the light-blue "also rules" lines) and aspects. networkEnabled is on
   // while either is.
-  var networkShowDisp = false, networkShowAsp = false;
+  var networkShowDisp = false, networkShowAsp = false, networkShowKaraka = false;
   // Set when a planet is picked from the Influences dropdown: the overlay
   // then shows only that planet's share of its sign. Cleared by clicking a
   // sign on the chart, toggling the network, or picking an empty house.
@@ -32,6 +32,7 @@
   var NETWORK_VIEW_KEY = 'vedicChartNetworkOn.v1';
   var NETWORK_DISP_KEY = 'vedicChartNetworkDisp.v1';
   var NETWORK_ASP_KEY = 'vedicChartNetworkAsp.v1';
+  var NETWORK_KARAKA_KEY = 'vedicChartNetworkKaraka.v1';
 
   // ---- South Indian chart's optional Dasha-activation overlay ----
   // Mirrors whatever MD/AD/PD node is currently selected in the Dasha tab's
@@ -180,6 +181,9 @@
     if (e.type === 'secondary') {
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' also rules ' + SIGNS[e.from] + ', placed in ' + SIGNS[e.to] + '.';
     }
+    if (e.type === 'karaka') {
+      return e.planet + netNatureWord(e.planet, sb, result, H) + ' is the karaka of house ' + e.house + ' (' + SIGNS[e.to] + '), standing in ' + SIGNS[e.from] + '.';
+    }
     return '';
   }
 
@@ -304,7 +308,7 @@
   }
 
   function svgPlanetLabel(x, y, pname, p, cls, size) {
-    var t = svgEl('text', { x: x, y: y, class: cls || '', 'font-size': size || 11, 'text-anchor': 'middle' });
+    var t = svgEl('text', { x: x, y: y, class: cls || '', 'font-size': size || 11, 'text-anchor': 'middle', 'data-planet': pname });
     t.appendChild(document.createTextNode(PLANET_SYMBOL[pname] + ' ' + pname.slice(0, 3)));
     // Retrograde: the same bold red "R" the Planets tab puts after the name.
     if (p.retrograde) {
@@ -1346,13 +1350,67 @@
   function mergeEdges(list) {
     var byKey = {}, out = [];
     list.forEach(function (e) {
-      var k = e.from + '>' + e.to + '@' + e.type;
+      var k = e.from + '>' + e.to + '@' + e.type + (e.type === 'karaka' ? '#' + e.planet : '');
       var have = byKey[k];
       if (!have) { byKey[k] = e; out.push(e); return; }
       if (e._headEnd) have._headEnd = true;
       if (e._headStart) { have._headStart = true; have._tenants = e._tenants; }
     });
     return out;
+  }
+
+  // Karaka lines for one sign's house: each naisargika karaka of the house,
+  // from the sign it stands in (In), and each tenant of the sign to the
+  // houses it is karaka of (Out). A karaka already standing in the house
+  // draws no line.
+  function networkKarakaEdges(sign, result) {
+    var KH = (window.Interpret && window.Interpret.KARAKA_OF_HOUSE) || {};
+    var asc = result.ascendant.signIndex;
+    var house = ((sign - asc + 12) % 12) + 1;
+    var inEdges = [], outEdges = [], selfLoops = [];
+    (KH[house] || []).forEach(function (k) {
+      var ks = result.planets[k].signIndex;
+      if (ks === sign) selfLoops.push({ planet: k, house: house, sign: sign });
+      else inEdges.push({ from: ks, to: sign, type: 'karaka', planet: k, house: house, label: 'Karaka', _headEnd: true });
+    });
+    signTenants(sign, result).forEach(function (occ) {
+      for (var h = 1; h <= 12; h++) {
+        if ((KH[h] || []).indexOf(occ) < 0) continue;
+        var ts = (asc + h - 1) % 12;
+        if (ts !== sign) outEdges.push({ from: sign, to: ts, type: 'karaka', planet: occ, house: h, label: 'Karaka', _headEnd: true });
+      }
+    });
+    return { inEdges: inEdges, outEdges: outEdges, selfLoops: selfLoops };
+  }
+
+  // A karaka standing in the house it signifies: a small purple loop just
+  // right of its label, arrowhead back into itself.
+  function drawKarakaSelfLoop(svg, layer, loop, result, sb, H) {
+    var label = [].filter.call(svg.querySelectorAll('text[data-planet]'), function (t) {
+      return t.getAttribute('data-planet') === loop.planet && !t.closest('#networkLayer');
+    })[0];
+    if (!label) return;
+    var size = Number(label.getAttribute('font-size')) || 10;
+    var cx = Number(label.getAttribute('x')), y = Number(label.getAttribute('y'));
+    var w = 0;
+    try { w = label.getBBox().width; } catch (err) {}
+    if (!w) w = label.textContent.length * size * 0.58;
+    var x0 = cx + w / 2 + 1.5, ym = y - size * 0.35, r = size * 0.42;
+    var g = svgEl('g', { class: 'net-edge-karaka net-self-loop' });
+    // An open circle, starting and ending at the label side, then a head.
+    g.appendChild(svgEl('path', {
+      d: 'M ' + x0 + ' ' + (ym - r * 0.55) + ' A ' + r + ' ' + r + ' 0 1 1 ' + x0 + ' ' + (ym + r * 0.55),
+      fill: 'none', 'stroke-width': 1.1
+    }));
+    var hx = x0, hy = ym + r * 0.55;
+    g.appendChild(svgEl('path', {
+      d: 'M ' + (hx - 0.4) + ' ' + hy + ' l 2.6 -1.9 l -0.2 3.2 z', fill: 'currentColor', stroke: 'none'
+    }));
+    var title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    title.textContent = loop.planet + netNatureWord(loop.planet, sb, result, H) + ' is the karaka of house ' + loop.house +
+      ' (' + SIGNS[loop.sign] + ') and stands in it.';
+    g.appendChild(title);
+    layer.appendChild(g);
   }
 
   function drawNetworkOverlay(svg, result, cell, cellRects, svgId, varga, sb) {
@@ -1397,12 +1455,25 @@
     // single sign's own count beyond what that sign's own click shows.
     var consolidated = !selectedList.length;
     var scanList = consolidated ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : selectedList;
-    var visibleEdges = [], secondaryEdges = [];
+    var visibleEdges = [], secondaryEdges = [], karakaSelfLoops = [];
     scanList.forEach(function (sign) {
       var info = connectionsForSign(sign, allEdges, result);
       var dir = networkDirEdges(info, sign, result);
       visibleEdges = visibleEdges.concat(dir.inEdges, dir.outEdges);
       secondaryEdges = secondaryEdges.concat(dir.secondary);
+      // Karaka lines: In runs from where each of the house's karakas
+      // stands; Out from this sign to the houses its tenants are karakas
+      // of. With no house clicked, every house's In lines are drawn — taken
+      // across all twelve they are also every Out line.
+      if (networkShowKaraka) {
+        var kk = networkKarakaEdges(sign, result);
+        var kIn = consolidated ? (networkShowIn || networkShowOut) : networkShowIn;
+        if (kIn) {
+          visibleEdges = visibleEdges.concat(kk.inEdges);
+          karakaSelfLoops = karakaSelfLoops.concat(kk.selfLoops);
+        }
+        if (!consolidated && networkShowOut) visibleEdges = visibleEdges.concat(kk.outEdges);
+      }
     });
     visibleEdges = mergeEdges(visibleEdges);
     secondaryEdges = dedupeEdges(secondaryEdges);
@@ -1448,12 +1519,13 @@
         if (e._tenants) e._tenants = e._tenants.filter(function (n) { return others.indexOf(n) < 0; });
       });
     }
-    // The Dispositor and Aspects checkboxes pick the line families.
-    if (!networkShowDisp) {
-      visibleEdges = visibleEdges.filter(function (e) { return e.type === 'aspect'; });
-      secondaryEdges = [];
-    }
-    if (!networkShowAsp) visibleEdges = visibleEdges.filter(function (e) { return e.type !== 'aspect'; });
+    // The Dispositor, Aspects and Karaka checkboxes pick the line families.
+    visibleEdges = visibleEdges.filter(function (e) {
+      if (e.type === 'aspect') return networkShowAsp;
+      if (e.type === 'karaka') return networkShowKaraka;
+      return networkShowDisp;
+    });
+    if (!networkShowDisp) secondaryEdges = [];
     // A light-blue "also rules" line (ruled sign → where its lord stands)
     // says the same thing as that lord's own dispositor line running the
     // other way; when that line is already drawn, the blue one is dropped
@@ -1759,6 +1831,11 @@
           layer.appendChild(svgText(lx, ly + 2, label, 'net-label-text', 6.6));
         }
       });
+    });
+
+    karakaSelfLoops.forEach(function (loop) {
+      if (networkFocusPlanet && selectedList.length === 1 && loop.planet !== networkFocusPlanet) return;
+      drawKarakaSelfLoop(svg, layer, loop, result, sb, H);
     });
 
     svg.appendChild(layer);
@@ -7391,9 +7468,12 @@
     var dPref = prefGet(NETWORK_DISP_KEY), aPref = prefGet(NETWORK_ASP_KEY);
     networkShowDisp = dPref == null ? legacy : dPref === '1';
     networkShowAsp = aPref == null ? legacy : aPref === '1';
-    networkEnabled = networkShowDisp || networkShowAsp;
+    var karBox = document.getElementById('networkKarakaToggle');
+    networkShowKaraka = prefGet(NETWORK_KARAKA_KEY) === '1';
+    networkEnabled = networkShowDisp || networkShowAsp || networkShowKaraka;
     box.checked = networkShowDisp;
     if (aspBox) aspBox.checked = networkShowAsp;
+    if (karBox) karBox.checked = networkShowKaraka;
     var inBox = document.getElementById('networkInToggle');
     var outBox = document.getElementById('networkOutToggle');
     // In/Out only mean something while the network is on: turning it on
@@ -7413,9 +7493,11 @@
       var was = networkEnabled;
       networkShowDisp = box.checked;
       networkShowAsp = !!(aspBox && aspBox.checked);
-      networkEnabled = networkShowDisp || networkShowAsp;
+      networkShowKaraka = !!(karBox && karBox.checked);
+      networkEnabled = networkShowDisp || networkShowAsp || networkShowKaraka;
       prefSet(NETWORK_DISP_KEY, networkShowDisp ? '1' : '0');
       prefSet(NETWORK_ASP_KEY, networkShowAsp ? '1' : '0');
+      prefSet(NETWORK_KARAKA_KEY, networkShowKaraka ? '1' : '0');
       if (was !== networkEnabled) {
         networkSelectedSigns = {};
         networkFocusPlanet = null;
@@ -7425,6 +7507,7 @@
     }
     box.addEventListener('change', onFamilyChange);
     if (aspBox) aspBox.addEventListener('change', onFamilyChange);
+    if (karBox) karBox.addEventListener('change', onFamilyChange);
     [[inBox, 'in'], [outBox, 'out']].forEach(function (pair) {
       if (!pair[0]) return;
       pair[0].addEventListener('change', function () {
