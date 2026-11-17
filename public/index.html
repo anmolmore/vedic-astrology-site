@@ -10721,15 +10721,20 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         });
       });
     }
-    fanOffsets(renderEdges, 'to', cell);
-    fanOffsets(renderEdges, 'from', cell);
-
+    // Every line between the same two signs, whichever way it runs (an
+    // aspect, a dispositor and a karaka line, say), forms one bundle: laid
+    // out as a single line, then drawn as close parallels either side of it,
+    // each pointing its own way. Only the bundle's first line takes part in
+    // the fanning below.
     var groups = {};
     renderEdges.forEach(function (e) {
       var k = networkPairKey(e.from, e.to);
       if (!groups[k]) groups[k] = [];
       groups[k].push(e);
     });
+    var bundleReps = Object.keys(groups).map(function (k) { return groups[k][0]; });
+    fanOffsets(bundleReps, 'to', cell);
+    fanOffsets(bundleReps, 'from', cell);
 
     var defs = svgEl('defs', {});
     defs.innerHTML =
@@ -10769,11 +10774,15 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       var cdx = cB.x - cA.x, cdy = cB.y - cA.y;
       var clen = Math.sqrt(cdx * cdx + cdy * cdy) || 1;
       var groupPx = -(cdy / clen), groupPy = cdx / clen;
-      list.forEach(function (e, idx) {
+      // The whole group is one bundle: lines running the first line's way,
+      // then those running back.
+      var members = list.filter(function (m) { return m.from === list[0].from; })
+        .concat(list.filter(function (m) { return m.from !== list[0].from; }));
+      [list[0]].forEach(function (e, idx) {
         var a = networkSignCenter(e.from, cell), b = networkSignCenter(e.to, cell);
         var dx = b.x - a.x, dy = b.y - a.y;
 
-        var count = list.length;
+        var count = 1;
         var offsetIdx = idx - (count - 1) / 2; // this edge's position within its same-sign-pair group, centered on 0
 
         // Every edge starts and ends on its own sign's NET_ANCHOR_R circle —
@@ -10810,6 +10819,24 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           midx = (start.x + end.x) / 2 + groupPx * offsetIdx * offStep;
           midy = (start.y + end.y) / 2 + groupPy * offsetIdx * offStep;
         }
+
+        // Draw the bundle: each line the same curve, shifted sideways by
+        // BUNDLE_GAP px from its neighbour; labels staggered along the line
+        // so they don't sit on top of each other.
+        var BUNDLE_GAP = 4;
+        var bundle = members, repFrom = e.from;
+        var blen = Math.sqrt((end.x - start.x) * (end.x - start.x) + (end.y - start.y) * (end.y - start.y)) || 1;
+        var bpx = -(end.y - start.y) / blen, bpy = (end.x - start.x) / blen;
+        var base = { start: start, end: end, midx: midx, midy: midy };
+        var labelled = bundle.filter(function (m) { return m.type !== 'dispositor' && m.type !== 'secondary'; });
+        bundle.forEach(function (e, bi) {
+        var sh = (bi - (bundle.length - 1) / 2) * BUNDLE_GAP;
+        var start = { x: base.start.x + bpx * sh, y: base.start.y + bpy * sh };
+        var end = { x: base.end.x + bpx * sh, y: base.end.y + bpy * sh };
+        var midx = base.midx + bpx * sh, midy = base.midy + bpy * sh;
+        // A line running back the other way takes the same lane reversed.
+        if (e.from !== repFrom) { var sw = start; start = end; end = sw; }
+        var li = labelled.indexOf(e);
 
         // The arrowhead at the "to" end reflects the nature of `e.planet` —
         // the planet actually driving this specific influence (the
@@ -10863,7 +10890,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         // dispositor and secondary-influence edges are conveyed by line
         // style/color alone (see legend).
         if (e.type !== 'dispositor' && e.type !== 'secondary') {
-          var t = 0.5;
+          var t = 0.5 + (li - (labelled.length - 1) / 2) * 0.16;
           var lx = (1 - t) * (1 - t) * start.x + 2 * (1 - t) * t * midx + t * t * end.x;
           var ly = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * midy + t * t * end.y;
           var label = e.label || 'Exchange';
@@ -10871,6 +10898,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           layer.appendChild(svgEl('rect', { x: lx - tw / 2, y: ly - 5, width: tw, height: 8, class: 'net-label-bg', rx: 1.5 }));
           layer.appendChild(svgText(lx, ly + 2, label, 'net-label-text', 6.6));
         }
+        });
       });
     });
 
