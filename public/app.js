@@ -4125,6 +4125,9 @@
       { label: 'Parivartana (mutual exchange)', dashaClass: 'dependent', items: (ie.parivartana || []).map(function (y) {
           return { title: y.planets.join(' + ') + ' — ' + y.name, text: y.reason, timingText: y.timingText, planets: y.planets };
         }) },
+      { label: 'Dispositor loop (chain exchange)', dashaClass: 'dependent', items: (ie.dispLoops || []).map(function (y) {
+          return { title: y.planets.join(' → ') + ' → ' + y.planets[0] + ' — ' + y.name, text: y.reason, timingText: y.timingText, planets: y.planets };
+        }) },
       { label: 'Viparita Raja Yoga', dashaClass: 'dependent', items: ie.vry.map(function (y) {
           return { title: y.name, text: y.reason + (y.isPrimaryLord ? '' :
             ' (via ' + y.lord + '’s co-lordship — this app’s own extended convention, not the classical single lord)'), timingText: y.timingText, planets: [y.lord] };

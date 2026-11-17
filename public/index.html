@@ -5059,6 +5059,12 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       name: 'Chandra-Mangala Yoga', planets: ['Moon', 'Mars'],
       match: pairMatch('Moon', 'Mars'),
       reason: 'Mars conjunct the Moon — drive joined to the mind: enterprise and earning power, with a quick, restless temper.'
+    },
+    {
+      // Not named by Parashara or Phaladeepika; a later, widely used yoga.
+      name: 'Lakshmi Narayana Yoga', planets: ['Mercury', 'Venus'],
+      match: pairMatch('Mercury', 'Venus'),
+      reason: 'Mercury (Narayana) conjunct Venus (Lakshmi) — intelligence joined to grace: artistic and verbal talent, charm, comfort and wealth. A later yoga, not named in BPHS or Phaladeepika.'
     }
   ];
 
@@ -5457,6 +5463,17 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
             '°), which is classically said to weaken this yoga.';
         }
       }
+      if (y.name === 'Lakshmi Narayana Yoga') {
+        var house = ((result.planets.Mercury.signIndex - result.ascendant.signIndex + 12) % 12) + 1;
+        var kt = [KENDRA.indexOf(house) >= 0 ? 'kendra' : '', TRIKONA.indexOf(house) >= 0 ? 'trikona' : ''].filter(Boolean);
+        reason += ' Here they sit together in the ' + ord(house) + ' house' +
+          (kt.length ? ', a ' + kt.join(' and ') + ', where the yoga is at its best' : ', outside the kendras and trikonas, so it is milder') +
+          '; ' + n1(arc(result.planets.Mercury.longitude, result.planets.Venus.longitude)) + '° apart.';
+        ['Mercury', 'Venus'].forEach(function (n) {
+          var cb = result.planets[n].combustion;
+          if (cb && cb.combust) reason += ' ' + n + ' is combust (' + n1(cb.separation) + '° from the Sun, orb ' + cb.orb + '°), which weakens its half of the yoga.';
+        });
+      }
       out.push({ name: y.name, planets: y.planets.slice(), reason: reason });
     });
     return out;
@@ -5515,6 +5532,61 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
           reason: a + ' and ' + b + ' sit in each other’s sign — a mutual exchange between the ' +
             ord(hA) + ' and ' + ord(hB) + ' lords, ' + cls + ' yoga in Phaladeepika’s classification.'
         });
+      });
+    });
+    return out;
+  }
+
+  // Dispositor loops: three or more planets each sitting in the next one's
+  // sign, the last back in the first's (Saturn in Mercury's sign, Mercury in
+  // Jupiter's, Jupiter in Saturn's). Classical Parivartana is two planets
+  // only (listed above); a longer closed chain is a common modern extension,
+  // read as weaker than a direct exchange. Classical single lords only — the
+  // nodes hold no dispositorship here. Classed like Parivartana by the houses
+  // the chain sits in, with each link's compound relation of the planet to
+  // its host so the weakest link can be named.
+  var LINK_RANK = { 'Best Friend': 4, Friend: 3, Neutral: 2, Enemy: 1, 'Worst Enemy': 0 };
+  function dispositorLoopYogas(result, H) {
+    var E2 = H.engine;
+    var ascSign = result.ascendant.signIndex;
+    var GRAHAS = ['Sun', 'Moon', 'Mars', 'Mercury', 'Jupiter', 'Venus', 'Saturn'];
+    function houseOf(n) { return ((result.planets[n].signIndex - ascSign + 12) % 12) + 1; }
+    function host(n) { return E2.SIGN_LORDS[result.planets[n].signIndex]; }
+    var seen = {}, out = [];
+    GRAHAS.forEach(function (start) {
+      var chain = [start], cur = host(start);
+      while (chain.indexOf(cur) < 0 && chain.length < 8) { chain.push(cur); cur = host(cur); }
+      if (cur !== start || chain.length < 3) return;
+      var key = chain.slice().sort().join('|');
+      if (seen[key]) return;
+      seen[key] = true;
+      var houses = chain.map(houseOf);
+      var cls = 'Maha';
+      houses.forEach(function (h) {
+        if (DUSTHANA.indexOf(h) >= 0) cls = 'Dainya';
+        else if (h === 3 && cls === 'Maha') cls = 'Khala';
+      });
+      var links = chain.map(function (n, i) {
+        var nxt = chain[(i + 1) % chain.length];
+        var rel = result.relationships[n] && result.relationships[n][nxt];
+        return { planet: n, host: nxt, rel: rel ? rel.panchadha : 'Neutral' };
+      });
+      var weakest = links.reduce(function (w, l) { return LINK_RANK[l.rel] < LINK_RANK[w.rel] ? l : w; });
+      var steps = chain.map(function (n, i) {
+        var nxt = chain[(i + 1) % chain.length];
+        var owns = H.housesOwnedBy(n, ascSign).map(function (o) { return o.house; });
+        return n + ' (lord of ' + owns.map(ord).join(' and ') + ') sits in the ' + ord(houseOf(n)) + ', ' + nxt + '’s sign';
+      });
+      out.push({
+        name: cls + ' Yoga (dispositor loop)', planets: chain, houses: houses, cls: cls, links: links, weakest: weakest,
+        reason: steps.join('; ') + ' — a closed chain linking houses ' + houses.map(ord).join(', ') +
+          ', so their matters work as one system. Links: ' +
+          links.map(function (l) { return l.planet + '→' + l.host + ' ' + l.rel; }).join(', ') + '. ' +
+          (LINK_RANK[weakest.rel] >= 3 ? 'Every link is friendly, so the chain runs smoothly.'
+            : 'The weakest link is ' + weakest.planet + ' in ' + weakest.host + '’s sign (' + weakest.rel +
+              '), where the chain meets friction.') +
+          ' Classical Parivartana is between two planets; a ' + chain.length + '-planet loop is a modern extension, read as weaker than a direct exchange — ' +
+          cls + ' by Phaladeepika’s house classes.'
       });
     });
     return out;
@@ -5927,6 +5999,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     var gajakesari = gajakesariYogas(result, H);
     var conjunction = conjunctionYogas(result, H);
     var parivartana = parivartanaYogas(result, H);
+    var dispLoops = dispositorLoopYogas(result, H);
     var mahapurusha = panchaMahapurushaYogas(result, H);
     var nabhasha = nabhashaYogas(result, sb, H);
     nabhasha.forEach(function (y) { y.dashaClass = 'independent'; });
@@ -5937,6 +6010,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     gajakesari.forEach(function (y) { y.timing = dashaTiming(['Moon', 'Jupiter'], result, H, sb); y.timingText = dashaTimingText(y.timing); y.dashaClass = 'dependent'; });
     conjunction.forEach(function (y) { y.timing = dashaTiming(y.planets, result, H, sb); y.timingText = dashaTimingText(y.timing); y.dashaClass = 'dependent'; });
     parivartana.forEach(function (y) { y.timing = dashaTiming(y.planets, result, H, sb); y.timingText = dashaTimingText(y.timing); y.dashaClass = 'dependent'; });
+    dispLoops.forEach(function (y) { y.timing = dashaTiming(y.planets, result, H, sb); y.timingText = dashaTimingText(y.timing); y.dashaClass = 'dependent'; });
     mahapurusha.forEach(function (y) { y.timing = dashaTiming([y.planet], result, H, sb); y.timingText = dashaTimingText(y.timing, { hybrid: true }); y.dashaClass = 'hybrid'; });
     var tripod = tripodImpact(result, sb, H);
     var planets = {};
@@ -5945,7 +6019,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     });
     return {
       vry: vry, raja: raja, dhana: dhana,
-      neechaBhanga: neechaBhanga, gajakesari: gajakesari, conjunction: conjunction, parivartana: parivartana,
+      neechaBhanga: neechaBhanga, gajakesari: gajakesari, conjunction: conjunction, parivartana: parivartana, dispLoops: dispLoops,
       mahapurusha: mahapurusha, nabhasha: nabhasha, tripod: tripod, planets: planets
     };
   }
@@ -13034,6 +13108,9 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         }) },
       { label: 'Parivartana (mutual exchange)', dashaClass: 'dependent', items: (ie.parivartana || []).map(function (y) {
           return { title: y.planets.join(' + ') + ' — ' + y.name, text: y.reason, timingText: y.timingText, planets: y.planets };
+        }) },
+      { label: 'Dispositor loop (chain exchange)', dashaClass: 'dependent', items: (ie.dispLoops || []).map(function (y) {
+          return { title: y.planets.join(' → ') + ' → ' + y.planets[0] + ' — ' + y.name, text: y.reason, timingText: y.timingText, planets: y.planets };
         }) },
       { label: 'Viparita Raja Yoga', dashaClass: 'dependent', items: ie.vry.map(function (y) {
           return { title: y.name, text: y.reason + (y.isPrimaryLord ? '' :
