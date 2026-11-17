@@ -1082,6 +1082,56 @@
     return [relWordOf(result, from, to), signRelationOf(result, H, from, result.planets[to].signIndex)].filter(Boolean).join(' · ');
   }
 
+  // Archetype for the Facts tab's Body / Mind / Soul: the sign's role and a
+  // line on its character, then one clause on its strongest influence — the
+  // closest planet sharing the sign, else the sign's lord and the house it
+  // sits in. Interpretive, labelled as such where it is shown.
+  var SIGN_ARCHETYPE = {
+    Aries: ['The Pioneer', 'Aries starts things: bold, direct and competitive, quickest when there is something to win.'],
+    Taurus: ['The Steward', 'Taurus builds and keeps: steady, patient and sensual, valuing comfort and lasting worth.'],
+    Gemini: ['The Messenger', 'Gemini is the communicator and connector: curious, adaptable and quick-witted, at its best linking people and ideas.'],
+    Cancer: ['The Nurturer', 'Cancer protects and cares: emotional, loyal and devoted to home and family.'],
+    Leo: ['The Sovereign', 'Leo leads from the centre: confident, generous and expressive, wanting to be seen.'],
+    Virgo: ['The Analyst-Healer', 'Virgo perfects through service: meticulous, modest and practical, with a sharp eye for what is broken and how to fix it.'],
+    Libra: ['The Diplomat', 'Libra is the harmoniser: fair-minded and sociable, weighing every side before settling.'],
+    Scorpio: ['The Transformer', 'Scorpio goes deep: intense, private and resilient, drawn to what lies beneath the surface.'],
+    Sagittarius: ['The Seeker-Teacher', 'Sagittarius aims for meaning: optimistic, philosophical and freedom-loving.'],
+    Capricorn: ['The Builder', 'Capricorn climbs with discipline: ambitious, patient and responsible, measuring life by what it achieves.'],
+    Aquarius: ['The Reformer', 'Aquarius thinks ahead of the crowd: independent, inventive and humanitarian.'],
+    Pisces: ['The Mystic', 'Pisces dissolves boundaries: compassionate, imaginative and intuitive.']
+  };
+  var ARCHETYPE_ADDS = {
+    Sun: 'authority and a need for recognition', Moon: 'feeling and sensitivity', Mars: 'drive and courage',
+    Mercury: 'intellect and wit', Jupiter: 'wisdom and an ethical, counselling streak', Venus: 'grace, charm and refinement',
+    Saturn: 'discipline, gravity and endurance', Rahu: 'restless ambition and an appetite for the unconventional',
+    Ketu: 'detachment and an inward, spiritual turn'
+  };
+  var ARCHETYPE_HOUSE = {
+    1: 'the self and its own path', 2: 'family, speech and wealth', 3: 'effort, courage and communication',
+    4: 'home, inner peace and roots', 5: 'intelligence, creativity and children', 6: 'service, work and overcoming obstacles',
+    7: 'partnership and the public', 8: 'research, transformation and hidden matters', 9: 'principles, teaching and dharma',
+    10: 'career and public standing', 11: 'gains, networks and ambitions', 12: 'retreat, distant lands and letting go'
+  };
+  function archetypeOf(result, H, signIdx, lon, self) {
+    var E2 = H.engine, sign = E2.SIGNS[signIdx], a = SIGN_ARCHETYPE[sign];
+    var ascSign = result.ascendant.signIndex;
+    var near = H.PLANET_ORDER.filter(function (n) { return n !== self && result.planets[n].signIndex === signIdx; })
+      .sort(function (x, y) { return arc(result.planets[x].longitude, lon) - arc(result.planets[y].longitude, lon); });
+    var mod;
+    if (near.length) {
+      var c = near[0], cp = result.planets[c];
+      mod = c + ' beside it adds ' + ARCHETYPE_ADDS[c] + '.' +
+        (cp.retrograde && !NODES[c] ? ' Its retrograde motion turns that inward, so it reflects before it acts.' : '');
+    } else {
+      var lord = E2.SIGN_LORDS[signIdx], lp = result.planets[lord];
+      var lh = ((lp.signIndex - ascSign + 12) % 12) + 1;
+      mod = lord === self || lp.signIndex === signIdx
+        ? lord + ', its lord, stands in its own sign, so it acts on its own terms.'
+        : lord + ', its lord, sits in the ' + ord(lh) + ' house, directing it toward ' + ARCHETYPE_HOUSE[lh] + '.';
+    }
+    return { role: a[0], text: a[1] + ' ' + mod };
+  }
+
   // The Facts tab's Body / Mind / Soul read: for each, its placement and all
   // it takes in, heaviest first — lordships, a sign exchange, co-tenants, the
   // dispositor, then aspects (the tripod hits above, each with how the
@@ -1109,6 +1159,8 @@
     var body = [{ text: asc.sign + ' rising' + deg(asc) + (asc.nakshatra && asc.nakshatra.name ? ' · ' + asc.nakshatra.name : ''), tone: 'neutral' },
       { text: 'Lagna lord ' + where(lagnaLord), tone: 'neutral' }];
     out.Body = body.concat(influences('Body', null));
+    var ab = archetypeOf(result, H, ascSign, asc.longitude, null);
+    out.Body.push({ text: ab.text, role: ab.role, tone: 'neutral', archetype: true });
 
     [['Mind', 'Moon'], ['Soul', 'Sun']].forEach(function (pair) {
       var key = pair[0], name = pair[1], p = result.planets[name];
@@ -1129,6 +1181,8 @@
         lines.push({ text: 'Dispositor ' + where(disp) + (dRel ? ' · ' + dRel : ''), tone: 'neutral' });
       }
       out[key] = lines.concat(rest);
+      var am = archetypeOf(result, H, p.signIndex, p.longitude, name);
+      out[key].push({ text: am.text, role: am.role, tone: 'neutral', archetype: true });
     });
     return out;
   }

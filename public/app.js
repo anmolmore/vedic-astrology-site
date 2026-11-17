@@ -5369,6 +5369,17 @@
       var col = document.createElement('div');
       col.appendChild(spanText(pair[0] + ' (' + pair[1] + ')', 'fact-pick-name'));
       inputs[pair[0]].forEach(function (line) {
+        if (line.archetype) {
+          // The interpretive close: the sign's role, then its character and
+          // strongest influence.
+          var arch = document.createElement('div');
+          arch.className = 'facts-archetype';
+          arch.title = 'Archetype — an interpretive reading of the sign and its strongest influence';
+          arch.appendChild(spanText('Archetype · ' + line.role, 'facts-archetype-role'));
+          arch.appendChild(spanText(line.text, 'facts-archetype-text'));
+          col.appendChild(arch);
+          return;
+        }
         col.appendChild(spanText(line.text, 'facts-tripod-hit ' + TONE[line.tone]));
       });
       cols.appendChild(col);
