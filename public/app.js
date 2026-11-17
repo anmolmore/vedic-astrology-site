@@ -165,6 +165,12 @@
     var n = result && H ? netInfluenceTone(name, result, sb, H) : natureOfPlanet(name, sb);
     return ' (' + n + ')';
   }
+  function netEdgeLabel(e) {
+    function sh(n) { return SHORT[n] || n; }
+    if (e.type === 'aspect') return (e.planets || [e.planet]).map(sh).join('+') + ' ' + (e.label || '');
+    if (e.type === 'dispositor' || e.type === 'karaka') return sh(e.planet);
+    return e.label || 'Exchange';
+  }
   function netEdgeTitle(e, sb, result, H) {
     if (e.type === 'dispositor') {
       return e.planet + netNatureWord(e.planet, sb, result, H) + ' rules ' + SIGNS[e.to] + ', standing in ' + SIGNS[e.from] + '.';
@@ -1787,7 +1793,7 @@
         var blen = Math.sqrt((end.x - start.x) * (end.x - start.x) + (end.y - start.y) * (end.y - start.y)) || 1;
         var bpx = -(end.y - start.y) / blen, bpy = (end.x - start.x) / blen;
         var base = { start: start, end: end, midx: midx, midy: midy };
-        var labelled = bundle.filter(function (m) { return m.type !== 'dispositor' && m.type !== 'secondary'; });
+        var labelled = bundle.filter(function (m) { return m.type !== 'secondary'; });
         bundle.forEach(function (e, bi) {
         var sh = (bi - (bundle.length - 1) / 2) * BUNDLE_GAP;
         var start = { x: base.start.x + bpx * sh, y: base.start.y + bpy * sh };
@@ -1845,14 +1851,15 @@
         edgePath.appendChild(titleEl);
         layer.appendChild(edgePath);
 
-        // Only label aspect edges (with their degree) and the exchange edge;
-        // dispositor and secondary-influence edges are conveyed by line
-        // style/color alone (see legend).
-        if (e.type !== 'dispositor' && e.type !== 'secondary') {
-          var t = 0.5 + (li - (labelled.length - 1) / 2) * 0.16;
+        // Labels name the planet behind the line: the dispositor, the
+        // karaka, or the aspecting planet with its aspect number. The
+        // exchange keeps its own label; the light-blue "also rules" lines
+        // are conveyed by colour alone (see legend).
+        if (e.type !== 'secondary') {
+          var t = 0.5 + (li - (labelled.length - 1) / 2) * 0.18;
           var lx = (1 - t) * (1 - t) * start.x + 2 * (1 - t) * t * midx + t * t * end.x;
           var ly = (1 - t) * (1 - t) * start.y + 2 * (1 - t) * t * midy + t * t * end.y;
-          var label = e.label || 'Exchange';
+          var label = netEdgeLabel(e);
           var tw = label.length * 3.9 + 4;
           layer.appendChild(svgEl('rect', { x: lx - tw / 2, y: ly - 5, width: tw, height: 8, class: 'net-label-bg', rx: 1.5 }));
           layer.appendChild(svgText(lx, ly + 2, label, 'net-label-text', 6.6));
