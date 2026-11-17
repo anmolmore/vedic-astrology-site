@@ -21,11 +21,17 @@
   // selected sign(s), Out = influences going out. Both on whenever the
   // overlay is turned on; both off (and disabled) while it's off.
   var networkShowIn = true, networkShowOut = true;
+  // Which line families the network draws: dispositor (lords, exchanges and
+  // the light-blue "also rules" lines) and aspects. networkEnabled is on
+  // while either is.
+  var networkShowDisp = false, networkShowAsp = false;
   // Set when a planet is picked from the Influences dropdown: the overlay
   // then shows only that planet's share of its sign. Cleared by clicking a
   // sign on the chart, toggling the network, or picking an empty house.
   var networkFocusPlanet = null;
   var NETWORK_VIEW_KEY = 'vedicChartNetworkOn.v1';
+  var NETWORK_DISP_KEY = 'vedicChartNetworkDisp.v1';
+  var NETWORK_ASP_KEY = 'vedicChartNetworkAsp.v1';
 
   // ---- South Indian chart's optional Dasha-activation overlay ----
   // Mirrors whatever MD/AD/PD node is currently selected in the Dasha tab's
@@ -1442,6 +1448,12 @@
         if (e._tenants) e._tenants = e._tenants.filter(function (n) { return others.indexOf(n) < 0; });
       });
     }
+    // The Dispositor and Aspects checkboxes pick the line families.
+    if (!networkShowDisp) {
+      visibleEdges = visibleEdges.filter(function (e) { return e.type === 'aspect'; });
+      secondaryEdges = [];
+    }
+    if (!networkShowAsp) visibleEdges = visibleEdges.filter(function (e) { return e.type !== 'aspect'; });
     // A light-blue "also rules" line (ruled sign → where its lord stands)
     // says the same thing as that lord's own dispositor line running the
     // other way; when that line is already drawn, the blue one is dropped
@@ -3614,7 +3626,7 @@
     // sign, which is also where the planet sits), narrowed to the planet
     // itself when one is picked. A dropdown pick is one choice, so it
     // replaces any signs clicked before; what is drawn still follows the
-    // Dispositor & aspect network / In / Out boxes.
+    // Dispositor / Aspects / In / Out boxes.
     function focusNetwork(entry) {
       if (!lastResult) return;
       networkSelectedSigns = {};
@@ -7373,8 +7385,15 @@
     var box = document.getElementById('networkToggle');
     if (!box || box.__wired) return;
     box.__wired = true;
-    networkEnabled = prefGet(NETWORK_VIEW_KEY) === '1';
-    box.checked = networkEnabled;
+    var aspBox = document.getElementById('networkAspToggle');
+    // The old single checkbox's setting turns both on the first time.
+    var legacy = prefGet(NETWORK_VIEW_KEY) === '1';
+    var dPref = prefGet(NETWORK_DISP_KEY), aPref = prefGet(NETWORK_ASP_KEY);
+    networkShowDisp = dPref == null ? legacy : dPref === '1';
+    networkShowAsp = aPref == null ? legacy : aPref === '1';
+    networkEnabled = networkShowDisp || networkShowAsp;
+    box.checked = networkShowDisp;
+    if (aspBox) aspBox.checked = networkShowAsp;
     var inBox = document.getElementById('networkInToggle');
     var outBox = document.getElementById('networkOutToggle');
     // In/Out only mean something while the network is on: turning it on
@@ -7388,14 +7407,24 @@
       });
     }
     syncDirBoxes();
-    box.addEventListener('change', function () {
-      networkEnabled = box.checked;
-      prefSet(NETWORK_VIEW_KEY, networkEnabled ? '1' : '0');
-      networkSelectedSigns = {};
-      networkFocusPlanet = null;
-      syncDirBoxes();
+    // Switching the network on or off resets the selection and In / Out;
+    // changing which families show while it stays on keeps them.
+    function onFamilyChange() {
+      var was = networkEnabled;
+      networkShowDisp = box.checked;
+      networkShowAsp = !!(aspBox && aspBox.checked);
+      networkEnabled = networkShowDisp || networkShowAsp;
+      prefSet(NETWORK_DISP_KEY, networkShowDisp ? '1' : '0');
+      prefSet(NETWORK_ASP_KEY, networkShowAsp ? '1' : '0');
+      if (was !== networkEnabled) {
+        networkSelectedSigns = {};
+        networkFocusPlanet = null;
+        syncDirBoxes();
+      }
       if (lastResult) renderD1Charts(lastResult, lastSb);
-    });
+    }
+    box.addEventListener('change', onFamilyChange);
+    if (aspBox) aspBox.addEventListener('change', onFamilyChange);
     [[inBox, 'in'], [outBox, 'out']].forEach(function (pair) {
       if (!pair[0]) return;
       pair[0].addEventListener('change', function () {
