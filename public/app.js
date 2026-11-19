@@ -34,6 +34,7 @@
   var NETWORK_ASP_KEY = 'vedicChartNetworkAsp.v1';
   var NETWORK_KARAKA_KEY = 'vedicChartNetworkKaraka.v1';
 
+
   // ---- South Indian chart's optional Dasha-activation overlay ----
   // Mirrors whatever MD/AD/PD node is currently selected in the Dasha tab's
   // tree (set from showDetail() as the user browses it, and by the tree's own
@@ -43,65 +44,13 @@
   var lastDashaSelection = null;
   var DASHA_ACTIVATION_VIEW_KEY = 'vedicChartDashaActivationOn.v1';
 
-  // Arrowhead markers, one per *nature* rather than per edge type (a later
-  // request: the line still conveys type via its own stroke color/style —
-  // see the .net-edge-<type> CSS rules and the comment above .net-label-bg —
-  // but the arrowhead alone is recolored to show whether the planet driving
-  // that specific influence (dispositor lord, aspect caster, exchange
-  // partner, secondary ruler) is a natural benefic or malefic, per the
-  // Influence Engine's own benefic/malefic map. One marker per nature, color
-  // baked straight into its own fill, rather than a single shared marker
-  // with fill="currentColor" — a <marker> is rendered as its own detached
-  // tree, so currentColor inside it resolves against the marker element's
-  // own fixed computed color, not the color of whichever path references it.
-  var NET_NATURE_MARKER_IDS = [
-    { id: 'netArrowBenefic', color: 'var(--net-benefic)' },
-    { id: 'netArrowMalefic', color: 'var(--net-malefic)' },
-    { id: 'netArrowMixed', color: 'var(--gold)' },
-    { id: 'netArrowNeutral', color: 'var(--muted)' }
-  ];
-  function netNatureMarkerId(nature) {
-    return nature === 'benefic' ? 'netArrowBenefic' : nature === 'malefic' ? 'netArrowMalefic'
-      : nature === 'mixed' ? 'netArrowMixed' : 'netArrowNeutral';
-  }
-  // Benefic ('benefic') / malefic ('malefic') for one planet — the exact
-  // same classification the Influence Engine's Tripod scanner and unified
-  // verdict already use (window.Interpret.DEFAULT_BENEFIC, or the chart's own
-  // computed sb.context.beneficMap when a real chart's Shadbala ran), not a
-  // second benefic/malefic table invented for this overlay. Rahu/Ketu are
-  // always natural malefics (Interpret.isNaturalBenefic) — the conditions
-  // under which their own results turn favourable don't change how their
-  // influence lands on others.
-  function natureOfPlanet(name, sb) {
-    if (name === 'Rahu' || name === 'Ketu') return 'malefic';
-    var beneficMap = (sb && sb.context && sb.context.beneficMap) || (window.Interpret && window.Interpret.DEFAULT_BENEFIC) || {};
-    return beneficMap[name] ? 'benefic' : 'malefic';
-  }
-  // Widened influence tone (Influence Framework §3 / item 24 — "aspect as a
-  // net vector", generalized here to every edge type this overlay draws, not
-  // only aspects, since dispositor and exchange edges read the same
-  // natureOfPlanet() call and share the identical shallow-nature-only
-  // problem). Reads natural tone (as before) plus two more signals per the
-  // research's own recommendation: functional lordship tone (Trikona
-  // lordship pulls toward benefic, Dusthana lordship pulls toward malefic —
-  // this is the concrete fix for why Mars's aspects in a chart like Siva's
-  // all render the same red today, even though two of the three land on
-  // structurally different points) and same-conjunction taint (a co-tenant's
-  // own nature pulls this planet's read the same direction). A planet
-  // holding a genuinely split signal (e.g. both a Trikona and a Dusthana
-  // lordship at once, or conjunct planets of both natures) reads 'mixed'
-  // rather than forced to either side. Falls back to plain natureOfPlanet()
-  // when result/H aren't available, so existing callers
-  // that only have (name, sb) keep working unchanged.
-  //
-  // With real Shadbala on hand the arrowhead takes the planet's verdict from
-  // the Influence Engine tab's Bala framework instead — green, amber or red
-  // (Interpret.balaFramework: the Shadbala number crossed with the factors
-  // the number leaves out). The votes below remain the fallback for a
-  // hand-placed chart, which has no Shadbala to grade.
+  // Arrowheads follow the layered reading (Interpret.layeredReading): head
+  // colour = the driving planet's functional nature, head fill = its
+  // Ishta/Kashta tone, line thickness = its Shadbala. The line's own colour
+  // still shows the edge type (see the .net-edge-<type> CSS rules).
   // The MD/AD/PD chain selected on the Dashas tab (lastDashaSelection), in the
-  // shape Interpret.balaFramework() takes. Yogas score only for its lords, so
-  // the verdicts — and these arrowheads — follow the period in view.
+  // shape Interpret.balaFramework() takes: the Influence Engine names which
+  // planets are lords of the period in view.
   function bfDashaOpts() {
     var sel = lastDashaSelection;
     if (!sel || !sel.lords || !sel.lords.length) return { activeLords: [], periodLabel: '' };
@@ -110,60 +59,62 @@
       periodLabel: sel.lords.map(function (l) { return l.lord + ' ' + l.role; }).join(' › ')
     };
   }
-  var netVerdictCache = new WeakMap();
-  function netPlanetVerdict(name, result, sb, H) {
-    if (!result || !H || !sb || !sb.results || !window.Interpret || !window.Interpret.balaFramework) return null;
-    var cached = netVerdictCache.get(result);
-    var dashaOpts = bfDashaOpts();
-    if (!cached || cached.sb !== sb || cached.period !== dashaOpts.periodLabel) {
-      cached = { sb: sb, period: dashaOpts.periodLabel, verdicts: {} };
-      netVerdictCache.set(result, cached);
-    }
-    if (!(name in cached.verdicts)) {
-      var fw = window.Interpret.balaFramework({ kind: 'planet', key: name, house: result.planets[name].house }, result, sb, H, dashaOpts);
-      var block = fw && fw.blocks.filter(function (b) { return b.kind === 'narrative' && b.subject === 'planet'; })[0];
-      cached.verdicts[name] = block ? block.verdict : null;
-    }
-    return cached.verdicts[name];
+  // ---- Layered arrowheads ----
+  var NET_LAYER_COLORS = { benefic: 'var(--net-benefic)', malefic: 'var(--net-malefic)', mixed: 'var(--gold)', neutral: 'var(--muted)' };
+  // Layered whenever there is a chart; without Shadbala (a hand-placed chart)
+  // only the functional colour is known: half-filled heads, plain lines.
+  function netLayeredOn(result, sb, H) {
+    return !!(result && H && window.Interpret && window.Interpret.layeredReading);
   }
-  var NET_VERDICT_TONE = { green: 'benefic', amber: 'mixed', red: 'malefic' };
-  function netInfluenceTone(name, result, sb, H) {
-    var verdict = netPlanetVerdict(name, result, sb, H);
-    if (verdict) return NET_VERDICT_TONE[verdict.color];
-    var natural = natureOfPlanet(name, sb);
-    if (!natural || !result || !H || !window.Interpret) return natural;
-    var role = window.Interpret.functionalRoleOf(name, result, H);
-    var tags = (role.dual ? role.appConvention : role.classical).tags;
-    var isTri = tags.indexOf('Trikona') >= 0;
-    var isDus = tags.indexOf('Dusthana') >= 0;
-    var functional = (isTri && isDus) ? 'mixed' : isTri ? 'benefic' : isDus ? 'malefic' : null;
-
-    var taint = null;
-    var mySign = result.planets[name].signIndex;
-    H.PLANET_ORDER.forEach(function (other) {
-      if (other === name || H.isNodePair(name, other)) return;
-      if (result.planets[other].signIndex !== mySign) return;
-      var otherNat = natureOfPlanet(other, sb);
-      if (!otherNat) return;
-      taint = taint === null ? otherNat : (taint === otherNat ? taint : 'mixed');
+  // One planet's layers. Rahu and Ketu have no Shadbala: their tone is their
+  // dispositor's and their line stays thin.
+  function netLayerOne(name, result, sb, H) {
+    return window.Interpret.layeredReading(name, result, sb, H);
+  }
+  // Several planets behind one line (a joint aspect, tenants feeding back):
+  // shared nature and tone, else mixed / balanced; the strongest sets the width.
+  function netLayered(names, result, sb, H) {
+    var ls = names.map(function (n) { return netLayerOne(n, result, sb, H); });
+    var nature = ls.every(function (l) { return l.nature === ls[0].nature; }) ? ls[0].nature : 'mixed';
+    var tone = ls.every(function (l) { return l.tone === ls[0].tone; }) ? ls[0].tone : 'balanced';
+    var ratios = ls.map(function (l) { return l.ratio; }).filter(function (x) { return x != null; });
+    return { nature: nature, tone: tone, ratio: ratios.length ? Math.max.apply(null, ratios) : null };
+  }
+  function netLayerMarkerId(L) { return 'netL-' + L.nature + '-' + L.tone; }
+  function netLayerWidth(L) {
+    if (L.ratio == null) return 1;
+    return Math.max(0.8, Math.min(2.6, 0.8 + (L.ratio - 1) * 2));
+  }
+  function netLayerMarkersSvg() {
+    var out = '';
+    Object.keys(NET_LAYER_COLORS).forEach(function (nat) {
+      var c = NET_LAYER_COLORS[nat];
+      ['good', 'balanced', 'difficult'].forEach(function (tone) {
+        out += '<marker id="netL-' + nat + '-' + tone + '" viewBox="-1 -1 12 12" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse">';
+        if (tone === 'good') out += '<path d="M0,0 L10,5 L0,10 z" fill="' + c + '"/>';
+        else {
+          out += '<path d="M0,0 L10,5 L0,10 z" fill="var(--bg2)" stroke="' + c + '" stroke-width="1.4" stroke-linejoin="round"/>';
+          if (tone === 'balanced') out += '<path d="M0,0 L10,5 L0,5 z" fill="' + c + '"/>';
+        }
+        out += '</marker>';
+      });
     });
-
-    var votes = [natural];
-    if (functional) votes.push(functional);
-    if (taint) votes.push(taint);
-    if (votes.indexOf('mixed') >= 0) return 'mixed';
-    var hasB = votes.indexOf('benefic') >= 0, hasM = votes.indexOf('malefic') >= 0;
-    if (hasB && hasM) return 'mixed';
-    return hasB ? 'benefic' : 'malefic';
+    return out;
   }
-  // A plain-language hover title for one edge, naming the planet whose
-  // nature colored its arrowhead — so the coloring is self-explanatory
-  // rather than a colored tip with no stated reason.
+  function netLayerWord(name, result, sb, H) {
+    var l = netLayerOne(name, result, sb, H);
+    var parts = ['functional ' + l.nature + (l.fn.flags.length ? ' (' + l.fn.flags.join(', ') + ')' : '')];
+    if (l.ratio != null) parts.push(l.ratio.toFixed(2) + '× Shadbala');
+    if (l.ik) {
+      var t = l.tone === 'good' ? 'Ishta ' + l.ik.ishta.toFixed(0) : l.tone === 'difficult' ? 'Kashta ' + l.ik.kashta.toFixed(0)
+        : 'Ishta ' + l.ik.ishta.toFixed(0) + ' / Kashta ' + l.ik.kashta.toFixed(0);
+      parts.push((l.ratio == null ? 'tone via ' + l.fn.via + ': ' : '') + t);
+    }
+    return ' (' + parts.join(', ') + ')';
+  }
   function netNatureWord(name, sb, result, H) {
-    var verdict = netPlanetVerdict(name, result, sb, H);
-    if (verdict) return ' (' + verdict.word + ')';
-    var n = result && H ? netInfluenceTone(name, result, sb, H) : natureOfPlanet(name, sb);
-    return ' (' + n + ')';
+    if (netLayeredOn(result, sb, H)) return netLayerWord(name, result, sb, H);
+    return '';
   }
   function netEdgeLabel(e) {
     function sh(n) { return SHORT[n] || n; }
@@ -697,13 +648,21 @@
     return d;
   }
 
-  // The Influence Engine tab's verdict pill for a planet or house narrative,
-  // or nothing when the framework has no entries (a hand-placed chart).
-  function ctVerdictPill(narrative) {
-    if (!narrative) return null;
+  // The layered reading's pills for a planet or house narrative (functional
+  // nature, tone), or nothing for a hand-placed chart.
+  function bfLayerPills(layer, word) {
+    var frag = document.createDocumentFragment();
+    frag.appendChild(spanText(word || layer.word, 'bf-badge bf-fn-' + layer.nature));
+    frag.appendChild(spanText(layer.toneWord, 'bf-badge bf-tone-' + layer.tone));
+    return frag;
+  }
+  function ctLayerPills(narrative) {
+    if (!narrative || !narrative.layer) return null;
     var d = document.createElement('div');
-    d.className = 'ct-verdict';
-    d.appendChild(spanText(narrative.verdict.word, 'bf-badge bf-badge-' + narrative.verdict.color));
+    d.className = 'ct-layers';
+    // On hover a planet's pill names just its nature ("Malefic").
+    var n = narrative.layer.nature;
+    d.appendChild(bfLayerPills(narrative.layer, narrative.subject === 'planet' ? n.charAt(0).toUpperCase() + n.slice(1) : null));
     return d;
   }
 
@@ -778,7 +737,7 @@
   // Chart hover tooltip: one self-contained reference card per occupant
   // planet, plus a House-level card that's always present (the only card
   // shown for an empty house). A planet card's title block carries its
-  // verdict, then its Dignity, co-tenant compound relationships and the
+  // layered-reading pills, then its Dignity, co-tenant compound relationships and the
   // planets aspecting it (ctPlanetFacts), then its Shadbala standing. Each
   // card then lists its trait lines (Planet, Sign, House for a planet card;
   // Sign, House for the House-level card) and — only when relevant — a
@@ -800,9 +759,9 @@
       var sub = document.createElement('div');
       sub.className = 'ct-sub';
       sub.textContent = (PLANET_SYMBOL[pname] || '') + ' ' + pname + '-' + signName + '-House(' + houseNum + ')';
-      // The verdict pill and the Shadbala standing sit inside the title
+      // The layered-reading pills and the Shadbala standing sit inside the title
       // block, above its underline.
-      var pPill = ctVerdictPill(bfPlanetNarrative(pname));
+      var pPill = ctLayerPills(bfPlanetNarrative(pname));
       if (pPill) sub.appendChild(pPill);
       // Dignity, co-tenant relationships and aspects received, as the
       // Planets and Houses tables show them, above the Shadbala standing.
@@ -871,7 +830,7 @@
     var hSub = document.createElement('div');
     hSub.className = 'ct-sub';
     hSub.textContent = signName + '-House(' + houseNum + ')';
-    var hPill = ctVerdictPill(bfHouseNarrative(houseNum));
+    var hPill = ctLayerPills(bfHouseNarrative(houseNum));
     if (hPill) hSub.appendChild(hPill);
     var myBala = null, myBalaRank = null;
     try {
@@ -1543,6 +1502,20 @@
       });
     });
     var renderEdges = visibleEdges.concat(secondaryEdges);
+    // Layered heads describe one planet each, so a joint aspect (two planets
+    // in one sign casting the same aspect) splits into one parallel line per
+    // caster; the bundling below lays them side by side.
+    if (netLayeredOn(result, sb, H)) {
+      renderEdges = [].concat.apply([], renderEdges.map(function (e) {
+        if (e.type !== 'aspect' || !e.planets || e.planets.length < 2) return [e];
+        return e.planets.map(function (p) {
+          var c = {};
+          Object.keys(e).forEach(function (k) { c[k] = e[k]; });
+          c.planet = p; c.planets = [p];
+          return c;
+        });
+      }));
+    }
 
     // Spread edges that arrive at (or leave) the same sign from close to the
     // same angle — even from different origin signs, not just edges sharing
@@ -1702,11 +1675,8 @@
     fanOffsets(bundleReps, 'from', cell);
 
     var defs = svgEl('defs', {});
-    defs.innerHTML =
-      NET_NATURE_MARKER_IDS.map(function (m) {
-        return '<marker id="' + m.id + '" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">' +
-          '<path d="M0,0 L10,5 L0,10 z" fill="' + m.color + '"/></marker>';
-      }).join('');
+    var layeredOn = netLayeredOn(result, sb, H);
+    defs.innerHTML = netLayerMarkersSvg();
     svg.appendChild(defs);
 
     var layer = svgEl('g', { id: 'networkLayer' });
@@ -1828,17 +1798,12 @@
         // the opposite way (each marker's own auto-start-reverse orientation
         // flips correctly for marker-start with no second marker definition
         // needed).
-        if (e._headEnd !== false) {
-          pathAttrs['marker-end'] = 'url(#' + netNatureMarkerId(netInfluenceTone(e.planet, result, sb, H)) + ')';
-        }
-        if (e.type === 'exchange') {
-          pathAttrs['marker-start'] = 'url(#' + netNatureMarkerId(netInfluenceTone(e.planetReverse, result, sb, H)) + ')';
-        } else if (e._headStart) {
-          // Tenants' content flowing up to the lord: colored by the tenants
-          // (gold when several tenants of different tone share the sign).
-          var tones = e._tenants.map(function (t) { return netInfluenceTone(t, result, sb, H); });
-          var tTone = tones.every(function (t) { return t === tones[0]; }) ? tones[0] : 'mixed';
-          pathAttrs['marker-start'] = 'url(#' + netNatureMarkerId(tTone) + ')';
+        if (layeredOn) {
+          var Lend = netLayered(e.type === 'aspect' && e.planets ? e.planets : [e.planet], result, sb, H);
+          pathAttrs.style = 'stroke-width:' + netLayerWidth(Lend).toFixed(2) + 'px';
+          if (e._headEnd !== false) pathAttrs['marker-end'] = 'url(#' + netLayerMarkerId(Lend) + ')';
+          if (e.type === 'exchange') pathAttrs['marker-start'] = 'url(#' + netLayerMarkerId(netLayered([e.planetReverse], result, sb, H)) + ')';
+          else if (e._headStart) pathAttrs['marker-start'] = 'url(#' + netLayerMarkerId(netLayered(e._tenants, result, sb, H)) + ')';
         }
         var edgePath = svgEl('path', pathAttrs);
         // A hover title naming the planet behind this specific arrow and its
@@ -3385,7 +3350,7 @@
   }
 
   // The South Indian chart's "Influences" side tab: the Influence Engine tab's
-  // own dropdown (same entries, same verdict labels) and, for the chosen entry,
+  // own dropdown (same entries, same layered labels) and, for the chosen entry,
   // only its narratives — the planet's and the house's — followed by that
   // entry's Interpretation notes box. Rebuilt by renderBalaFramework(), so it
   // follows the dasha period in view exactly as the main tab does.
@@ -3655,52 +3620,6 @@
     }
     return wrap;
   }
-  // Whether a helping or hurting factor already shows as a colour in the rows
-  // above, so the cards below can call out only the ones that don't.
-  function side2Covered(f, subject, entry) {
-    var t = f.t;
-    if (subject === 'planet') {
-      return /^it rules the |^it is the lagna lord|^it sits in the |an Upachaya house, gives|^Saturn in the 8th|^Ketu in the 12th|avastha$|^it is combust|^it is Vargottama/.test(t);
-    }
-    var occ = /^its occupant (\w+) /.exec(t);
-    if (occ) return entry.kind === 'planet' && occ[1] === entry.key;
-    return /^its karaka /.test(t);
-  }
-  // The Natal tab's Shadbala and Bhava Bala cards: only those helping and
-  // hurting factors that the colours in the rows above don't already show.
-  // Ishta against Kashta rides on the entry's dropdown label instead.
-  function side2NarrativeCards(blocks, entry) {
-    var cols = document.createElement('div');
-    cols.className = 'bf-narratives';
-    blocks.forEach(function (block) {
-      if (block.kind !== 'narrative') return;
-      var box = document.createElement('div');
-      box.className = 'bf-block bf-narrative bf-narrative-' + block.verdict.color + (block.subject ? ' bf-narrative-' + block.subject : '');
-      var head = document.createElement('h3');
-      head.className = 'bf-block-head';
-      head.textContent = block.heading;
-      box.appendChild(head);
-      var shown = 0;
-      [['Helping', block.help, 'bf-help'], ['Hurting', block.hurt, 'bf-hurt']].forEach(function (pair) {
-        var rest = pair[1].filter(function (f) { return !side2Covered(f, block.subject, entry); });
-        if (!rest.length) return;
-        shown += rest.length;
-        var grp = document.createElement('div');
-        grp.className = 'bf-lines ' + pair[2];
-        grp.appendChild(spanText(pair[0], 'bf-narrative-label'));
-        rest.forEach(function (f) {
-          var item = document.createElement('p');
-          item.className = 'bf-item';
-          item.textContent = f.t.charAt(0).toUpperCase() + f.t.slice(1) + ' (' + f.w + 'pt)';
-          grp.appendChild(item);
-        });
-        box.appendChild(grp);
-      });
-      if (!shown) box.appendChild(spanText('Nothing more: what helps and hurts shows in the colours above.', 'bf-sbtree-muted'));
-      cols.appendChild(box);
-    });
-    return cols;
-  }
   function renderChartSide2(entries) {
     side2Refresh = null;
     var select = document.getElementById('chartSide2Select');
@@ -3717,19 +3636,14 @@
     function show(entry) {
       content.innerHTML = '';
       content.appendChild(side2Snapshot(entry));
-      content.appendChild(side2NarrativeCards(entry.fw.blocks, entry));
+      content.appendChild(bfNarrativeColumns(entry.fw.blocks));
       content.appendChild(bfInterpretationBox(entry));
     }
     var selectedIdx = 0;
     entries.forEach(function (entry, i) {
       var opt = document.createElement('option');
       opt.value = String(i);
-      // A planet's Ishta against Kashta follows its verdict, with a red dot
-      // when Kashta outweighs it and a green one otherwise (an option's text
-      // can't be coloured in part, so the dot carries the colour).
-      var ik = entry.fw.blocks.filter(function (b) { return b.kind === 'narrative' && b.ishta; })[0];
-      opt.textContent = bfOptionLabel(entry) +
-        (ik ? '  ·  ' + BF_DOT[ik.ishta.text.indexOf(' < ') >= 0 ? 'red' : 'green'] + ' ' + ik.ishta.text : '');
+      opt.textContent = bfOptionLabel(entry);
       select.appendChild(opt);
       if (entry.kind + ':' + entry.key === side2LastKey) selectedIdx = i;
     });
@@ -3779,7 +3693,7 @@
   // Virupas, with the Shadbala / Bhava Bala component in the right column.
   var bfLastKey = null;
   // The entries renderBalaFramework() last computed (null for a hand-placed
-  // chart), kept so the Facts tab's picks quote the very same verdicts.
+  // chart), kept so the chart tooltips quote the very same readings.
   var bfLastEntries = null;
   function bfNarrative(subject, match) {
     var found = null;
@@ -3826,19 +3740,17 @@
     { label: 'Qualitative dimension', width: '22%' }, { label: 'Actual condition', width: '50%' },
     { label: 'Why it is not scored', width: '28%' }
   ];
-  var BF_DOT = { green: '🟢', amber: '🟡', red: '🔴' };
+  // Option labels carry the layered reading: a dot for functional nature
+  // (an option's text can't be coloured in part, so the dot carries it),
+  // then the tone. A house reads through its lord.
+  var BF_DOT = { benefic: '🟢', neutral: '⚪', mixed: '🟡', malefic: '🔴' };
   function bfOptionLabel(entry) {
     var v = {};
-    entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative') v[b.subject] = b.verdict; });
-    var label = BF_DOT[v.house.color] + ' House ' + entry.house + ' · ' + v.house.word;
-    if (entry.kind === 'planet') label += '  ↔  ' + BF_DOT[v.planet.color] + ' ' + entry.key + ' · ' + v.planet.word;
-    else label += '  (empty)';
+    entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative') v[b.subject] = b.layer; });
+    var label = BF_DOT[v.house.nature] + ' House ' + entry.house + ' · ' + v.house.word;
+    if (entry.kind === 'planet') label += '  ↔  ' + BF_DOT[v.planet.nature] + ' ' + entry.key + ' · ' + v.planet.nature + ', ' + v.planet.toneWord;
     return label;
   }
-  // The narratives' Shadbala / Bhava Bala tree: the total on top, each
-  // component expandable to its parts. Collapsed to the total by default; a
-  // percentage only where a minimum (or, for a house, the benchmark) exists,
-  // with a bar ticked at 100%.
   function bfShadbalaTree(tree) {
     var wrap = document.createElement('div');
     wrap.className = 'bf-sbtree';
@@ -3932,60 +3844,42 @@
       box.appendChild(sum);
     }
     if (block.kind === 'narrative') {
-      box.className = 'bf-block bf-narrative bf-narrative-' + block.verdict.color + (block.subject ? ' bf-narrative-' + block.subject : '');
-      head.appendChild(spanText(block.verdict.word, 'bf-badge bf-badge-' + block.verdict.color));
-      block.verdict.basis.split(/(?<=\.)\s+(?=[A-Z])/).forEach(function (sentence, i) {
-        var basis = document.createElement('p');
-        basis.className = 'bf-basis';
-        basis.textContent = sentence;
-        box.appendChild(basis);
-        // Ishta against Kashta sits right under the number, in the yogas' active
-        // colour while the planet is a lord of the period in view.
-        if (i === 0 && block.ishta) {
-          var ik = document.createElement('p');
-          ik.className = 'bf-basis bf-ishta' + (block.ishta.active ? ' bf-ishta-active' : '');
-          ik.textContent = block.ishta.text;
-          ik.title = block.ishta.title;
-          box.appendChild(ik);
-        }
-        if (i === 0 && block.tree) box.appendChild(bfShadbalaTree(block.tree));
-      });
-      // Each group is a run of short lines — a list is never run together
-      // with commas or semicolons, it gets one line per item.
-      (block.groups || []).forEach(function (lines) {
+      box.className = 'bf-block bf-narrative bf-narrative-fn-' + block.layer.nature + (block.subject ? ' bf-narrative-' + block.subject : '');
+      head.appendChild(bfLayerPills(block.layer));
+      if (block.reading) {
+        var rd = document.createElement('p');
+        rd.className = 'bf-reading';
+        rd.textContent = block.reading;
+        box.appendChild(rd);
+      }
+      // One section per layer, one short line per item.
+      (block.sections || []).forEach(function (sec) {
+        var gh = document.createElement('h4');
+        gh.className = 'bf-group-head';
+        gh.textContent = sec.title;
+        box.appendChild(gh);
         var grp = document.createElement('div');
         grp.className = 'bf-lines';
-        lines.forEach(function (text) {
+        sec.lines.forEach(function (text) {
           var para = document.createElement('p');
           para.textContent = text;
           grp.appendChild(para);
         });
         box.appendChild(grp);
+        if (sec.tree && block.tree) box.appendChild(bfShadbalaTree(block.tree));
+        if (sec.notes && sec.notes.length) {
+          var ng = document.createElement('div');
+          ng.className = 'bf-lines';
+          ng.appendChild(spanText(sec.notesTitle || 'Notes', 'bf-narrative-label'));
+          sec.notes.forEach(function (text) {
+            var item = document.createElement('p');
+            item.className = 'bf-item';
+            item.textContent = text;
+            ng.appendChild(item);
+          });
+          box.appendChild(ng);
+        }
       });
-      [['Helping, but not counted', block.help, 'bf-help'], ['Hurting, but not counted', block.hurt, 'bf-hurt']].forEach(function (pair) {
-        if (!pair[1].length) return;
-        var grp = document.createElement('div');
-        grp.className = 'bf-lines ' + pair[2];
-        grp.appendChild(spanText(pair[0], 'bf-narrative-label'));
-        pair[1].forEach(function (f) {
-          var item = document.createElement('p');
-          item.className = 'bf-item';
-          item.textContent = f.t.charAt(0).toUpperCase() + f.t.slice(1) + ' (' + f.w + 'pt)';
-          grp.appendChild(item);
-        });
-        box.appendChild(grp);
-      });
-      if (block.period) {
-        var period = document.createElement('p');
-        period.className = 'bf-basis';
-        period.textContent = block.period;
-        box.insertBefore(period, box.querySelector('.bf-lines'));
-      }
-      if (block.closing) {
-        var closing = document.createElement('p');
-        closing.textContent = block.closing;
-        box.appendChild(closing);
-      }
     } else if (block.kind === 'bala') {
       block.groups.forEach(function (group) {
         var gh = document.createElement('h4');
@@ -4046,8 +3940,8 @@
     if (periodEl) {
       periodEl.textContent = dashaOpts.periodLabel
         ? 'Period in view: ' + dashaOpts.periodLabel + ' (' + fmtDate(lastDashaSelection.start) + ' – ' + fmtDate(lastDashaSelection.end) +
-          '). Yogas are scored only for the lords of this period; pick another period on the Dashas tab and the verdicts here, and the network arrowheads, follow it.'
-        : 'No dasha period is in view, so every yoga is scored as dormant.';
+          '). The Dasha layer below names whether each planet is a lord of this period; pick another period on the Dashas tab to follow it.'
+        : 'No dasha period is in view: pick one on the Dashas tab to fill the Dasha layer.';
     }
 
     var occupied = {};
@@ -4611,22 +4505,17 @@
 
   // ---- Remedies side tab ----
   // Remedies.evaluate() decides; this only draws. The natal plan is built once
-  // per chart, with verdicts taken outside any dasha period so the paths don't
+  // per chart, with layered readings taken outside any dasha period so the paths don't
   // shift as periods are picked; the period section redraws on each pick. The
   // transit scan takes about a second, so it waits until the tab is opened.
   var REMEDY_OPTIONAL_KEY = 'vedicRemedyOptional.v1';
   var REMEDY_SCAN_DAYS = 1200;
-  var rm = { result: null, sb: null, ctx: null, plan: null, lords: null, flags: null, scanning: false, verdicts: {}, open: {} };
+  var rm = { result: null, sb: null, ctx: null, plan: null, lords: null, flags: null, scanning: false, layers: {}, open: {} };
 
-  function rmVerdict(name) {
-    if (!rm.sb || !rm.sb.results) return null;
-    if (!(name in rm.verdicts)) {
-      var fw = window.Interpret.balaFramework({ kind: 'planet', key: name, house: rm.result.planets[name].house },
-        rm.result, rm.sb, interpHelpers(), { activeLords: [], periodLabel: '' });
-      var block = fw && fw.blocks.filter(function (b) { return b.kind === 'narrative' && b.subject === 'planet'; })[0];
-      rm.verdicts[name] = block ? block.verdict : null;
-    }
-    return rm.verdicts[name];
+  function rmLayers(name) {
+    if (!rm.result || !window.Interpret.layeredReading) return null;
+    if (!(name in rm.layers)) rm.layers[name] = window.Interpret.layeredReading(name, rm.result, rm.sb, interpHelpers());
+    return rm.layers[name];
   }
   function rmHead(text) { return spanText(text, 'rm-head'); }
   function rmPill(text, tone) { return spanText(text, 'rm-pill rm-' + tone); }
@@ -4895,9 +4784,9 @@
     if (!window.Remedies) return;
     rm.lords = lords;
     if (rm.result === result && rm.sb === sb) { rmPeriodSection(); return; }
-    rm.result = result; rm.sb = sb; rm.flags = null; rm.scanning = false; rm.verdicts = {}; rm.open = {};
+    rm.result = result; rm.sb = sb; rm.flags = null; rm.scanning = false; rm.layers = {}; rm.open = {};
     rm.ctx = { result: result, sb: sb, bhava: sb ? computeBhava(result, sb) : null, H: interpHelpers(),
-      Interpret: window.Interpret, data: window.RemedyData, verdictOf: sb ? rmVerdict : null };
+      Interpret: window.Interpret, data: window.RemedyData, layersOf: sb ? rmLayers : null };
     rm.plan = window.Remedies.evaluate(rm.ctx);
     rmDraw();
   }
@@ -5260,8 +5149,8 @@
       // South Indian grid under the *new* chart's dasha data.
       lastDashaSelection = { lords: sel.lords, start: sel.start, end: sel.end };
       if (dashaActivationEnabled || networkEnabled) renderD1Charts(result, sb);
-      // Yogas score only for the lords of the period in view, so the Influence
-      // Engine tab's verdicts are recomputed for it too.
+      // The Influence Engine's Dasha layer names the lords of the period in
+      // view, so it is rebuilt for the new period.
       renderBalaFramework(result, sb);
       if (lastIE && lastIE.result === result) {
         renderFactsPicks(lastIE.ie, result, sb);

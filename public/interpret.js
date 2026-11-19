@@ -633,7 +633,7 @@
   // The chart-wide scans behind the Influence Engine tab's supporting panels —
   // yogas (with their dasha timing), the Body/Mind/Soul tripod and the
   // dispositor chains — gathered by influenceEngineChart(). The per-planet and
-  // per-house verdicts themselves come from balaFramework(), further down.
+  // per-house layered readings themselves come from balaFramework(), further down.
   // Rahu/Ketu: functional lordship follows this app's own co-lordship
   // (SIGN_COLORDS), with the classical no-lordship reading kept alongside
   // (`roleInfo.dual`); their nature is always malefic (isNaturalBenefic).
@@ -695,6 +695,69 @@
     var appOwned = H.housesOwnedBy(name, ascSign).map(function (o) { return o.house; });
     var appConvention = { ownedHouses: appOwned, tags: roleTagsForOwnedHouses(appOwned) };
     return { classical: classical, appConvention: appConvention, dual: true };
+  }
+
+  // Functional nature by lordship from the ascendant (Laghu Parashari), the
+  // "what does it bring" layer of the layered reading — kept apart from
+  // strength (Shadbala) and tone (Ishta/Kashta), which say how well it brings
+  // it. Classical sign lords only. Rules, in order:
+  //   lord of a kendra and a trikona (5, 9) -> yogakaraka, benefic
+  //   lagna lord -> benefic
+  //   trikona lord -> benefic; if it also rules a malefic house (3, 6, 8, 11
+  //     or 12), mixed unless its moolatrikona sign falls in a trikona
+  //   lord of 3, 6, 8 or 11 -> malefic (Sun or Moon owning the 8th: neutral)
+  //   kendra lord only -> natural benefic malefic (kendradhipati dosha),
+  //     natural malefic neutral
+  //   2nd or 12th lord only -> neutral
+  // Flags: maraka (2nd or 7th lord); badhaka (11th lord for a movable
+  // ascendant, 9th for fixed, 7th for dual). Rahu and Ketu own nothing here:
+  // they take their dispositor's nature, and a mixed dispositor in a dusthana
+  // tips to malefic (modern practice, not a BPHS verse).
+  var FN_TRIKONA = [5, 9], FN_KENDRA = [4, 7, 10], FN_BAD = [3, 6, 8, 11];
+  var FN_NATURAL_BENEFIC = { Moon: true, Mercury: true, Jupiter: true, Venus: true };
+  function functionalNature(name, result, H) {
+    var asc = result.ascendant.signIndex, E2 = H.engine, S = H.Shadbala;
+    function owned(p) {
+      var out = [];
+      for (var s = 0; s < 12; s++) if (E2.SIGN_LORDS[s] === p) out.push(((s - asc + 12) % 12) + 1);
+      return out;
+    }
+    function any(hs, set) { return hs.some(function (h) { return set.indexOf(h) >= 0; }); }
+    if (NODES[name]) {
+      var lord = E2.SIGN_LORDS[result.planets[name].signIndex];
+      var ln = functionalNature(lord, result, H);
+      var house = result.planets[name].house;
+      var nat = ln.nature;
+      if (nat === 'mixed' && DUSTHANA.indexOf(house) >= 0) nat = 'malefic';
+      return { nature: nat, houses: [], flags: [], via: lord,
+        rule: 'follows its dispositor ' + lord + ' (' + ln.nature + ')' + (nat !== ln.nature ? ', tipped by the ' + ord(house) + ' house' : '') };
+    }
+    var hs = owned(name).sort(function (a, b) { return a - b; });
+    var flags = [];
+    if (hs.indexOf(2) >= 0 || hs.indexOf(7) >= 0) flags.push('maraka');
+    var mod = asc % 3; // 0 movable, 1 fixed, 2 dual
+    var badhakaHouse = mod === 0 ? 11 : mod === 1 ? 9 : 7;
+    if (hs.indexOf(badhakaHouse) >= 0) flags.push('badhaka');
+    var hasTri = any(hs, FN_TRIKONA), hasKendra = any(hs, FN_KENDRA);
+    var hasBad = any(hs, FN_BAD) || hs.indexOf(12) >= 0;
+    var nature, rule;
+    if (hasTri && hasKendra) { nature = 'benefic'; rule = 'kendra and trikona lord (yogakaraka)'; flags.push('yogakaraka'); }
+    else if (hs.indexOf(1) >= 0) { nature = 'benefic'; rule = 'lagna lord'; }
+    else if (hasTri && hasBad) {
+      var mt = S && S.MOOLATRIKONA && S.MOOLATRIKONA[name];
+      var mtHouse = mt ? ((mt.sign - asc + 12) % 12) + 1 : null;
+      if (mtHouse && FN_TRIKONA.indexOf(mtHouse) >= 0) { nature = 'benefic'; rule = 'trikona lord; moolatrikona in the ' + ord(mtHouse); }
+      else { nature = 'mixed'; rule = 'trikona and ' + (mtHouse ? ord(mtHouse) : 'malefic-house') + ' lord; moolatrikona in the ' + (mtHouse ? ord(mtHouse) : '?'); }
+    }
+    else if (hasTri) { nature = 'benefic'; rule = 'trikona lord'; }
+    else if (hs.indexOf(8) >= 0 && (name === 'Sun' || name === 'Moon')) { nature = 'neutral'; rule = '8th lord, exempt as ' + name; }
+    else if (any(hs, FN_BAD)) { nature = 'malefic'; rule = 'lord of the ' + hs.filter(function (h) { return FN_BAD.indexOf(h) >= 0; }).map(ord).join(' and '); }
+    else if (hasKendra) {
+      nature = FN_NATURAL_BENEFIC[name] ? 'malefic' : 'neutral';
+      rule = FN_NATURAL_BENEFIC[name] ? 'natural benefic owning a kendra (kendradhipati dosha)' : 'natural malefic owning a kendra';
+    }
+    else { nature = 'neutral'; rule = ord(hs[0]) + ' lord'; }
+    return { nature: nature, houses: hs, flags: flags, rule: rule };
   }
 
   // The reading actually used to drive yoga scanning and the FROM verdict:
@@ -2874,20 +2937,13 @@
   var FW_VARGAS = ['D1', 'D2', 'D3', 'D7', 'D9', 'D12', 'D30'];
   var FW_DAY_STRONG = ['Sun', 'Jupiter', 'Venus'];
 
-  // Verdict = the number (Strong / Adequate / Weak) crossed with the factors
-  // the number leaves out (Supported / Mixed / Afflicted). Uncounted factors
-  // weigh 2 (heavy: lordship of a Dusthana, Trikona or the lagna, combustion,
-  // debilitation or exaltation incl. D9, Neecha Bhanga) or 1 (light: avasthas,
-  // dispositor, placement, Kartari, Vargottama, karaka, directional strength,
-  // the nodes). Viparita Raja Yoga is heavy. Rahu and Ketu also take the
-  // favourable-result rules of nodeFavourableFactors(). Supported / Afflicted
-  // need a margin of FW_MARGIN points.
-  var FW_HEAVY = 2, FW_LIGHT = 1, FW_MARGIN = 2;
-  // Ishta against Kashta Bala says whether a planet's own periods lean
-  // auspicious or difficult. It is shown under the planet's number, not
-  // scored: active while the planet is a lord of the period in view, dormant
-  // otherwise. A lead under FW_ISHTA_LEAN Virupas reads as balanced.
+  // Weights carried by the Rahu/Ketu favourable-result rules below; shown
+  // only as the rule's own emphasis, never summed into a score.
+  var FW_HEAVY = 2, FW_LIGHT = 1;
+  // Ishta against Kashta Bala: a lead of FW_ISHTA_LEAN Virupas or more sets
+  // the tone (good or difficult); anything closer reads as balanced.
   var FW_ISHTA_LEAN = 10;
+  // Shadbala against the required minimum, for describing strength only.
   var FW_PLANET_STRONG = 1.25, FW_PLANET_ADEQUATE = 1.0; // × the required Shadbala
   // Bhava Bala has no classical minimum, so a house is graded against a
   // benchmark of this app's own making: its lord's required Shadbala plus the
@@ -2895,29 +2951,71 @@
   // neutral), with the same Strong / Adequate cut-offs as the planets. Ranking
   // the twelve instead would call four houses Weak in every chart.
   var FW_HOUSE_DIG_MID = 30;
-  var FW_VERDICT = {
-    Strong:   { Supported: ['Strong', 'green'], Mixed: ['Strong', 'green'], Afflicted: ['Strong but afflicted', 'amber'] },
-    Adequate: { Supported: ['Adequate, supported', 'green'], Mixed: ['Adequate', 'amber'], Afflicted: ['Adequate but afflicted', 'amber'] },
-    Weak:     { Supported: ['Weak but supported', 'amber'], Mixed: ['Weak', 'red'], Afflicted: ['Weak', 'red'] },
-    // No number at all (Rahu, Ketu): the uncounted factors are the verdict.
-    none:     { Supported: ['Supported', 'green'], Mixed: ['Mixed', 'amber'], Afflicted: ['Afflicted', 'red'] }
+  // ---- The layered reading ----
+  // One planet read in separate layers, never blended into one score:
+  //   1. What it brings — functional nature by lordship (functionalNature)
+  //   2. How well — Shadbala against its minimum, and Ishta/Kashta tone
+  // Association (3) and dasha (4) are read per entry in balaFramework, and
+  // transit (5) on the Transit chart. Rahu and Ketu have no Shadbala: their
+  // tone is their dispositor's. Without Shadbala (a hand-placed chart) only
+  // layer 1 is known and the tone reads as balanced.
+  var LAYER_READING = {
+    benefic: {
+      good: 'Brings good results and delivers them well.',
+      balanced: 'Brings good results, delivered steadily rather than fully.',
+      difficult: 'Promises good results, but they come late, diluted or with effort.'
+    },
+    neutral: {
+      good: 'Has no lordship agenda of its own; what it joins and aspects, it delivers well.',
+      balanced: 'Has no lordship agenda of its own; it gives what its associations give.',
+      difficult: 'Has no lordship agenda of its own; what it joins, it delivers with friction.'
+    },
+    mixed: {
+      good: 'Brings a mix of good and hard results, with the good side favoured.',
+      balanced: 'Brings a mix of good and hard results in about equal measure.',
+      difficult: 'Brings a mix of good and hard results, with the hard side favoured.'
+    },
+    malefic: {
+      good: 'Brings the matters of hard houses, but softened: their constructive side shows.',
+      balanced: 'Brings the matters of hard houses, partly softened.',
+      difficult: 'Brings the troubles of its houses in full.'
+    }
   };
-  function fwVerdict(number, numberBasis, help, hurt, rankText) {
-    function sum(a) { return a.reduce(function (t, f) { return t + f.w; }, 0); }
-    var helpScore = sum(help), hurtScore = sum(hurt), diff = helpScore - hurtScore;
-    var quality = diff >= FW_MARGIN ? 'Supported' : diff <= -FW_MARGIN ? 'Afflicted' : 'Mixed';
-    var v = FW_VERDICT[number || 'none'][quality];
+  function layeredReading(name, result, sb, H) {
+    var fn = functionalNature(name, result, H);
+    var res = sb && sb.results;
+    var r = res && res[name];
+    var src = r || (fn.via && res && res[fn.via]);
+    var ik = (src && src.ishtaKashta) || null;
+    var tone = 'balanced';
+    if (ik) {
+      var gap = ik.ishta - ik.kashta;
+      tone = gap >= FW_ISHTA_LEAN ? 'good' : gap <= -FW_ISHTA_LEAN ? 'difficult' : 'balanced';
+    }
+    var ratio = r && r.required ? r.rupa / r.required : null;
+    var reading = LAYER_READING[fn.nature][tone];
+    if (ratio != null) {
+      if (ratio < FW_PLANET_ADEQUATE) reading += ' Below its Shadbala minimum, so all of this shows faintly.';
+      else if (ratio >= 1.5) reading += ' Strong in Shadbala, so it shows forcefully.';
+    }
     return {
-      word: v[0], color: v[1], number: number, quality: quality, helpScore: helpScore, hurtScore: hurtScore,
-      basis: (number ? number + ' (' + numberBasis + ')' + (rankText ? ', ' + rankText : '') + '. ' : '') +
-        quality + ' (helping ' + helpScore + ', hurting ' + hurtScore + ').'
+      name: name, nature: fn.nature, fn: fn, tone: tone, toneKnown: !!ik, toneVia: r ? null : (ik ? fn.via : null),
+      ik: ik, ratio: ratio, rank: r ? r.rank : null, total: r ? r.total : null, reading: reading
     };
+  }
+  function layerToneText(L) {
+    if (!L.ik) return 'Tone unknown (no Ishta/Kashta).';
+    return (L.toneVia ? 'Tone through its dispositor ' + L.toneVia + ': ' : 'Tone: ') + L.tone +
+      ' (Ishta ' + n1(L.ik.ishta) + ', Kashta ' + n1(L.ik.kashta) + ').';
+  }
+  function layerShort(L) {
+    return 'functional ' + L.nature + ', ' + L.tone + ' tone' + (L.ratio != null ? ', ' + n2(L.ratio) + '× Shadbala' : '');
   }
 
   // ---- Rahu/Ketu: when their RESULTS turn favourable ----
   // Their nature stays malefic (isNaturalBenefic), but BPHS and classical
   // commentary give specific conditions under which the results a node itself
-  // delivers turn good. Each is a helping factor in the node's verdict, never a
+  // delivers turn good. Each is listed in the node's condition notes, never a
   // change to how its aspects land.
 
   // Yogakaraka planets for this Lagna: lords of both a kendra (4/7/10) and a
@@ -3039,9 +3137,9 @@
 
   // opts.activeLords ([{ lord, role }] — the MD/AD/PD chain in view) decides
   // which yogas count: a yoga delivers in the dasha of the planet forming it,
-  // so its points are scored only while that planet is a lord of the period in
-  // view, and it is listed as dormant (0 points) otherwise. Everything else in
-  // the verdict is a standing condition and ignores the period.
+  // so the reading names it active only while that planet is a lord of the period in
+  // view, and says it fruits in that dasha otherwise. Everything else in
+  // the reading is a standing condition and ignores the period.
   // Classical Shadbala component minimums (B.V. Raman, after BPHS) — the
   // total's is Shadbala's own MIN_REQUIRED. Exported so the app's tables
   // colour each component against the same figures the tree shows.
@@ -3716,75 +3814,58 @@
         cond: p.nakshatra + (p.pada ? ' pada ' + p.pada : '') + '; lord ' + p.nakshatraLord +
           (p.nakshatraLord !== name ? ' (' + stateOf(p.nakshatraLord) + ')' : ' (itself)') + '.',
         note: 'Not scored.' });
-      // ---- Planet narrative: what the number rests on, and what it leaves out ----
-      var pHelp = [], pHurt = [];
-      var pRole = activeRole[name] || null, pHasYoga = false;
-      H.housesOwnedBy(name, ascSign).forEach(function (o) {
-        if (DUSTHANA.indexOf(o.house) >= 0) pHurt.push({ t: 'it rules the ' + ord(o.house) + ', a Dusthana', w: FW_HEAVY });
-        else if (o.house === 1) pHelp.push({ t: 'it is the lagna lord', w: FW_HEAVY });
-        else if (TRIKONA.indexOf(o.house) >= 0) pHelp.push({ t: 'it rules the ' + ord(o.house) + ', a Trikona', w: FW_HEAVY });
-      });
-      // Placement. Three classical exceptions turn a malefic's difficult house
-      // to good account, so they replace the plain "sits in a Dusthana" penalty:
-      // a natural malefic in the 3rd, 6th or 11th (Upachaya houses); Saturn, the
-      // significator of longevity, in the 8th; Ketu, the significator of
-      // liberation, in the 12th. The nature stays malefic — only the results turn.
+      // ---- Planet narrative: the layered reading ----
+      var pRole = activeRole[name] || null;
+      var PL = layeredReading(name, result, sb, H);
+      // Layer 1 — what it brings
+      var pWhat = ['Functional ' + PL.nature + ': ' + PL.fn.rule + '.'];
+      if (PL.fn.houses.length) pWhat.push('Rules the ' + list(PL.fn.houses.map(ord)) + ' house' + (PL.fn.houses.length > 1 ? 's' : '') + ': ' +
+        list(PL.fn.houses.map(function (h) { return HOUSE_TEXT[h]; })) + '.');
+      if (PL.fn.flags.indexOf('yogakaraka') >= 0) pWhat.push('Yogakaraka for this lagna.');
+      if (PL.fn.flags.indexOf('maraka') >= 0) pWhat.push('Maraka: rules the 2nd or 7th.');
+      if (PL.fn.flags.indexOf('badhaka') >= 0) pWhat.push('Badhaka: rules the obstructing house for this lagna.');
+      // Layer 2 condition notes: facts about its state, listed, not scored.
+      var pCond = [];
       var pMalefic = !isNaturalBenefic(name, beneficMap);
-      if (pMalefic && [3, 6, 11].indexOf(p.house) >= 0) {
-        pHelp.push({ t: 'a natural malefic in the ' + ord(p.house) + ', an Upachaya house, gives favourable results', w: FW_LIGHT });
-      } else if (name === 'Saturn' && p.house === 8) {
-        pHelp.push({ t: 'Saturn in the 8th supports longevity (longevity only, so no points)', w: 0 });
-      } else if (name === 'Ketu' && p.house === 12) {
-        pHelp.push({ t: 'Ketu in the 12th supports liberation (spiritual, not material)', w: FW_LIGHT });
-      } else if (DUSTHANA.indexOf(p.house) >= 0) {
-        pHurt.push({ t: 'it sits in the ' + ord(p.house) + ', a Dusthana', w: FW_LIGHT });
-      } else if (p.house === 5 || p.house === 9) {
-        pHelp.push({ t: 'it sits in the ' + ord(p.house) + ', a Trikona', w: FW_LIGHT });
-      }
-      // Viparita Raja Yoga: a Dusthana lord in a Dusthana cancels its own harm.
+      if (pMalefic && [3, 6, 11].indexOf(p.house) >= 0) pCond.push('A natural malefic in the ' + ord(p.house) + ', an Upachaya house: its results turn favourable.');
+      else if (name === 'Saturn' && p.house === 8) pCond.push('Saturn in the 8th supports longevity.');
+      else if (name === 'Ketu' && p.house === 12) pCond.push('Ketu in the 12th supports liberation (spiritual, not material).');
       viparitaRajaYogas(result, H).forEach(function (y) {
         if (y.lord !== name) return;
-        pHasYoga = true;
-        pHelp.push({ t: y.name + ' (Viparita Raja Yoga): as lord of the ' + ord(y.dusthanaOwned) + ' in the ' + ord(y.lordHouse) + ', it cancels its own harm — ' +
-          (pRole ? 'active' : 'dormant until ' + name + '’s dasha'), w: pRole ? FW_HEAVY : 0 });
+        pCond.push(y.name + ' (Viparita Raja Yoga): as lord of the ' + ord(y.dusthanaOwned) + ' in the ' + ord(y.lordHouse) +
+          ', it cancels its own harm — ' + (pRole ? 'active in this period' : 'fruits in ' + name + '’s dasha') + '.');
       });
-      // Rahu/Ketu: the classical conditions under which a node's results turn good.
       if (NODES[name]) {
         nodeFavourableFactors(name, result, H, beneficMap).forEach(function (fct) {
-          if (!fct.dasha) { pHelp.push({ t: fct.t, w: fct.w }); return; }
-          pHasYoga = true;
-          pHelp.push({ t: fct.t + ' — ' + (pRole ? 'active' : 'dormant until ' + name + '’s dasha'), w: pRole ? fct.w : 0 });
+          pCond.push(cap(fct.t) + (fct.dasha ? ' — ' + (pRole ? 'active in this period' : 'fruits in ' + name + '’s dasha') : '') + '.');
         });
       }
       var nExS = Math.floor(S.EXALT[name] / 30), nDebS = (nExS + 6) % 12;
-      // Neecha Bhanga is half condition, half yoga: the cancelled weakness always
-      // counts (1), its Raja Yoga fruits only in the planet's own dasha (+1).
-      if (p.signIndex === nDebS && neechaBhangaFor(name, result, H)) {
-        pHasYoga = true;
-        pHelp.push({ t: 'Neecha Bhanga cancels its debilitation — its Raja Yoga is ' +
-          (pRole ? 'active' : 'dormant until ' + name + '’s dasha'), w: pRole ? FW_HEAVY : FW_LIGHT });
-      }
+      if (p.signIndex === nDebS) {
+        pCond.push(neechaBhangaFor(name, result, H) ? 'Debilitated, with Neecha Bhanga cancelling it — its Raja Yoga ' +
+          (pRole ? 'is active in this period.' : 'fruits in ' + name + '’s dasha.') : 'Debilitated.');
+      } else if (p.signIndex === nExS) pCond.push('Exalted.');
       if (r) {
         var nD9 = r.sthanaDetail.vargas.D9.sign;
-        if (nD9 === nDebS) pHurt.push({ t: 'it is debilitated in D9', w: FW_HEAVY });
-        else if (nD9 === nExS) pHelp.push({ t: 'it is exalted in D9', w: FW_HEAVY });
+        if (nD9 === nDebS) pCond.push('Debilitated in D9.');
+        else if (nD9 === nExS) pCond.push('Exalted in D9.');
       }
-      if (p.vargottama) pHelp.push({ t: 'it is Vargottama', w: FW_LIGHT });
-      if (p.baladiAvastha === 'Yuva') pHelp.push({ t: 'it is in Yuva (prime) avastha', w: FW_LIGHT });
-      else if (p.baladiAvastha === 'Bala') pHurt.push({ t: 'it is in Bala (infant) avastha', w: FW_LIGHT });
-      else if (p.baladiAvastha === 'Mrita') pHurt.push({ t: 'it is in Mrita (dead) avastha', w: FW_LIGHT });
-      if (p.combustion && p.combustion.combust) pHurt.push({ t: 'it is combust', w: FW_HEAVY });
-      else {
-        var nMal = cot.filter(function (n) { return !isNaturalBenefic(n, beneficMap); });
-        if (nMal.length) pHurt.push({ t: 'it shares its sign with the malefic' + (nMal.length > 1 ? 's ' : ' ') + list(nMal), w: FW_LIGHT });
-      }
+      if (p.vargottama) pCond.push('Vargottama.');
+      if (p.retrograde && !NODES[name]) pCond.push('Retrograde.');
+      if (p.baladiAvastha) pCond.push(p.baladiAvastha + ' avastha.');
+      if (p.combustion && p.combustion.combust) pCond.push('Combust.');
+      // Layer 3 — association: whose influence it carries
+      var pAssoc = [];
+      cot.forEach(function (n) { pAssoc.push('With ' + n + ' (' + layerShort(layeredReading(n, result, sb, H)) + ').'); });
+      asp.forEach(function (a) { pAssoc.push(cap(ord(a.aspect)) + ' aspect from ' + a.planet + ' (' + layerShort(layeredReading(a.planet, result, sb, H)) + ').'); });
       if (lord !== name) {
-        var nLp = result.planets[lord], nLd = H.dignityOf(lord, nLp).map(function (d) { return d.k; });
-        if (nLd.indexOf('deb') >= 0) pHurt.push({ t: 'its dispositor ' + lord + ' is debilitated', w: FW_LIGHT });
-        else if (nLd.length) pHelp.push({ t: 'its dispositor ' + lord + ' is strong by dignity', w: FW_LIGHT });
-        if (DUSTHANA.indexOf(nLp.house) >= 0) pHurt.push({ t: 'its dispositor ' + lord + ' sits in the ' + ord(nLp.house) + ', a Dusthana', w: FW_LIGHT });
-        else if (KENDRA.indexOf(nLp.house) >= 0 || TRIKONA.indexOf(nLp.house) >= 0) pHelp.push({ t: 'its dispositor ' + lord + ' is well placed in the ' + ord(nLp.house), w: FW_LIGHT });
-      }
+        pAssoc.push('Dispositor ' + lord + ' in the ' + ord(result.planets[lord].house) + ' (' + layerShort(layeredReading(lord, result, sb, H)) + ').');
+      } else pAssoc.push('In its own sign: its own dispositor.');
+      if (!cot.length && !asp.length) pAssoc.unshift('No co-tenants and no aspects on it.');
+      // Layer 4 — dasha
+      var pDasha = [!periodLabel ? 'No dasha period is in view.'
+        : pRole ? 'Period in view: ' + periodLabel + '. ' + name + ' is its ' + pRole + ' lord, so this reading is live now.'
+        : 'Period in view: ' + periodLabel + '. ' + name + ' is not one of its lords.'];
       var pGroups = [];
       if (r) {
         var nStr = [], nWeak = [], nSd = r.sthanaDetail, nKd = r.kalaDetail;
@@ -3822,31 +3903,23 @@
         // One item per line: "The strength comes from X", then "Y", "Z"…
         if (nStr.length) pGroups.push(['The strength comes from ' + nStr[0]].concat(nStr.slice(1).map(cap)));
         if (nWeak.length) pGroups.push(['It is held back by ' + nWeak[0]].concat(nWeak.slice(1).map(cap)));
-      } else {
-        pGroups.push([name + ' has no Shadbala, so there is no number to weigh', 'Its reading rests on the factors below']);
       }
       // graded on the figure as displayed (2 decimals), so 1.25× never reads as below 1.25
       var pRatio = r ? Math.round(r.rupa / r.required * 100) / 100 : null;
       var pNumber = !r ? null : pRatio >= FW_PLANET_STRONG ? 'Strong' : pRatio >= FW_PLANET_ADEQUATE ? 'Adequate' : 'Weak';
-      var pPeriod = !pHasYoga ? '' : !periodLabel ? 'No dasha period is in view, so its dasha-dependent factors are dormant.'
-        : 'Period in view: ' + periodLabel + '. ' + (pRole
-          ? name + ' is its ' + pRole + ' lord, so its dasha-dependent factors count.'
-          : name + ' is not a lord of this period, so its dasha-dependent factors are dormant.');
-      // Ishta / Kashta Bala: shown under the number, active only in the planet's own periods.
-      var pIshta = null;
-      if (r && r.ishtaKashta) {
-        var ik = r.ishtaKashta, ikGap = ik.ishta - ik.kashta;
-        pIshta = {
-          active: !!pRole,
-          text: 'Ishta (' + n1(ik.ishta) + ') ' + (n1(ik.ishta) === n1(ik.kashta) ? '=' : ikGap > 0 ? '>' : '<') + ' Kashta (' + n1(ik.kashta) + ')',
-          title: 'Its periods lean ' + (ikGap >= FW_ISHTA_LEAN ? 'auspicious' : ikGap <= -FW_ISHTA_LEAN ? 'difficult' : 'neither way') + '. ' +
-            (pRole ? 'Active: ' + name + ' is the ' + pRole + ' lord of the period in view.' : 'Dormant until ' + name + '’s dasha.')
-        };
-      }
-      narr.push({ kind: 'narrative', subject: 'planet', heading: name + ': Shadbala narrative', groups: pGroups, help: pHelp, hurt: pHurt, period: pPeriod, ishta: pIshta,
+      var pHow = [r ? 'Shadbala ' + Math.round(r.total) + ' Virupas: ' + n2(pRatio) + '× its minimum, rank ' + r.rank + ' of 7.'
+        : name + ' has no Shadbala; its tone comes from its dispositor.', layerToneText(PL)];
+      pGroups.forEach(function (g) { pHow = pHow.concat(g); });
+      narr.push({ kind: 'narrative', subject: 'planet', heading: name + ': layered reading',
+        layer: { nature: PL.nature, tone: PL.tone, word: 'Functional ' + PL.nature, toneWord: PL.tone + ' tone' },
+        reading: PL.reading, ishta: PL.ik ? { text: 'Ishta ' + n1(PL.ik.ishta) + ' / Kashta ' + n1(PL.ik.kashta), tone: PL.tone } : null,
         total: r ? r.total : null, tree: r ? shadbalaTree(name, r) : null,
-        verdict: fwVerdict(pNumber, r ? n2(pRatio) + '× its requirement' : '', pHelp, pHurt, r ? 'Rank ' + r.rank + ' of 7' : null),
-        closing: (r && (pHelp.length || pHurt.length)) ? 'None of these appear in the ' + Math.round(r.total) + ' Virupas.' : '' });
+        sections: [
+          { title: '1 · What it brings', lines: pWhat },
+          { title: '2 · How well', lines: pHow, tree: true, notes: pCond, notesTitle: 'Its condition' },
+          { title: '3 · Association', lines: pAssoc },
+          { title: '4 · Dasha', lines: pDasha }
+        ] });
 
       blocks.push({ kind: 'gap', heading: name + ': reading factors not covered by Shadbala or Bhava Bala', rows: gaps });
       // First of the detail blocks, right under the narratives.
@@ -3981,41 +4054,26 @@
       note: 'Only the human / quadruped / insect / watery type is used.' });
     hg.push({ dim: 'Ashtakavarga points and the house in divisional charts',
       cond: 'Not computed by this app.', note: 'Separate systems, not part of Bhava Bala.' });
-    // ---- House narrative ----
-    var hHelp = [], hHurt = [];
+    // ---- House narrative: read through its lord ----
+    var HL = layeredReading(hLord, result, sb, H);
+    var hLordLines = [hLord + ': ' + layerShort(HL) + '.', HL.fn.rule.charAt(0).toUpperCase() + HL.fn.rule.slice(1) + '.', HL.reading,
+      'Placed in the ' + ord(lordP.house) + ' house, the ' + ord(fromHouse) + ' from this house' +
+        (DUSTHANA.indexOf(fromHouse) >= 0 ? ', a difficult position from it.' : '.')];
     var hLd = H.dignityOf(hLord, lordP).map(function (d) { return d.k; });
-    if (hLd.indexOf('deb') >= 0) hHurt.push({ t: 'its lord ' + hLord + ' is debilitated', w: FW_HEAVY });
-    if (house !== 1 && H.housesOwnedBy(hLord, ascSign).some(function (o) { return o.house === 1; })) hHelp.push({ t: 'its lord ' + hLord + ' is also the lagna lord', w: FW_HEAVY });
-    if (DUSTHANA.indexOf(lordP.house) >= 0) hHurt.push({ t: 'its lord sits in the ' + ord(lordP.house) + ', a Dusthana', w: FW_LIGHT });
-    else if (lordP.house === 5 || lordP.house === 9) hHelp.push({ t: 'its lord sits in the ' + ord(lordP.house) + ', a Trikona', w: FW_LIGHT });
-    if (DUSTHANA.indexOf(fromHouse) >= 0) hHurt.push({ t: 'its lord is in the ' + ord(fromHouse) + ' from the house', w: FW_LIGHT });
-    if (lordP.combustion && lordP.combustion.combust) hHurt.push({ t: 'its lord is combust', w: FW_HEAVY });
-    kar.forEach(function (k) { if (result.planets[k].signIndex === signIdx) hHelp.push({ t: 'its karaka ' + k + ' sits in the house', w: FW_LIGHT }); });
-    if (kartari.indexOf('Shubha') === 0) hHelp.push({ t: 'benefics flank it on both sides (Shubha Kartari)', w: FW_LIGHT });
-    else if (kartari.indexOf('Papa') === 0) hHurt.push({ t: 'malefics flank it on both sides (Papa Kartari)', w: FW_LIGHT });
-    // Natural malefics do well in the Upachaya houses (3rd, 6th, 10th, 11th), so
-    // one sitting there helps the house — the counterpart of the planet-side
-    // placement exception. The 10th counts here too: unlike the planet, the
-    // house gets no Kendra credit for it, and the occupation factor has
-    // already cost it 60 Virupas per malefic. A node in an Upachaya house is
-    // credited the same way and is not counted as hurting it.
-    var hUpachaya = UPACHAYA.indexOf(house) >= 0;
-    occupants.forEach(function (n) {
-      var op = result.planets[n], od = H.dignityOf(n, op).map(function (d) { return d.k; });
-      if (hUpachaya && !isNaturalBenefic(n, beneficMap)) {
-        hHelp.push({ t: 'its occupant ' + n + ' is a natural malefic in an Upachaya house', w: FW_LIGHT });
-      }
-      if (DIG_HOUSE[n] === house) hHelp.push({ t: n + ' has its full directional strength here', w: FW_LIGHT });
-      if (od.indexOf('ex') >= 0) hHelp.push({ t: 'its occupant ' + n + ' is exalted', w: FW_HEAVY });
-      if (od.indexOf('deb') >= 0) hHurt.push({ t: 'its occupant ' + n + ' is debilitated', w: FW_HEAVY });
-      if (op.combustion && op.combustion.combust) hHurt.push({ t: 'its occupant ' + n + ' is combust', w: FW_HEAVY });
-      var oDus = H.housesOwnedBy(n, ascSign).filter(function (o) { return DUSTHANA.indexOf(o.house) >= 0 && o.house !== house; }).map(function (o) { return ord(o.house); });
-      if (oDus.length) hHurt.push({ t: 'its occupant ' + n + ' rules the ' + list(oDus) + (oDus.length > 1 ? ' (Dusthanas)' : ' (a Dusthana)'), w: FW_HEAVY });
-    });
-    nodeBits.forEach(function (b) {
-      if (hUpachaya && b.indexOf(' occupies the house') >= 0) return;
-      hHurt.push({ t: b, w: FW_LIGHT });
-    });
+    if (hLd.indexOf('deb') >= 0) hLordLines.push(hLord + ' is debilitated.');
+    if (hLd.indexOf('ex') >= 0) hLordLines.push(hLord + ' is exalted.');
+    if (lordP.combustion && lordP.combustion.combust) hLordLines.push(hLord + ' is combust.');
+    var hTen = occupants.length ? occupants.map(function (n) {
+      var od = H.dignityOf(n, result.planets[n]).map(function (d) { return d.k; });
+      return n + ': ' + layerShort(layeredReading(n, result, sb, H)) +
+        (od.indexOf('ex') >= 0 ? ', exalted' : od.indexOf('deb') >= 0 ? ', debilitated' : '') +
+        (result.planets[n].combustion && result.planets[n].combustion.combust ? ', combust' : '') +
+        (DIG_HOUSE[n] === house ? ', full directional strength here' : '') + '.';
+    }) : ['Empty: the house reads through its lord.'];
+    var hAlso = [];
+    kar.forEach(function (k) { hAlso.push('Karaka ' + k + ' ' + (result.planets[k].signIndex === signIdx ? 'sits in the house.' : 'is in the ' + ord(result.planets[k].house) + '.')); });
+    hAlso.push(kartari);
+    nodeBits.forEach(function (b) { hAlso.push(cap(b) + '.'); });
     var hRank = ranked.indexOf(house) + 1;
     var hBench = lr.required * 60 + FW_HOUSE_DIG_MID;
     // graded on the figure as displayed (2 decimals), as for the planets
@@ -4042,11 +4100,15 @@
         { n: 'Day-Night (Raman)', v: bb.dayNight, max: 15 }
       ]
     };
-    var hNumber = hRatio >= FW_PLANET_STRONG ? 'Strong' : hRatio >= FW_PLANET_ADEQUATE ? 'Adequate' : 'Weak';
-    narr.push({ kind: 'narrative', subject: 'house', heading: hTitle + ': Bhava Bala narrative', groups: [], help: hHelp, hurt: hHurt,
-      total: bb.total, tree: hTree,
-      verdict: fwVerdict(hNumber, n2(hRatio) + '× its benchmark', hHelp, hHurt, 'Rank ' + hRank + ' of 12'),
-      closing: (hHelp.length || hHurt.length) ? 'None of these appear in the ' + Math.round(bb.total) + ' Virupas.' : '' });
+    narr.push({ kind: 'narrative', subject: 'house', heading: hTitle + ': through its lord',
+      layer: { nature: HL.nature, tone: HL.tone, word: 'Lord ' + hLord + ' · ' + HL.nature, toneWord: HL.tone + ' tone' },
+      reading: '', total: bb.total, tree: hTree,
+      sections: [
+        { title: 'Its lord', lines: hLordLines },
+        { title: 'Its tenants', lines: hTen },
+        { title: 'Also on the house', lines: hAlso },
+        { title: 'Bhava Bala', lines: [Math.round(bb.total) + ' Virupas, rank ' + hRank + ' of 12 (' + n2(hRatio) + '× this app’s benchmark).'], tree: true }
+      ] });
 
     blocks.push({ kind: 'gap', heading: hTitle + ': house-reading factors Bhava Bala doesn’t cover', rows: hg });
 
@@ -4068,6 +4130,7 @@
     // caller that only wants one slice (e.g. just the VRY list for the
     // Strength tab) isn't forced to run the whole chart-wide computation.
     functionalRoleOf: functionalRoleOf,
+    functionalNature: functionalNature, layeredReading: layeredReading,
     viparitaRajaYogas: viparitaRajaYogas,
     chartWideRajaYogas: chartWideRajaYogas,
     chartWideDhanaYogas: chartWideDhanaYogas,
@@ -4079,7 +4142,7 @@
     // chart-wide computation.
     dispositorChain: dispositorChain,
     balaFramework: balaFramework,
-    // The natural benefic/malefic fallback map every Influence Engine verdict
+    // The natural benefic/malefic fallback map the Influence Engine
     // already reads (tripodImpact, Bhava Bala's Drishti
     // component) — exported so other renderers needing the same "nature of
     // this planet's influence" read (e.g. the South Indian network overlay's

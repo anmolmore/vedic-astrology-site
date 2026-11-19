@@ -1327,8 +1327,8 @@
     font-size: 12px; font-weight: 700; color: var(--gold-soft);
     margin: 0 0 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line);
   }
-  .chart-tooltip .ct-verdict { margin: 5px 0 0; }
-  .chart-tooltip .ct-verdict .bf-badge { margin-left: 0; }
+  .chart-tooltip .ct-layers { margin: 5px 0 0; }
+  .chart-tooltip .ct-layers .bf-badge { margin-left: 0; }
   .chart-tooltip .ct-sub .ct-stat { margin: 5px 0 0; padding-top: 0; border-top: none; }
   .chart-tooltip .ct-sub .ct-stat.ct-ishta { color: #1d6b46; margin-top: 2px; }
   .chart-tooltip .ct-sub .ct-stat.ct-kashta { color: #96302f; margin-top: 2px; }
@@ -1557,19 +1557,23 @@
   #chartSide2Content .bf-narrative .bf-lines { font-size: 12.5px; }
   .bf-narrative .bf-lines p { margin: 0; }
   .bf-narrative .bf-lines p.bf-item { padding-left: 12px; }
-  /* Planet narrative: one empty line after the Helping and the Hurting lists. */
-  .bf-narrative-planet .bf-lines.bf-help, .bf-narrative-planet .bf-lines.bf-hurt { margin-bottom: 1.5em; }
-  /* ...and one empty line between its verdict lines (up to the helping / hurting tally and any period line) and the lists below. */
-  .bf-narrative-planet > div.bf-lines:first-of-type { margin-top: 1.5em; }
-  .bf-narrative .bf-help { color: #1d6b46; }
-  .bf-narrative .bf-hurt { color: #96302f; }
-  .bf-narrative-green { border-left: 4px solid #1d6b46; }
-  .bf-narrative-amber { border-left: 4px solid #b3822f; }
-  .bf-narrative-red { border-left: 4px solid #96302f; }
-  .bf-badge { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; vertical-align: middle; }
-  .bf-badge-green { background: #1d6b46; }
-  .bf-badge-amber { background: #b3822f; }
-  .bf-badge-red { background: #96302f; }
+  /* Layered reading: the left border and first pill carry functional nature
+     (green benefic, grey neutral, gold mixed, red malefic), the second pill the
+     Ishta/Kashta tone (solid good, half balanced, outline difficult). */
+  .bf-narrative-fn-benefic { border-left: 4px solid var(--net-benefic); }
+  .bf-narrative-fn-neutral { border-left: 4px solid var(--muted); }
+  .bf-narrative-fn-mixed { border-left: 4px solid #b3822f; }
+  .bf-narrative-fn-malefic { border-left: 4px solid var(--net-malefic); }
+  .bf-badge { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; color: #fff; vertical-align: middle; border: 1.5px solid transparent; }
+  .bf-fn-benefic { background: var(--net-benefic); }
+  .bf-fn-neutral { background: var(--muted); }
+  .bf-fn-mixed { background: #b3822f; }
+  .bf-fn-malefic { background: var(--net-malefic); }
+  .bf-tone-good { background: var(--text); color: var(--bg2); }
+  .bf-tone-balanced { background: linear-gradient(90deg, var(--text) 50%, var(--bg2) 50%); color: var(--text); border-color: var(--text); text-shadow: 0 0 3px var(--bg2), 0 0 3px var(--bg2); }
+  .bf-tone-difficult { background: var(--bg2); color: var(--text); border-color: var(--text); }
+  .bf-narrative p.bf-reading { font-style: italic; margin: 6px 0 4px; }
+  .bf-narrative h4.bf-group-head { margin: 10px 0 3px; font-size: 13px; }
   .bf-narrative p.bf-basis { font-size: 12.5px; color: var(--muted); margin-bottom: 2px; }
   .bf-sbtree { container-type: inline-size; margin: 8px 0 10px; font-size: 12.5px; }
   .bf-sbtree-tools { display: flex; gap: 12px; margin-bottom: 4px; }
@@ -1598,11 +1602,7 @@
     .bf-sbtree-row { grid-template-columns: minmax(0, 1fr) 58px 96px; }
     .bf-sbtree-max { display: none; }
   }
-  .bf-narrative p.bf-basis + p:not(.bf-basis) { margin-top: 10px; }
-  .bf-narrative p.bf-help { color: #1d6b46; }
-  /* Ishta / Kashta under the number: muted while dormant, the yogas' active colour in the planet's own period. */
-  .bf-narrative p.bf-ishta-active { color: #1d6b46; font-weight: 600; }
-  .bf-narrative p.bf-hurt { color: #96302f; }
+
   .bf-picker select { min-width: 420px; }
   .bf-group-head { font-size: 13.5px; font-weight: 700; margin: 14px 0 6px; }
   table.bf-table { font-size: 12.5px; line-height: 1.5; table-layout: fixed; min-width: 760px; }
@@ -2176,7 +2176,7 @@
         <div role="tabpanel" id="panel2-influence" aria-labelledby="tab2-influence" hidden>
     <section class="block">
       <h2>Influence Engine</h2>
-      <p class="sub-note">Pick a House ↔ Planet combination. For the planet, every Shadbala component is shown with the qualitative dimension it measures, this chart's actual condition and the arithmetic behind the number, followed by the reading factors Shadbala leaves out. The same is then shown for the house through Bhava Bala. An empty house shows the house part only. Each planet and house carries a verdict: the number (Strong, Adequate or Weak) crossed with the factors the number leaves out (Supported, Mixed or Afflicted), shown as a green, amber or red badge. Heavy factors weigh 2 and light ones 1; the weight is shown in brackets after each. A planet's number is graded against its classical Shadbala requirement. Bhava Bala has no classical minimum, so a house is graded against this app's own benchmark: its lord's required Shadbala plus 30 Virupas.</p>
+      <p class="sub-note">Pick a House ↔ Planet combination. The planet is read in layers, each answering one question and none blended into a score: <b>1 · What it brings</b> — its functional nature by lordship from the ascendant (Laghu Parashari); <b>2 · How well</b> — its Shadbala against the classical minimum and its Ishta/Kashta tone, with its condition listed; <b>3 · Association</b> — the planets it sits with, the aspects on it and its dispositor, each with their own layers; <b>4 · Dasha</b> — whether it is a lord of the period in view. The first pill and the left border show functional nature (green benefic, grey neutral, gold mixed, red malefic); the second shows tone (solid good, half balanced, outline difficult). A house reads through its lord, its tenants and its Bhava Bala. The Shadbala and Bhava Bala grids below give the detail behind layer 2.</p>
       <p class="na-note hidden" id="bfNote">Not available — this framework needs Shadbala and Bhava Bala, which need exact degrees and the moment of birth. A placed chart has neither.</p>
       <div class="bf-picker">
         <label for="bfSelect">House ↔ Planet</label>
@@ -2201,12 +2201,12 @@
         <div role="tabpanel" id="panel2-framework" aria-labelledby="tab2-framework" hidden>
     <section class="block">
       <h2>Influence Framework</h2>
-      <p class="if-intro">The Influence Engine tab reads each planet and each house in two ways: by the number
-      Shadbala or Bhava Bala gives it, and by the reading factors that number leaves out. This tab documents how
-      that is done: what the tab shows, how the verdict and its colour are reached, which factors are weighed and
-      by how much, how yogas are scored only in their dasha, and what each bala does and does not measure. Every
-      item is <span class="if-status if-status-existing">Implemented</span> unless marked
-      <span class="if-status if-status-open">Open</span>. For a specific chart's verdicts, see the Influence
+      <p class="if-intro">The Influence Engine tab reads each planet in layers — what it brings (functional
+      nature), how well (Shadbala and Ishta/Kashta tone), whose influence it carries, and whether its dasha is
+      running — and each house through its lord. This tab documents how each layer is derived, how houses and
+      the network arrowheads use them, and what each bala does and does not measure. Every item is
+      <span class="if-status if-status-existing">Implemented</span> unless marked
+      <span class="if-status if-status-open">Open</span>. For a specific chart's reading, see the Influence
       Engine tab itself.</p>
 
       <p class="if-p"><b>A note on the BPHS citations below:</b> chapter numbers and names follow
@@ -2216,234 +2216,102 @@
       is Chapter 36 here is Chapter 34 in the R. Santhanam translation and Chapter 35 in at least one other, so
       a citation below won't line up chapter-for-chapter with a different edition on your shelf. Treat these as
       accurate for the Sharma/Sagar edition specifically, not as universal verse-level references. Where this
-      project builds something classical texts don't describe verbatim — the verdict matrix, the factor
-      weights, the house benchmark, the Dispositor Chain's multi-hop walk —
+      project builds something classical texts don't describe verbatim — the Rahu/Ketu functional
+      convention, the tone threshold, the house benchmark, the Dispositor Chain's multi-hop walk —
       that's said plainly rather than attached to a chapter it doesn't have.</p>
 
       <div class="if-section">
         <h3>What the Influence Engine tab shows</h3>
         <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the tab's main content</p>
         <p class="if-p">The tab has one dropdown with an entry for every planet, labelled by the house it sits in
-        ("House 10 ↔ Sun"), and an entry for every house nothing occupies ("House 3 (empty)"). Each entry shows a
-        coloured dot and a verdict for the house and, where there is one, the planet.</p>
+        ("House 10 ↔ Sun"), and an entry for every house nothing occupies. Each entry shows a dot for functional
+        nature (🟢 benefic, ⚪ neutral, 🟡 mixed, 🔴 malefic): the house's through its lord, then the planet's with
+        its tone.</p>
         <p class="if-p">Choosing an entry shows, in this order:</p>
         <ol class="if-open-list">
-          <li><b>The planet's Shadbala narrative</b> — its verdict, what its number rests on, and the factors the
-          number leaves out, split into helping and hurting, each with its weight in brackets.</li>
-          <li><b>The house's Bhava Bala narrative</b> — the same for the house.</li>
-          <li><b>Shadbala, qualitative and quantitative</b> — a grid for each of the six balas. Each row gives the
-          qualitative dimension, the chart's actual condition, the calculation, the Virupas, and the component on
-          the right.</li>
+          <li><b>The planet's layered reading</b> — its functional-nature and tone pills, a one-line reading, and a
+          section per layer: what it brings, how well (with the Shadbala tree and its condition), association and
+          dasha.</li>
+          <li><b>The house, read through its lord</b> — its lord's layers, its tenants, its karakas and Kartari,
+          and its Bhava Bala.</li>
+          <li><b>What the planet carries</b> — the houses it rules and occupies, and what it delivers.</li>
+          <li><b>Shadbala, qualitative and quantitative</b> — a grid for each of the six balas.</li>
           <li><b>The planet's reading factors not covered by Shadbala or Bhava Bala.</b></li>
           <li><b>Bhava Bala, qualitative and quantitative</b> — a grid for each of its five components.</li>
           <li><b>House-reading factors Bhava Bala doesn't cover.</b></li>
         </ol>
-        <p class="if-p">An empty house shows only the house parts. Rahu and Ketu have no Shadbala, so their entry
-        shows a narrative built from the uncounted factors alone. A hand-placed chart has no Shadbala at all, so the
-        dropdown is disabled for it.</p>
-        <p class="if-p">The Natal chart's <b>Influences</b> side tab carries the same dropdown and shows only
-        the two narratives for the chosen entry, followed by a notes box for that entry. It follows the dasha period
-        in view in the same way.</p>
-      </div>
-
-      <div class="if-section">
-        <h3>The verdict — two axes, three colours</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the badge on each narrative, the dot in the dropdown, and the network arrowheads</p>
-        <p class="if-p">Shadbala and Bhava Bala give a number. A reading also weighs things the number never sees:
-        which houses a planet rules, its state in the navamsa, combustion, avasthas, its dispositor. The two can
-        disagree, so the verdict keeps them apart and then crosses them.</p>
-        <div class="table-wrap">
-          <table class="if-gap-table">
-            <thead><tr><th>By the number</th><th>By the uncounted factors</th><th>Verdict</th><th>Colour</th></tr></thead>
-            <tbody>
-              <tr><td>Strong</td><td>Supported or Mixed</td><td>Strong</td><td><span class="if-swatch if-swatch-green"></span>Green</td></tr>
-              <tr><td>Strong</td><td>Afflicted</td><td>Strong but afflicted</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
-              <tr><td>Adequate</td><td>Supported</td><td>Adequate, supported</td><td><span class="if-swatch if-swatch-green"></span>Green</td></tr>
-              <tr><td>Adequate</td><td>Mixed</td><td>Adequate</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
-              <tr><td>Adequate</td><td>Afflicted</td><td>Adequate but afflicted</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
-              <tr><td>Weak</td><td>Supported</td><td>Weak but supported</td><td><span class="if-swatch if-swatch-amber"></span>Amber</td></tr>
-              <tr><td>Weak</td><td>Mixed or Afflicted</td><td>Weak</td><td><span class="if-swatch if-swatch-red"></span>Red</td></tr>
-              <tr><td>None (Rahu, Ketu)</td><td>Supported / Mixed / Afflicted</td><td>Supported / Mixed / Afflicted</td><td>Green / Amber / Red</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="if-p">The matrix, the weights and the cut-offs below are this project's own construction. No
-        classical text gives them.</p>
-      </div>
-
-      <div class="if-section">
-        <h3>Axis 1 — the number</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span></p>
-        <h4>Planets</h4>
-        <p class="if-p">A planet is graded on its Shadbala total against the classical minimum for that planet:
-        Sun 6.5 rupas, Moon 6.0, Mars 5.0, Mercury 7.0, Jupiter 6.5, Venus 5.5, Saturn 5.0.</p>
-        <p class="if-formula">Strong: 1.25× the requirement or more &nbsp;·&nbsp; Adequate: 1.0× to 1.25× &nbsp;·&nbsp; Weak: below 1.0×</p>
-        <p class="if-p">The ratio is graded as displayed, to two decimals. Rahu and Ketu have no Shadbala, so they
-        have no number and their verdict comes from the second axis alone.</p>
-        <p class="if-p">A planet's rank out of seven goes by the same ratio, not by its raw total, as Parashara's
-        Light's "Relative Rank" does. Ranking by total would favour the planets with high requirements: Mercury
-        needs 7 rupas and Mars 5, so Mercury can hold more Virupas than Mars and still be the weaker of the two
-        against its own minimum.</p>
-        <h4>Houses</h4>
-        <p class="if-p">Bhava Bala has no classical minimum. Ranking the twelve houses would call four of them Weak
-        in every chart, however healthy they are, so a house is graded against a benchmark instead:</p>
-        <p class="if-formula">House benchmark = the lord's required Shadbala (in Virupas) + 30</p>
-        <p class="if-p">The 30 is the midpoint of Bhava Digbala (0 to 60). Aspects, occupation and the day-night
-        factor are taken as neutral. The same cut-offs apply as for planets. The house's rank out of twelve is still
-        shown after its ratio as context ("Adequate (1.03× its benchmark), Rank 9 of 12"), as a planet's rank out of
-        seven is.</p>
-        <p class="if-p">A known side effect: a house ruled by Mars or Saturn has a low benchmark, because those
-        planets have the lowest requirements. Such a house can grade Strong by the number even when its lord is in
-        poor condition; the second axis is what catches that.</p>
-      </div>
-
-      <div class="if-section">
-        <h3>Axis 2 — the factors the number leaves out</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span></p>
-        <p class="if-p">Each uncounted factor either helps or hurts, and weighs 2 (heavy) or 1 (light). The helping
-        points and the hurting points are added up separately.</p>
-        <p class="if-formula">Supported: helping leads by 2 or more &nbsp;·&nbsp; Afflicted: hurting leads by 2 or more &nbsp;·&nbsp; Mixed: otherwise</p>
-        <h4>Planet factors</h4>
-        <div class="table-wrap">
-          <table class="if-gap-table">
-            <thead><tr><th>Factor</th><th>Helps or hurts</th><th>Weight</th></tr></thead>
-            <tbody>
-              <tr><td>It is the lagna lord</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>It rules a Trikona (5th or 9th)</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>It rules a Dusthana (6th, 8th or 12th)</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>Exalted in D9</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>Debilitated in D9</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>Combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>Viparita Raja Yoga (Harsha, Sarala, Vimala)</td><td class="if-gap-no">Helps</td><td>2 when active, 0 when dormant</td></tr>
-              <tr><td>Neecha Bhanga</td><td class="if-gap-no">Helps</td><td>2 when active, 1 when dormant</td></tr>
-              <tr><td>It sits in the 5th or 9th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>It sits in a Dusthana (unless an exception below applies)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>A natural malefic in the 3rd, 6th or 11th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Ketu in the 12th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Saturn in the 8th (longevity note)</td><td class="if-gap-no">Helps</td><td>0</td></tr>
-              <tr><td>Vargottama</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Yuva avastha</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Bala or Mrita avastha</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>It shares its sign with a natural malefic (not listed when it is combust)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>Its dispositor is exalted, in Moolatrikona or in its own sign</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Its dispositor is debilitated</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>Its dispositor sits in a Kendra or Trikona</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Its dispositor sits in a Dusthana</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>Rahu or Ketu: it is a yogakaraka (in a Kendra or Trikona, linked with the lord of the other)</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>Rahu or Ketu: its proxy planet (Saturn for Rahu, Mars for Ketu) is the yogakaraka for the lagna</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>Rahu or Ketu: its proxy planet is a functional benefic for the lagna</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Rahu in the 10th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Rahu or Ketu: its dasha periods turn auspicious</td><td class="if-gap-no">Helps</td><td>1 when active, 0 when dormant</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <h4>House factors</h4>
-        <div class="table-wrap">
-          <table class="if-gap-table">
-            <thead><tr><th>Factor</th><th>Helps or hurts</th><th>Weight</th></tr></thead>
-            <tbody>
-              <tr><td>Its lord is also the lagna lord</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>Its lord is debilitated</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>Its lord is combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>An occupant is exalted</td><td class="if-gap-no">Helps</td><td>2</td></tr>
-              <tr><td>An occupant is debilitated</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>An occupant is combust</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>An occupant rules a Dusthana (other than this house)</td><td class="if-gap-yes">Hurts</td><td>2</td></tr>
-              <tr><td>Its lord sits in the 5th or 9th</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Its lord sits in a Dusthana</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>Its lord is in the 6th, 8th or 12th counted from the house</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>A karaka of the house sits in it</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Benefics flank it on both sides (Shubha Kartari)</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Malefics flank it on both sides (Papa Kartari)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>An occupant has its full directional strength in this house</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>A natural malefic occupies it, and it is an Upachaya house (3rd, 6th, 10th or 11th), each</td><td class="if-gap-no">Helps</td><td>1</td></tr>
-              <tr><td>Rahu or Ketu occupies it, and it is not an Upachaya house (each)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-              <tr><td>Rahu or Ketu aspects it (each)</td><td class="if-gap-yes">Hurts</td><td>1</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="if-p">House factors are all standing conditions. None of them depends on the dasha period.</p>
-      </div>
-
-      <div class="if-section">
-        <h3>Malefics that do well in difficult houses</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> in the planet verdicts</p>
-        <p class="if-p">Four classical exceptions replace the plain "sits in a Dusthana" penalty. In each, the
-        planet's nature stays malefic; it is the results that turn favourable.</p>
-        <ol class="if-open-list">
-          <li><b>A natural malefic in the 3rd, 6th or 11th.</b> Malefics do well in the Upachaya (growth) houses.
-          The 6th is both a Dusthana and an Upachaya, so a malefic there is read as overcoming enemies, debt and
-          illness. Rahu and Ketu are always counted as natural malefics.</li>
-          <li><b>Saturn in the 8th.</b> Saturn signifies longevity and the 8th is the house of longevity. This helps
-          longevity only, so the penalty is dropped and a note is shown with no points.</li>
-          <li><b>Ketu in the 12th.</b> Ketu signifies liberation and the 12th is the house of liberation. The
-          reading is spiritual and not material. The textual root is the Karakamsa teaching; applying it to the
-          12th from the lagna is a common extension and not the literal text.</li>
-          <li><b>Viparita Raja Yoga.</b> A lord of the 6th, 8th or 12th placed in another of those houses cancels
-          its own harm. Phaladeepika names the three forms Harsha, Sarala and Vimala. This is about lordship, not
-          about being a natural malefic.</li>
-        </ol>
-        <h4>When Rahu's and Ketu's own results turn favourable</h4>
-        <p class="if-p">Rahu and Ketu stay natural malefics, so their aspects and conjunctions count against
-        whatever they touch. The results a node itself gives can still turn good under these conditions, each a
-        helping factor in the node's verdict:</p>
-        <ol class="if-open-list">
-          <li><b>Yogakaraka.</b> A node in a Kendra linked with a Trikona lord, or in a Trikona linked with a
-          Kendra lord, becomes a yogakaraka (BPHS, Yoga Karakas chapter). The link is a conjunction, an aspect
-          either way, or an exchange. Weight 2.</li>
-          <li><b>Shanivat Rahu, Kujavat Ketu.</b> Rahu behaves like Saturn and Ketu like Mars. Where that planet
-          is the yogakaraka for the lagna the node inherits the role (weight 2); where it is a functional
-          benefic without a Dusthana lordship, weight 1. This is classical commentary, not a BPHS verse.</li>
-          <li><b>Rahu in an Upachaya house</b> (BPHS Ch. 55 v.3). The 3rd, 6th and 11th are covered by the first
-          exception above; Rahu in the 10th adds weight 1.</li>
-          <li><b>Auspicious dasha periods</b> (BPHS Ch. 57 v.16 for Ketu; Ch. 59 v.45 and Ch. 55 for Rahu). A
-          node's own periods turn auspicious when it is exalted, in its own sign (Aquarius for Rahu, Scorpio for
-          Ketu, per Ch. 50 v.42), joined or aspected by a natural benefic, in a natural friend's sign, or
-          conjoined with the yogakaraka. Because this speaks of the node's periods, it scores 1 only while the
-          node is a lord of the period in view, and is listed as dormant otherwise.</li>
-        </ol>
-        <p class="if-p"><span class="if-status if-status-open">Open</span> This app treats Rahu as co-lord of
-        Aquarius and Virgo, and Ketu as co-lord of Scorpio and Pisces. A node can therefore be credited with a
-        Viparita Raja Yoga, or with being the lagna lord, which the classical single-lord reading would not give
+        <p class="if-p">An empty house shows only the house parts. Rahu and Ketu have no Shadbala, so their tone
+        comes from their dispositor. A hand-placed chart has no Shadbala at all, so the dropdown is disabled for
         it.</p>
-        <h4>The same rule on the house side</h4>
-        <p class="if-p">A natural malefic sitting in an Upachaya house helps that house too, with weight 1 for each
-        such occupant, and Rahu or Ketu there is not counted as hurting it. For houses the 10th is included along
-        with the 3rd, 6th and 11th. A planet in the 10th already has its Kendra placement counted in its own
-        Shadbala, which is why the planet-side exception leaves the 10th out; a house has no such credit, and the
-        occupation factor has already taken 60 Virupas from it for each of the Sun, Mars or Saturn. The Saturn,
-        Ketu and Viparita Raja Yoga exceptions remain planet-only.</p>
+        <p class="if-p">The Natal chart's <b>Influences</b> side tab carries the same dropdown and shows the two
+        readings for the chosen entry, followed by a notes box. It follows the dasha period in view in the same
+        way, and the chart tooltips carry the same two pills.</p>
       </div>
 
       <div class="if-section">
-        <h3>Yogas score only in their dasha</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the verdicts and the network arrowheads follow the period selected on the Dashas tab</p>
-        <p class="if-p">A yoga is a promise in the birth chart. Its results are delivered mainly in the Mahadasha,
-        Antardasha or Pratyantardasha of the planet that forms it. Every other factor in the verdict is a standing
-        condition that holds at all times.</p>
-        <ul class="if-open-list">
-          <li><b>The period in view</b> is whatever is selected in the Dashas tab's tree. When a chart is generated
-          the tree opens on the deepest period running today, so the first verdicts are "as of today".</li>
-          <li><b>A planet is active</b> when it is the MD, AD or PD lord of the period in view. Selecting only a
-          Mahadasha makes just that one lord active.</li>
-          <li><b>Viparita Raja Yoga</b> scores 2 when the planet is active and 0 when it is dormant. It stays
-          listed either way, marked "active" or "dormant until its dasha".</li>
-          <li><b>A node's auspicious dasha periods</b> score 1 when Rahu or Ketu is active and 0 when it is
-          dormant.</li>
-          <li><b>Ishta and Kashta Bala</b> say whether a planet's own periods lean auspicious or difficult. They
-          are shown, not scored: a line right under the planet's Shadbala ratio reads, for example,
-          "Ishta (50.6) &gt; Kashta (9.4)". The line is muted while the planet is dormant and turns the yogas'
-          green while it is an MD, AD or PD lord of the period in view; its tooltip names the lean (auspicious or
-          difficult when one leads by 10 Virupas) and the period. Rahu and Ketu have no Ishta or Kashta
-          Bala.</li>
-          <li><b>Neecha Bhanga</b> is part condition and part yoga. The cancelled weakness always scores 1; the
-          Raja Yoga adds a second point only when the planet is active.</li>
-          <li><b>Selecting another period</b> recomputes every verdict on the Influence Engine tab, updates the
-          dropdown, and recolours the network arrowheads. The line above the narratives names the period in
-          view.</li>
-        </ul>
-        <p class="if-p">A planet's badge is therefore a reading for the period in view, not a fixed grade of the
-        birth chart. With no dasha available, every yoga is scored as dormant.</p>
+        <h3>The layered reading</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the Influence Engine narratives, the Influences side tab, the chart tooltips, the network arrowheads and Remedies</p>
+        <p class="if-p">Each planet is read in separate layers. Each answers one question, and they are never
+        blended into one score: a planet can bring hard matters and still deliver them well, or promise good and
+        deliver it with friction, and a single colour would hide which.</p>
+        <div class="table-wrap">
+          <table class="if-gap-table">
+            <thead><tr><th>Layer</th><th>Question</th><th>Source</th></tr></thead>
+            <tbody>
+              <tr><td>1 · Functional nature</td><td>What does it bring?</td><td>Lordship from the ascendant (Laghu Parashari)</td></tr>
+              <tr><td>2 · Strength and tone</td><td>How much, and how good?</td><td>Shadbala against the BPHS minimum; Ishta / Kashta Bala (BPHS)</td></tr>
+              <tr><td>3 · Association</td><td>Whose influence does it carry?</td><td>Co-tenants, aspects received, dispositor — each with its own layers</td></tr>
+              <tr><td>4 · Dasha</td><td>When?</td><td>Whether it is a lord of the period selected on the Dashas tab</td></tr>
+              <tr><td>5 · Transit</td><td>What triggers it?</td><td>The Transit chart</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="if-p">A one-line reading under each planet combines layers 1 and 2 from a fixed table (for example,
+        a functional malefic of difficult tone "brings the troubles of its houses in full"), with a note when its
+        Shadbala is below the minimum or 1.5× above it.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Layer 1 — functional nature</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> Interpret.functionalNature</p>
+        <p class="if-p">By classical sign lords, in this order:</p>
+        <ol class="if-open-list">
+          <li>Lord of a kendra (4, 7, 10) and a trikona (5, 9): <b>benefic</b>, yogakaraka.</li>
+          <li>Lagna lord: <b>benefic</b>.</li>
+          <li>Trikona lord that also rules a house of 3, 6, 8, 11 or 12: <b>benefic</b> if its moolatrikona sign falls in a trikona, otherwise <b>mixed</b>.</li>
+          <li>Trikona lord otherwise: <b>benefic</b>.</li>
+          <li>Sun or Moon ruling the 8th: <b>neutral</b> (exempt from the 8th-lord blemish).</li>
+          <li>Lord of 3, 6, 8 or 11: <b>malefic</b>.</li>
+          <li>Kendra lord only: a natural benefic is <b>malefic</b> (kendradhipati dosha), a natural malefic <b>neutral</b>.</li>
+          <li>Lord of the 2nd or 12th only: <b>neutral</b>.</li>
+        </ol>
+        <p class="if-p">Flags: <b>maraka</b> for the 2nd and 7th lords; <b>badhaka</b> for the 11th lord of a movable
+        ascendant, the 9th of a fixed one and the 7th of a dual one. Rahu and Ketu own no sign here: they take
+        their dispositor's nature, and a mixed dispositor tips to malefic when the node sits in a dusthana — a
+        modern convention, not a BPHS verse.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Layer 2 — strength and tone</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the How well section, the Shadbala tree and the grids</p>
+        <p class="if-p">Strength is the planet's Shadbala against its classical minimum, shown with its rank of seven
+        and the collapsible tree of its six balas. Tone is Ishta against Kashta Bala: <b>good</b> when Ishta leads
+        by 10 Virupas or more, <b>difficult</b> when Kashta does, <b>balanced</b> between. Rahu and Ketu have no
+        Shadbala, so their tone is their dispositor's.</p>
+        <p class="if-p">Its condition is listed beside the numbers, not scored: dignity and Neecha Bhanga, D9
+        dignity, Vargottama, retrogression, Baladi avastha, combustion, Viparita Raja Yoga, and the classical
+        exceptions that turn a malefic's difficult house to good account (a natural malefic in the 3rd, 6th or
+        11th; Saturn in the 8th; Ketu in the 12th; the Rahu/Ketu favourable-result rules). Conditions that fruit
+        only in the planet's own dasha say so.</p>
+      </div>
+
+      <div class="if-section">
+        <h3>Houses — read through the lord</h3>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the house narrative</p>
+        <p class="if-p">A house carries no reading of its own. It shows its lord's layers and where the lord sits
+        from the house, each tenant's layers, its karakas and Kartari, and its Bhava Bala with rank. Bhava Bala has
+        no classical minimum, so it is set against this app's benchmark: the lord's required Shadbala plus 30
+        Virupas. The badge and border take the lord's functional nature.</p>
       </div>
 
       <div class="if-section">
@@ -2455,9 +2323,8 @@
         sign in the rasi, a Kendra placement, being lord of the third of the day, and being lord of the birth year,
         month, weekday or hora. Drik Bala is named at +20 or more, or −10 or less, with the planet whose aspect
         contributes most.</p>
-        <p class="if-p">The house narrative states the total, the ratio to the benchmark, the lord's contribution,
-        the sign-type score, the net of aspects with the largest single contributor, and the occupation and
-        day-night factors when they are not zero.</p>
+        <p class="if-p">The house reading states its lord's layers and placement from the house, each tenant's
+        layers, its karakas and Kartari, and its Bhava Bala total, rank and ratio to the benchmark.</p>
         <p class="if-p">Each sentence is shown on its own line.</p>
       </div>
 
@@ -2523,13 +2390,14 @@
 
       <div class="if-section">
         <h3>Network arrowheads</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> on the Natal chart's dispositor and aspect network</p>
-        <p class="if-p">An arrowhead takes the colour of the verdict of the planet driving that edge: green, gold
-        for amber, or red. The edge's tooltip names the verdict. Because yogas score only in their dasha, the
-        arrowheads change when another period is selected on the Dashas tab. The line's own colour still shows the
-        type of relationship.</p>
-        <p class="if-p">A hand-placed chart has no Shadbala, so its arrowheads keep the earlier colouring: natural
-        benefic or malefic, adjusted for Trikona or Dusthana lordship and for co-tenants.</p>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> on the Natal and Transit charts' network</p>
+        <p class="if-p">Each arrow shows the layers of the planet driving it. Head colour is functional nature
+        (green benefic, grey neutral, gold mixed, red malefic). Head fill is tone (solid good, half-filled
+        balanced, hollow difficult). Line thickness follows Shadbala against the minimum. The line's own colour
+        still shows the type of relationship. A joint aspect splits into one parallel line per planet. The hover
+        title spells out all three.</p>
+        <p class="if-p">A hand-placed chart has no Shadbala, so only the colour is known: heads are half-filled and
+        lines plain.</p>
       </div>
 
       <div class="if-section">
@@ -2546,27 +2414,24 @@
           the divisional charts are not computed.</li>
           <li><span class="if-status if-status-open">Open</span> <b>Counting from the karaka</b>, such as the 10th
           from the Sun, is not among the house factors.</li>
-          <li><span class="if-status if-status-open">Open</span> <b>The house benchmark, the verdict matrix and the
-          weights</b> are this project's own. They are named constants in the code and can be tuned.</li>
+          <li><span class="if-status if-status-open">Open</span> <b>The house benchmark, the 10-Virupa tone threshold
+          and the Rahu/Ketu functional convention</b> are this project's own. They are named constants in the code
+          and can be tuned.</li>
         </ol>
       </div>
 
       <div class="if-section">
         <h3>The one-hop rule — why this stays acyclic</h3>
-        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> as a settled design rule, followed by the verdicts above and the Dispositor Chain below</p>
+        <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> as a settled design rule, followed by the layered reading and the Dispositor Chain below</p>
         <p class="if-p">The clean version of "a planet's tone depends on its dispositor's tone" breaks
-        whenever two planets are in mutual exchange — each is the other's dispositor, so a verdict that
-        depended on another planet's already-finished verdict would have no base case there: it's a
-        two-planet loop, not a tree.</p>
-        <p class="if-p">The fix, now applied everywhere this app reasons about influence flowing between
-        planets: every verdict pulls only <em>raw</em> facts, one hop out — never another planet's
-        synthesized verdict. The uncounted factors above keep to this: a planet is scored on its dispositor's
-        dignity and house, never on its dispositor's verdict. It is also why the Dispositor Chain below is
-        purely descriptive and does not feed back into a score.</p>
-        <p class="if-p">The same rule governs the arrowheads of a hand-placed chart, which has no Shadbala to
-        grade. There the arrow tone reads the driving planet's natural benefic or malefic status, its
-        functional lordship (Trikona pulls toward benefic, Dusthana toward malefic, per BPHS Ch. 36, Yoga
-        Karakas) and the nature of any co-tenant, with a split read shown as a gold arrowhead.</p>
+        whenever two planets are in mutual exchange — each is the other's dispositor, so a reading that
+        depended on another planet's finished reading would have no base case there: it's a two-planet loop,
+        not a tree.</p>
+        <p class="if-p">So every layer pulls only <em>raw</em> facts, one hop out. A planet's functional nature
+        comes from its own lordship; its tone from its own Ishta/Kashta. Rahu and Ketu, which have neither,
+        borrow their dispositor's — one hop, and a classical planet's own layers never depend on another's. The
+        association layer lists the neighbours' layers beside the planet; it does not fold them in. The
+        Dispositor Chain below is likewise purely descriptive.</p>
       </div>
 
       <div class="if-section">
@@ -2609,9 +2474,8 @@
         <p class="if-p">The reference's Ishta and Kashta values are known for that one chart only, so the Sun's
         exception rests on a single figure. For Mars, Mercury, Jupiter, Venus and Saturn the result also inherits
         whatever error remains in their fitted Chesta Bala, halved.</p>
-        <p class="if-p">On the Influence Engine tab they appear under each planet's number, active in the planet's
-        own periods and dormant otherwise; they do not change its verdict. See "Yogas score only in their dasha"
-        above.</p>
+        <p class="if-p">On the Influence Engine tab they set each planet's tone — layer 2 of the layered reading —
+        and the fill of its network arrowheads.</p>
       </div>
 
       <div class="if-section">
@@ -2728,8 +2592,8 @@
         elsewhere rather than adding a new one:</p>
         <ol class="if-level-points">
           <li><b>Uncancelled debilitation</b> — the yoga-forming planet is debilitated, and Neecha Bhanga
-          (the same cancellation check the planet verdict and the Neecha Bhanga Yoga scan use) doesn't rescue it.</li>
-          <li><b>Sub-minimum Shadbala</b> — the same classical minimum the planet verdict grades against,
+          (the same cancellation check the layered reading and the Neecha Bhanga Yoga scan use) doesn't rescue it.</li>
+          <li><b>Sub-minimum Shadbala</b> — the same classical minimum the layered reading's strength is set against,
           read here as a caution on delivery rather than a score.</li>
         </ol>
         <p class="if-p">When either holds, the yoga's trigger note adds a "Yoga Bhanga caution" naming which
@@ -2750,7 +2614,7 @@
         (motional), Naisargika (natural), and Drik (aspectual) — summed into one Virupa total (60 Virupas = 1
         Rupa). A planet above its own prescribed minimum is read as strong enough to deliver its promised
         results in full; below it, results tend to arrive late, partially, or with more effort than the
-        placement alone would suggest — this is exactly what the planet verdict's first axis and the Yoga
+        placement alone would suggest — this is exactly what the layered reading's strength and the Yoga
         Bhanga "sub-minimum Shadbala" caution above both read directly.</p>
         <div class="table-wrap">
           <table class="if-gap-table">

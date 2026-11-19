@@ -19,7 +19,10 @@
   var KASHTA_GAP = 20;       // Kashta this far above Ishta scores double
   var HARD_SEVERITY = 6;     // a lord at or above this can make a tense period Hard
   var FAVOURABLE_PAIR = 2, HARD_PAIR = -2;
-  var VERDICT_SEVERITY = { red: 4, amber: 2, green: 0 }; // the nodes have no Shadbala
+  // The nodes have no Shadbala, so their severity comes from the layered
+  // reading: functional nature, plus the tone they take from their dispositor.
+  var NATURE_SEVERITY = { malefic: 2, mixed: 1, neutral: 0, benefic: 0 };
+  var TONE_SEVERITY = { difficult: 2, balanced: 0, good: 0 };
   var DIG_HOUSE = { Mercury: 1, Jupiter: 1, Moon: 4, Venus: 4, Saturn: 7, Sun: 10, Mars: 10 };
   var REL_SCORE = { 'Best Friend': 2, Friend: 1, Neutral: 0, Enemy: -1, 'Worst Enemy': -2 };
   var TIERS = {
@@ -43,9 +46,9 @@
     function add(text, points) { reasons.push({ text: text, points: points }); score += points; }
 
     if (NODES[name]) {
-      var verdict = ctx.verdictOf ? ctx.verdictOf(name) : null;
-      var pts = verdict ? (VERDICT_SEVERITY[verdict.color] || 0) : 0;
-      if (pts) add('Verdict: ' + verdict.word, pts);
+      var L = ctx.layersOf ? ctx.layersOf(name) : null;
+      if (L && NATURE_SEVERITY[L.nature]) add('Functional ' + L.nature, NATURE_SEVERITY[L.nature]);
+      if (L && TONE_SEVERITY[L.tone]) add('Difficult tone (via ' + (L.toneVia || 'its dispositor') + ')', TONE_SEVERITY[L.tone]);
       return { name: name, score: score, reasons: reasons, lowestRatio: lowestRatio };
     }
     var MIN = ctx.Interpret.SB_MIN;
@@ -90,9 +93,11 @@
     function push(target, kind) {
       if (links.length >= 2 || !target || target === name) return;
       if (links.some(function (l) { return l.target === target; })) return;
-      if (ctx.verdictOf) {
-        var v = ctx.verdictOf(target);
-        if (v && v.color === 'red') return;
+      // No path towards a planet that is itself a functional malefic of
+      // difficult tone: it has no strength to lend.
+      if (ctx.layersOf) {
+        var v = ctx.layersOf(target);
+        if (v && v.nature === 'malefic' && v.tone === 'difficult') return;
       }
       links.push({ target: target, kind: kind });
     }
