@@ -3048,6 +3048,46 @@
     return 'functional ' + L.nature + ', ' + L.tone + ' tone' + (L.ratio != null ? ', ' + n2(L.ratio) + '× Shadbala' : '');
   }
 
+  // ---- Layer 4: a dasha lord's reading ----
+  // What a period lord brings: its layers, the houses it activates (those it
+  // occupies and rules; Rahu and Ketu, owning no sign here, the house they
+  // occupy plus their dispositor's houses), and a short reading.
+  function houseGist(h) { return HOUSE_TEXT[h].split(', ').slice(0, 2).join(' and '); }
+  function periodLordReading(name, result, sb, H) {
+    var L = layeredReading(name, result, sb, H);
+    var p = result.planets[name];
+    var act = [p.house];
+    var ownerOf = L.fn.via || name;
+    for (var s = 0; s < 12; s++) {
+      if (H.engine.SIGN_LORDS[s] === ownerOf) act.push(((s - result.ascendant.signIndex + 12) % 12) + 1);
+    }
+    act = act.filter(function (h, i) { return act.indexOf(h) === i; }).sort(function (a, b) { return a - b; });
+    return {
+      name: name, L: L, house: p.house, sign: p.sign, activates: act,
+      layers: layerShort(L) + (L.fn.flags.length ? ' (' + L.fn.flags.join(', ') + ')' : ''),
+      activatesText: act.map(function (h) { return ord(h) + ' (' + houseGist(h) + ')'; }).join('; '),
+      reading: L.reading
+    };
+  }
+  // Where the second lord stands counted from the first (and back): the
+  // classical MD–AD placement read. 6/8 and 2/12 strain, 1/7 pulls both ways,
+  // 3/11 and the kendras support, the trikonas harmonise.
+  function periodPairRelation(a, b, result) {
+    var n = ((result.planets[b].signIndex - result.planets[a].signIndex + 12) % 12) + 1;
+    var m = ((14 - n) % 12) || 12;
+    var pair = n === 7 ? '1/7' : Math.min(n, m) + '/' + Math.max(n, m);
+    var text = {
+      '1/1': 'together in one sign: their results blend',
+      '1/7': 'opposite each other: a push-pull between their matters',
+      '2/12': 'second and twelfth from each other (dvirdvadasha): strained, gains offset by costs',
+      '6/8': 'sixth and eighth from each other (shashtashtaka): hard, with friction or upheaval',
+      '3/11': 'third and eleventh from each other: supportive, effort brings gains',
+      '4/10': 'in kendras from each other: supportive and active',
+      '5/9': 'in trikonas from each other: harmonious, the easiest pairing'
+    }[pair];
+    return { n: n, pair: pair, text: text, good: ['3/11', '4/10', '5/9', '1/1'].indexOf(pair) >= 0, hard: ['6/8', '2/12'].indexOf(pair) >= 0 };
+  }
+
   // ---- Rahu/Ketu: when their RESULTS turn favourable ----
   // Their nature stays malefic (isNaturalBenefic), but BPHS and classical
   // commentary give specific conditions under which the results a node itself
@@ -4176,6 +4216,7 @@
     // Strength tab) isn't forced to run the whole chart-wide computation.
     functionalRoleOf: functionalRoleOf,
     functionalNature: functionalNature, layeredReading: layeredReading,
+    periodLordReading: periodLordReading, periodPairRelation: periodPairRelation,
     viparitaRajaYogas: viparitaRajaYogas,
     chartWideRajaYogas: chartWideRajaYogas,
     chartWideDhanaYogas: chartWideDhanaYogas,

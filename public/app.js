@@ -3936,6 +3936,131 @@
     if (narr.planet) content.appendChild(bfBlockBox(part(narr.planet, 2, narr.planet.sections.length, entry.key + ': association and dasha')));
     entry.fw.blocks.forEach(function (block) { if (block.kind !== 'narrative') content.appendChild(bfBlockBox(block)); });
   }
+  // ---- Running period (Layer 4) and transit triggers (Layer 5) ----
+  // The MD and AD in view (the AD running at today's date, or at the period's
+  // start when today falls outside it, if only an MD is picked) and the AD
+  // that follows. Saturn and Jupiter are then scanned across that stretch:
+  // a house both occupy or aspect (double transit) that one of these lords
+  // activates is a trigger window.
+  var PT_FAVOURABLE_FROM_MOON = { Saturn: [3, 6, 11], Jupiter: [2, 5, 7, 9, 11] };
+  function ptPeriods(result) {
+    var sel = lastDashaSelection;
+    if (!sel || !sel.lords || !sel.lords.length || !result.antardashas) return null;
+    var md = sel.lords[0].lord;
+    var adSel = sel.lords[1] && sel.lords[1].lord;
+    var now = Date.now();
+    var ads = result.antardashas.filter(function (a) { return a.maha === md; });
+    var ad = null;
+    if (adSel) ad = ads.filter(function (a) { return a.antar === adSel; })[0];
+    if (!ad) {
+      var at = Math.min(Math.max(now, new Date(sel.start).getTime()), new Date(sel.end).getTime() - 1);
+      ad = ads.filter(function (a) { return new Date(a.start).getTime() <= at && at < new Date(a.end).getTime(); })[0] || ads[0];
+    }
+    var all = result.antardashas;
+    var idx = all.indexOf(ad);
+    return { md: md, mdStart: ads.length ? ads[0].start : sel.start, mdEnd: ads.length ? ads[ads.length - 1].end : sel.end,
+      ad: ad, next: idx >= 0 ? all[idx + 1] || null : null };
+  }
+  function ptTouches(sky, ascSign, planet) {
+    var h = ((sky.planets[planet].signIndex - ascSign + 12) % 12) + 1;
+    return [h].concat(ASPECT_HOUSES[planet].map(function (a) { return ((h - 1 + a - 1) % 12) + 1; }));
+  }
+  function ptSky(date) {
+    var nodeType = (document.getElementById('nodeTypeInput') || {}).value === 'true' ? 'true' : 'mean';
+    return E.computeChart({ date: date, latDeg: 0, lonDeg: 0, nodeType: nodeType });
+  }
+  function ptTable(headers, rows) {
+    return bfTable(headers.map(function (h) { return { label: h }; }), rows, function (r) {
+      return r.map(function (c, i) { return [c, i === 0 ? 'bf-dim' : '']; });
+    });
+  }
+  function renderPeriodTransit(result, sb) {
+    var pBox = document.getElementById('iePeriodPanel');
+    var tBox = document.getElementById('ieTransitPanel');
+    if (!pBox || !tBox) return;
+    pBox.innerHTML = ''; tBox.innerHTML = '';
+    var P = ptPeriods(result);
+    if (!P || !window.Interpret.periodLordReading) {
+      pBox.appendChild(spanText('Pick a period on the Dashas tab to read it here.', 'sub-note'));
+      return;
+    }
+    var H = interpHelpers(), I = window.Interpret;
+    var cols = [{ role: 'MD', name: P.md, start: P.mdStart, end: P.mdEnd },
+      { role: 'AD', name: P.ad.antar, start: P.ad.start, end: P.ad.end }];
+    if (P.next && P.next.maha === P.md) cols.push({ role: 'Next AD', name: P.next.antar, start: P.next.start, end: P.next.end });
+    cols.forEach(function (c) { c.R = I.periodLordReading(c.name, result, sb, H); });
+    var rows = [
+      ['Period'].concat(cols.map(function (c) { return c.name + ' ' + c.role + ' (' + fmtDate(c.start) + ' – ' + fmtDate(c.end) + ')'; })),
+      ['Layers'].concat(cols.map(function (c) { return c.R.layers; })),
+      ['Sits in'].concat(cols.map(function (c) { return 'H' + c.R.house + ' ' + c.R.sign; })),
+      ['Activates'].concat(cols.map(function (c) { return c.R.activatesText; })),
+      ['From the MD lord'].concat(cols.map(function (c, i) {
+        if (i === 0) return '—';
+        if (c.name === P.md) return 'Its own sub-period: the MD lord’s results undiluted.';
+        var rel = I.periodPairRelation(P.md, c.name, result);
+        return c.name + ' is ' + rel.n + (rel.n === 1 ? 'st' : rel.n === 2 ? 'nd' : rel.n === 3 ? 'rd' : 'th') + ' from ' + P.md + ': ' + rel.pair + ', ' + rel.text + '.';
+      })),
+      ['Reading'].concat(cols.map(function (c) { return c.R.reading; }))
+    ];
+    pBox.appendChild(ptTable(rows[0], rows.slice(1)));
+
+    // ---- Transit ----
+    var asc = result.ascendant.signIndex, moonSign = result.planets.Moon.signIndex;
+    var adStart = new Date(P.ad.start).getTime(), adEnd = new Date(P.ad.end).getTime();
+    var now = Date.now();
+    var refDate = new Date(now >= adStart && now < adEnd ? now : adStart);
+    var sky = ptSky(refDate);
+    function tRow(pl) {
+      var t = ptTouches(sky, asc, pl), sp = sky.planets[pl];
+      var fromMoon = ((sp.signIndex - moonSign + 12) % 12) + 1;
+      var fav = PT_FAVOURABLE_FROM_MOON[pl].indexOf(fromMoon) >= 0;
+      return [pl, sp.sign + (sp.retrograde ? ' (R)' : '') + ', H' + t[0], 'H' + t.slice(1).join(', H'),
+        fromMoon + (fromMoon === 1 ? 'st' : fromMoon === 2 ? 'nd' : fromMoon === 3 ? 'rd' : 'th') + ' from the Moon: ' + (fav ? 'favourable' : 'not a favourable position')];
+    }
+    var actBy = {};
+    cols.forEach(function (c) { c.R.activates.forEach(function (h) { (actBy[h] = actBy[h] || []).push(c.name + ' ' + c.role); }); });
+    var sat = ptTouches(sky, asc, 'Saturn'), jup = ptTouches(sky, asc, 'Jupiter');
+    var dbl = sat.filter(function (h, i) { return jup.indexOf(h) >= 0 && sat.indexOf(h) === i; }).sort(function (a, b) { return a - b; });
+    tBox.appendChild(spanText('On ' + fmtDate(refDate) + (refDate.getTime() === now ? ' (today)' : ' (start of the AD)') + ':', 'bf-narrative-label'));
+    tBox.appendChild(ptTable(['Planet', 'Sign, house', 'Aspects', 'From the Moon'], [tRow('Saturn'), tRow('Jupiter')]));
+    var dp = document.createElement('p');
+    dp.className = 'sub-note';
+    dp.textContent = dbl.length ? 'Double transit now: ' + dbl.map(function (h) {
+      return 'H' + h + (actBy[h] ? ' — activated by ' + actBy[h].join(' and ') + ', so it is triggered' : ' — not activated by these lords');
+    }).join('; ') + '.' : 'No house carries a double transit on this date.';
+    tBox.appendChild(dp);
+
+    // Windows: every 10 days from the AD's start to the end of the next AD.
+    var scanEnd = new Date((P.next ? P.next.end : P.ad.end)).getTime();
+    var STEP = 10 * 86400000, open = {}, windows = [];
+    // A lord's houses count only while its own period runs (the MD throughout);
+    // a window is one house with the same activating lords.
+    for (var t = adStart; t <= scanEnd; t += STEP) {
+      var sk = ptSky(new Date(t));
+      var s2 = ptTouches(sk, asc, 'Saturn'), j2 = ptTouches(sk, asc, 'Jupiter');
+      var live = cols.filter(function (c) { return new Date(c.start).getTime() <= t && t < new Date(c.end).getTime(); });
+      var hits = {};
+      s2.forEach(function (h) {
+        if (j2.indexOf(h) < 0) return;
+        var by = live.filter(function (c) { return c.R.activates.indexOf(h) >= 0; }).map(function (c) { return c.name + ' ' + c.role; });
+        if (by.length) hits[h + '|' + by.join(', ')] = true;
+      });
+      Object.keys(open).forEach(function (k) { if (!hits[k]) { windows.push({ k: k, from: open[k], to: t - STEP }); delete open[k]; } });
+      Object.keys(hits).forEach(function (k) { if (!(k in open)) open[k] = t; });
+    }
+    Object.keys(open).forEach(function (k) { windows.push({ k: k, from: open[k], to: scanEnd }); });
+    windows.sort(function (a, b) { return a.from - b.from; });
+    var wRows = windows.map(function (w) {
+      var h = +w.k.split('|')[0];
+      return ['H' + h, fmtDate(new Date(w.from)) + ' – ' + fmtDate(new Date(w.to)), ptCap(houseGistApp(h)), w.k.split('|')[1]];
+    });
+    tBox.appendChild(spanText('Trigger windows, ' + fmtDate(new Date(adStart)) + ' – ' + fmtDate(new Date(scanEnd)) + ': Saturn and Jupiter both on a house these lords activate', 'bf-narrative-label'));
+    if (wRows.length) tBox.appendChild(ptTable(['House', 'Window', 'Matters', 'Activated by'], wRows));
+    else tBox.appendChild(spanText('None in this stretch.', 'sub-note'));
+  }
+  function houseGistApp(h) { return window.Interpret.HOUSE_TEXT[h].split(', ').slice(0, 2).join(' and '); }
+  function ptCap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
   function renderBalaFramework(result, sb) {
     var select = document.getElementById('bfSelect');
     var content = document.getElementById('bfContent');
@@ -3950,6 +4075,7 @@
     if (periodEl) periodEl.textContent = '';
     if (!available) { bfLastEntries = null; renderChartSide2(null); return; }
     var dashaOpts = bfDashaOpts();
+    try { renderPeriodTransit(result, sb); } catch (err) { console.error(err); }
     if (periodEl) {
       periodEl.textContent = dashaOpts.periodLabel
         ? 'Period in view: ' + dashaOpts.periodLabel + ' (' + fmtDate(lastDashaSelection.start) + ' – ' + fmtDate(lastDashaSelection.end) +
