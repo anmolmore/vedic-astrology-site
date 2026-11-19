@@ -3920,7 +3920,20 @@
   function renderBalaFrameworkEntry(entry, result, sb, content) {
     content.innerHTML = '';
     if (!entry.fw) return;
-    content.appendChild(bfNarrativeColumns(entry.fw.blocks));
+    // The planet's Layers 1 and 2 first, then the house, then the planet's
+    // Layers 3 and 4, then the grids.
+    function part(block, from, to, heading) {
+      var c = {};
+      Object.keys(block).forEach(function (k) { c[k] = block[k]; });
+      c.sections = block.sections.slice(from, to);
+      if (heading) { c.heading = heading; c.reading = ''; }
+      return c;
+    }
+    var narr = {};
+    entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative') narr[b.subject] = b; });
+    if (narr.planet) content.appendChild(bfBlockBox(part(narr.planet, 0, 2)));
+    if (narr.house) content.appendChild(bfBlockBox(narr.house));
+    if (narr.planet) content.appendChild(bfBlockBox(part(narr.planet, 2, narr.planet.sections.length, entry.key + ': association and dasha')));
     entry.fw.blocks.forEach(function (block) { if (block.kind !== 'narrative') content.appendChild(bfBlockBox(block)); });
   }
   function renderBalaFramework(result, sb) {

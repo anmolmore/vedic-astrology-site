@@ -2981,17 +2981,48 @@
       difficult: 'Brings the troubles of its houses in full.'
     }
   };
+  // Dignity, the lead input to tone as popular practice reads it: exalted,
+  // moolatrikona or own sign +1; a best friend's sign +1, a friend's +½,
+  // a neutral's 0, an enemy's −½, a worst enemy's −1; debilitated −1, or −½
+  // when Neecha Bhanga cancels it. The sign lord's relationship is the
+  // panchadha (natural + temporary) one; the nodes use this app's convention.
+  var DIGNITY_VOTE = { 'Best Friend': 1, 'Friend': 0.5, 'Neutral': 0, 'Enemy': -0.5, 'Worst Enemy': -1 };
+  function dignityVote(name, result, H) {
+    var p = result.planets[name];
+    var keys = H.dignityOf(name, p).map(function (d) { return d.k; });
+    var lord = H.engine.SIGN_LORDS[p.signIndex];
+    if (keys.indexOf('ex') >= 0) return { v: 1, text: 'exalted in ' + p.sign };
+    if (keys.indexOf('deb') >= 0) {
+      return neechaBhangaFor(name, result, H) ? { v: -0.5, text: 'debilitated in ' + p.sign + ', with Neecha Bhanga' }
+        : { v: -1, text: 'debilitated in ' + p.sign };
+    }
+    if (keys.indexOf('mt') >= 0) return { v: 1, text: 'in its moolatrikona sign ' + p.sign };
+    if (keys.indexOf('lord') >= 0) return { v: 1, text: 'in its own sign ' + p.sign };
+    var rel = result.relationships && result.relationships[name] && result.relationships[name][lord];
+    if (rel && rel.panchadha in DIGNITY_VOTE) {
+      return { v: DIGNITY_VOTE[rel.panchadha], text: 'in a ' + rel.panchadha.toLowerCase() + '’s sign, ' + p.sign + ' (lord ' + lord + ')' };
+    }
+    return { v: 0, text: 'in ' + p.sign };
+  }
+  function signedVote(v) { return v > 0 ? '+' + v : v < 0 ? '−' + (-v) : '0'; }
   function layeredReading(name, result, sb, H) {
     var fn = functionalNature(name, result, H);
     var res = sb && sb.results;
     var r = res && res[name];
     var src = r || (fn.via && res && res[fn.via]);
     var ik = (src && src.ishtaKashta) || null;
-    var tone = 'balanced';
+    // Tone = dignity + Ishta/Kashta: each votes +1 (good), 0 or −1; a total
+    // of +1 or more reads good, −1 or less difficult, anything between
+    // balanced. Without Ishta/Kashta (a hand-placed chart) dignity alone sets it.
+    var dig = dignityVote(name, result, H);
+    var ikTone = null, ikVote = 0;
     if (ik) {
       var gap = ik.ishta - ik.kashta;
-      tone = gap >= FW_ISHTA_LEAN ? 'good' : gap <= -FW_ISHTA_LEAN ? 'difficult' : 'balanced';
+      ikTone = gap >= FW_ISHTA_LEAN ? 'good' : gap <= -FW_ISHTA_LEAN ? 'difficult' : 'balanced';
+      ikVote = ikTone === 'good' ? 1 : ikTone === 'difficult' ? -1 : 0;
     }
+    var toneSum = dig.v + ikVote;
+    var tone = toneSum >= 1 ? 'good' : toneSum <= -1 ? 'difficult' : 'balanced';
     var ratio = r && r.required ? r.rupa / r.required : null;
     var reading = LAYER_READING[fn.nature][tone];
     if (ratio != null) {
@@ -2999,14 +3030,19 @@
       else if (ratio >= 1.5) reading += ' Strong in Shadbala, so it shows forcefully.';
     }
     return {
-      name: name, nature: fn.nature, fn: fn, tone: tone, toneKnown: !!ik, toneVia: r ? null : (ik ? fn.via : null),
+      name: name, nature: fn.nature, fn: fn, tone: tone, toneVia: r ? null : (ik ? fn.via : null),
+      dignity: dig, ikTone: ikTone, ikVote: ikVote,
       ik: ik, ratio: ratio, rank: r ? r.rank : null, total: r ? r.total : null, reading: reading
     };
   }
   function layerToneText(L) {
-    if (!L.ik) return 'Tone unknown (no Ishta/Kashta).';
-    return (L.toneVia ? 'Tone through its dispositor ' + L.toneVia + ': ' : 'Tone: ') + L.tone +
-      ' (Ishta ' + n1(L.ik.ishta) + ', Kashta ' + n1(L.ik.kashta) + ').';
+    var parts = ['dignity ' + signedVote(L.dignity.v)];
+    if (L.ik) parts.push('Ishta ' + n1(L.ik.ishta) + ' vs Kashta ' + n1(L.ik.kashta) + (L.toneVia ? ' through ' + L.toneVia : '') + ' ' + signedVote(L.ikVote));
+    else parts.push('no Ishta/Kashta');
+    return 'Tone: ' + L.tone + ' — ' + parts.join('; ') + '.';
+  }
+  function naturalAspectText(n, beneficMap) {
+    return isNaturalBenefic(n, beneficMap) ? 'natural benefic, protective' : 'natural malefic, restricting';
   }
   function layerShort(L) {
     return 'functional ' + L.nature + ', ' + L.tone + ' tone' + (L.ratio != null ? ', ' + n2(L.ratio) + '× Shadbala' : '');
@@ -3825,9 +3861,16 @@
       if (PL.fn.flags.indexOf('maraka') >= 0) pWhat.push('Maraka: rules the 2nd or 7th.');
       if (PL.fn.flags.indexOf('badhaka') >= 0) pWhat.push('Badhaka: rules the obstructing house for this lagna.');
       // Layer 2 condition notes: facts about its state, listed, not scored.
-      var pCond = [];
+      var pCond = ['Dignity: ' + PL.dignity.text + ': ' + signedVote(PL.dignity.v) + '.'];
+      var pPlace = [];
+      if (KENDRA.indexOf(p.house) >= 0) pPlace.push('Kendra');
+      if (TRIKONA.indexOf(p.house) >= 0) pPlace.push('Trikona');
+      if (DUSTHANA.indexOf(p.house) >= 0) pPlace.push('Dusthana');
+      if (UPACHAYA.indexOf(p.house) >= 0) pPlace.push('Upachaya');
+      if (MARAKA.indexOf(p.house) >= 0) pPlace.push('Maraka house');
+      pCond.push('Placement: the ' + ord(p.house) + (pPlace.length ? ' — ' + pPlace.join(', ') : '') + '.');
       var pMalefic = !isNaturalBenefic(name, beneficMap);
-      if (pMalefic && [3, 6, 11].indexOf(p.house) >= 0) pCond.push('A natural malefic in the ' + ord(p.house) + ', an Upachaya house: its results turn favourable.');
+      if (pMalefic && UPACHAYA.indexOf(p.house) >= 0) pCond.push('A natural malefic in the ' + ord(p.house) + ', an Upachaya house: its results turn favourable.');
       else if (name === 'Saturn' && p.house === 8) pCond.push('Saturn in the 8th supports longevity.');
       else if (name === 'Ketu' && p.house === 12) pCond.push('Ketu in the 12th supports liberation (spiritual, not material).');
       viparitaRajaYogas(result, H).forEach(function (y) {
@@ -3841,10 +3884,9 @@
         });
       }
       var nExS = Math.floor(S.EXALT[name] / 30), nDebS = (nExS + 6) % 12;
-      if (p.signIndex === nDebS) {
-        pCond.push(neechaBhangaFor(name, result, H) ? 'Debilitated, with Neecha Bhanga cancelling it — its Raja Yoga ' +
-          (pRole ? 'is active in this period.' : 'fruits in ' + name + '’s dasha.') : 'Debilitated.');
-      } else if (p.signIndex === nExS) pCond.push('Exalted.');
+      if (p.signIndex === nDebS && neechaBhangaFor(name, result, H)) {
+        pCond.push('Neecha Bhanga Raja Yoga ' + (pRole ? 'is active in this period.' : 'fruits in ' + name + '’s dasha.'));
+      }
       if (r) {
         var nD9 = r.sthanaDetail.vargas.D9.sign;
         if (nD9 === nDebS) pCond.push('Debilitated in D9.');
@@ -3857,7 +3899,10 @@
       // Layer 3 — association: whose influence it carries
       var pAssoc = [];
       cot.forEach(function (n) { pAssoc.push('With ' + n + ' (' + layerShort(layeredReading(n, result, sb, H)) + ').'); });
-      asp.forEach(function (a) { pAssoc.push(cap(ord(a.aspect)) + ' aspect from ' + a.planet + ' (' + layerShort(layeredReading(a.planet, result, sb, H)) + ').'); });
+      asp.forEach(function (a) {
+        pAssoc.push(cap(ord(a.aspect)) + ' aspect from ' + a.planet + ': ' + naturalAspectText(a.planet, beneficMap) + '; ' +
+          layerShort(layeredReading(a.planet, result, sb, H)) + '.');
+      });
       if (lord !== name) {
         pAssoc.push('Dispositor ' + lord + ' in the ' + ord(result.planets[lord].house) + ' (' + layerShort(layeredReading(lord, result, sb, H)) + ').');
       } else pAssoc.push('In its own sign: its own dispositor.');

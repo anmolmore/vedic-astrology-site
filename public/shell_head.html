@@ -2176,7 +2176,7 @@
         <div role="tabpanel" id="panel2-influence" aria-labelledby="tab2-influence" hidden>
     <section class="block">
       <h2>Influence Engine</h2>
-      <p class="sub-note">Pick a House ↔ Planet combination. The planet is read in layers, each answering one question and none blended into a score: <b>1 · What it brings</b> — its functional nature by lordship from the ascendant (Laghu Parashari); <b>2 · How well</b> — its Shadbala against the classical minimum and its Ishta/Kashta tone, with its condition listed; <b>3 · Association</b> — the planets it sits with, the aspects on it and its dispositor, each with their own layers; <b>4 · Dasha</b> — whether it is a lord of the period in view. The first pill and the left border show functional nature (green benefic, grey neutral, gold mixed, red malefic); the second shows tone (solid good, half balanced, outline difficult). A house reads through its lord, its tenants and its Bhava Bala. The Shadbala and Bhava Bala grids below give the detail behind layer 2.</p>
+      <p class="sub-note">Pick a House ↔ Planet combination. The planet is read in layers, each answering one question and none blended into a score: <b>1 · What it brings</b> — its functional nature by lordship from the ascendant (Laghu Parashari); <b>2 · How well</b> — its Shadbala against the classical minimum, and its tone from dignity and Ishta/Kashta, with its condition (dignity first, then placement) listed; <b>3 · Association</b> — the planets it sits with, the aspects on it (each named as a natural benefic or malefic) and its dispositor, each with their own layers; <b>4 · Dasha</b> — whether it is a lord of the period in view. The first pill and the left border show functional nature (green benefic, grey neutral, gold mixed, red malefic); the second shows tone (solid good, half balanced, outline difficult). A house reads through its lord, its tenants and its Bhava Bala. The Shadbala and Bhava Bala grids below give the detail behind layer 2.</p>
       <p class="na-note hidden" id="bfNote">Not available — this framework needs Shadbala and Bhava Bala, which need exact degrees and the moment of birth. A placed chart has neither.</p>
       <div class="bf-picker">
         <label for="bfSelect">House ↔ Planet</label>
@@ -2295,14 +2295,22 @@
         <h3>Layer 2 — strength and tone</h3>
         <p class="if-section-sub"><span class="if-status if-status-existing">Implemented</span> the How well section, the Shadbala tree and the grids</p>
         <p class="if-p">Strength is the planet's Shadbala against its classical minimum, shown with its rank of seven
-        and the collapsible tree of its six balas. Tone is Ishta against Kashta Bala: <b>good</b> when Ishta leads
-        by 10 Virupas or more, <b>difficult</b> when Kashta does, <b>balanced</b> between. Rahu and Ketu have no
-        Shadbala, so their tone is their dispositor's.</p>
-        <p class="if-p">Its condition is listed beside the numbers, not scored: dignity and Neecha Bhanga, D9
-        dignity, Vargottama, retrogression, Baladi avastha, combustion, Viparita Raja Yoga, and the classical
-        exceptions that turn a malefic's difficult house to good account (a natural malefic in the 3rd, 6th or
-        11th; Saturn in the 8th; Ketu in the 12th; the Rahu/Ketu favourable-result rules). Conditions that fruit
-        only in the planet's own dasha say so.</p>
+        and the collapsible tree of its six balas.</p>
+        <p class="if-p">Tone combines two votes, as popular practice leads with dignity. <b>Dignity:</b> exalted,
+        moolatrikona, own sign or a best friend's sign +1; a friend's sign +½; a neutral's 0; an enemy's −½; a worst
+        enemy's or debilitation −1 (−½ when Neecha Bhanga cancels it), using the panchadha relationship to the sign
+        lord. <b>Ishta/Kashta:</b> +1 when Ishta leads by 10 Virupas or more, −1 when Kashta does, 0 between.
+        A total of +1 or more reads <b>good</b>, −1 or less <b>difficult</b>, anything between <b>balanced</b>.
+        Rahu and Ketu have no Shadbala, so their Ishta/Kashta vote is their dispositor's; a hand-placed chart
+        uses dignity alone.</p>
+        <p class="if-p">Its condition is listed beside the numbers: dignity first, then placement (Kendra, Trikona,
+        Dusthana, Upachaya, Maraka house), then D9 dignity, Vargottama, retrogression, Baladi avastha, combustion,
+        Neecha Bhanga and Viparita Raja Yoga, and the classical exceptions that turn a malefic's difficult house to
+        good account (a natural malefic in an Upachaya house — the 3rd, 6th, 10th or 11th; Saturn in the 8th; Ketu
+        in the 12th; the Rahu/Ketu favourable-result rules). Conditions that fruit only in the planet's own dasha
+        say so.</p>
+        <p class="if-p">In the association layer each aspect is also named by the caster's natural nature — a
+        natural benefic's aspect protects and a natural malefic's restricts, whatever its functional role.</p>
       </div>
 
       <div class="if-section">
