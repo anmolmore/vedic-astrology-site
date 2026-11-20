@@ -3886,6 +3886,7 @@
   // then the tone. A house reads through its lord.
   var BF_DOT = { benefic: '🟢', neutral: '⚪', mixed: '🟡', malefic: '🔴' };
   function bfOptionLabel(entry) {
+    if (entry.label) return entry.label;
     var v = {};
     entry.fw.blocks.forEach(function (b) { if (b.kind === 'narrative') v[b.subject] = b.layer; });
     var label = BF_DOT[v.house.nature] + ' House ' + entry.house + ' · ' + v.house.word;
@@ -4102,10 +4103,16 @@
     return { md: md, mdStart: ads.length ? ads[0].start : sel.start, mdEnd: ads.length ? ads[ads.length - 1].end : sel.end,
       ad: ad, next: idx >= 0 ? all[idx + 1] || null : null };
   }
-  function ptTouches(sky, ascSign, planet) {
-    var h = ((sky.planets[planet].signIndex - ascSign + 12) % 12) + 1;
+  function ptTouchesSign(sign, ascSign, planet) {
+    var h = ((sign - ascSign + 12) % 12) + 1;
     return [h].concat(ASPECT_HOUSES[planet].map(function (a) { return ((h - 1 + a - 1) % 12) + 1; }));
   }
+  function ptTouches(sky, ascSign, planet) { return ptTouchesSign(sky.planets[planet].signIndex, ascSign, planet); }
+  // The scan needs only Saturn's and Jupiter's signs, so it asks for those two
+  // longitudes rather than a whole chart (about 1.7 ms a step against 11), and
+  // keeps its windows per chart and period, so re-rendering the same period
+  // (as chart generation does) costs nothing.
+  var ptWindowCache = new WeakMap();
   function ptSky(date) {
     var nodeType = (document.getElementById('nodeTypeInput') || {}).value === 'true' ? 'true' : 'mean';
     return E.computeChart({ date: date, latDeg: 0, lonDeg: 0, nodeType: nodeType });
@@ -4174,11 +4181,17 @@
     // Windows: every 10 days from the AD's start to the end of the next AD.
     var scanEnd = new Date((P.next ? P.next.end : P.ad.end)).getTime();
     var STEP = 10 * 86400000, open = {}, windows = [];
+    var cacheKey = adStart + '|' + scanEnd + '|' + cols.map(function (c) { return c.name + c.role; }).join(',');
+    var chartCache = ptWindowCache.get(result);
+    if (!chartCache) { chartCache = {}; ptWindowCache.set(result, chartCache); }
+    if (chartCache[cacheKey]) windows = chartCache[cacheKey];
+    else {
     // A lord's houses count only while its own period runs (the MD throughout);
     // a window is one house with the same activating lords.
     for (var t = adStart; t <= scanEnd; t += STEP) {
-      var sk = ptSky(new Date(t));
-      var s2 = ptTouches(sk, asc, 'Saturn'), j2 = ptTouches(sk, asc, 'Jupiter');
+      var td = new Date(t);
+      var s2 = ptTouchesSign(Math.floor(E.siderealLongitude('Saturn', td) / 30), asc, 'Saturn');
+      var j2 = ptTouchesSign(Math.floor(E.siderealLongitude('Jupiter', td) / 30), asc, 'Jupiter');
       var live = cols.filter(function (c) { return new Date(c.start).getTime() <= t && t < new Date(c.end).getTime(); });
       var hits = {};
       s2.forEach(function (h) {
@@ -4191,6 +4204,8 @@
     }
     Object.keys(open).forEach(function (k) { windows.push({ k: k, from: open[k], to: scanEnd }); });
     windows.sort(function (a, b) { return a.from - b.from; });
+    chartCache[cacheKey] = windows;
+    }
     var wRows = windows.map(function (w) {
       var h = +w.k.split('|')[0];
       return ['H' + h, fmtDate(new Date(w.from)) + ' – ' + fmtDate(new Date(w.to)), ptCap(houseGistApp(h)), w.k.split('|')[1]];
@@ -4236,8 +4251,23 @@
 
     var helpers = interpHelpers();
     var selectedIdx = 0;
+    // Labels need only each planet's layers; an entry's full framework (its
+    // narratives and grids) is built the first time something reads entry.fw
+    // — the entry on screen, or a chart hover card — not all fourteen up front.
+    var layerOf = {};
+    function L(n) { return layerOf[n] || (layerOf[n] = window.Interpret.layeredReading(n, result, sb, helpers)); }
     entries.forEach(function (entry, i) {
-      entry.fw = window.Interpret.balaFramework(entry, result, sb, helpers, dashaOpts);
+      var fwBuilt = null;
+      Object.defineProperty(entry, 'fw', { configurable: true, enumerable: true, get: function () {
+        if (!fwBuilt) fwBuilt = window.Interpret.balaFramework(entry, result, sb, helpers, dashaOpts);
+        return fwBuilt;
+      } });
+      var lord = E.SIGN_LORDS[(result.ascendant.signIndex + entry.house - 1) % 12], HL = L(lord);
+      entry.label = BF_DOT[HL.nature] + ' House ' + entry.house + ' · Lord ' + lord + ' · ' + HL.nature;
+      if (entry.kind === 'planet') {
+        var PL = L(entry.key);
+        entry.label += '  ↔  ' + BF_DOT[PL.nature] + ' ' + entry.key + ' · ' + PL.nature + ', ' + PL.tone + ' tone';
+      }
       var opt = document.createElement('option');
       opt.value = String(i);
       opt.textContent = bfOptionLabel(entry);
