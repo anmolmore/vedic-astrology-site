@@ -737,6 +737,8 @@
   .dt-lvl-pd { color: #166f61; background: rgba(22,111,97,0.12); }
   .dt-dates { color: var(--muted); font-size: 12px; white-space: nowrap; }
   .dt-dur { color: var(--muted); font-size: 11.5px; min-width: 74px; text-align: right; white-space: nowrap; }
+  .dt-meta { display: inline-flex; gap: 8px; flex: none; }
+  .dt-age { color: var(--muted); font-size: 11.5px; min-width: 62px; text-align: right; white-space: nowrap; }
   .dt-now {
     font-size: 10px; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase;
     color: #2c7548; background: rgba(44,117,72,0.22); border-radius: 999px;
@@ -1209,6 +1211,14 @@
   .dasha-picker-side .dasha-tree { max-height: 240px; }
   .dasha-picker-side .dt-row { font-size: 12.5px; gap: 6px; padding: 4px 6px; }
   .dasha-picker-side .dt-dates { display: none; }
+  /* Narrow panel: duration and age side by side, without the fixed widths. */
+  .dasha-picker-side .dt-meta { gap: 6px; }
+  .dasha-picker-side .dt-row { gap: 4px; padding: 3px 4px; }
+  .dasha-picker-side .dt-children { margin-left: 9px; padding-left: 3px; }
+  .dasha-picker-side .dt-caret { width: 14px; }
+  .dasha-picker-side .dt-lvl { min-width: 24px; padding: 1px 3px; }
+  .dasha-picker-side .dt-now { padding: 1px 4px; }
+  .dasha-picker-side .dt-dur, .dasha-picker-side .dt-age { min-width: 0; font-size: 11px; }
   .ie-interp-wrap { margin-top: 14px; }
   .ie-interp-head { display: block; font-weight: 700; font-size: 12.5px; color: var(--gold-soft); margin-bottom: 4px; }
   .ie-interp-box {
@@ -14369,6 +14379,17 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     });
 
     function live(s, e) { return now >= s && now < e; }
+    // Completed years of age at a moment, by the calendar birthday.
+    function ageAt(d) {
+      var y = d.getFullYear() - birth.getFullYear();
+      if (d.getMonth() < birth.getMonth() || (d.getMonth() === birth.getMonth() && d.getDate() < birth.getDate())) y--;
+      return Math.max(0, y);
+    }
+    // "age 52–59", or "age 56" when the whole period falls within one year of age.
+    function ageSpan(s, e) {
+      var a = ageAt(s), b = ageAt(new Date(e.getTime() - 1));
+      return 'age ' + (a === b ? a : a + '–' + b);
+    }
     function keyOf(lords) { return lords.map(function (l) { return l.lord; }).join('|') + ':' + lords.length; }
 
     // Expand down to a period in one host's tree and return its node.
@@ -14433,6 +14454,11 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       dur.className = 'dt-dur';
       dur.textContent = fmtDuration(opts.end - opts.start);
 
+      var age = document.createElement('span');
+      age.className = 'dt-age';
+      age.textContent = ageSpan(opts.start, opts.end);
+      age.title = 'Age during this period';
+
       row.appendChild(caret);
       row.appendChild(lvlTag);
       row.appendChild(title);
@@ -14443,7 +14469,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         row.appendChild(badge);
       }
       row.appendChild(dates);
-      row.appendChild(dur);
+      // Duration and age travel together: side by side in the Dashas tab,
+      // stacked in the narrow Periods panel.
+      var meta = document.createElement('span');
+      meta.className = 'dt-meta';
+      meta.appendChild(dur);
+      meta.appendChild(age);
+      row.appendChild(meta);
 
       var kids = document.createElement('div');
       kids.className = 'dt-children hidden';

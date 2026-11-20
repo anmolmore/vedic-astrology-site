@@ -5239,6 +5239,17 @@
     });
 
     function live(s, e) { return now >= s && now < e; }
+    // Completed years of age at a moment, by the calendar birthday.
+    function ageAt(d) {
+      var y = d.getFullYear() - birth.getFullYear();
+      if (d.getMonth() < birth.getMonth() || (d.getMonth() === birth.getMonth() && d.getDate() < birth.getDate())) y--;
+      return Math.max(0, y);
+    }
+    // "age 52–59", or "age 56" when the whole period falls within one year of age.
+    function ageSpan(s, e) {
+      var a = ageAt(s), b = ageAt(new Date(e.getTime() - 1));
+      return 'age ' + (a === b ? a : a + '–' + b);
+    }
     function keyOf(lords) { return lords.map(function (l) { return l.lord; }).join('|') + ':' + lords.length; }
 
     // Expand down to a period in one host's tree and return its node.
@@ -5303,6 +5314,11 @@
       dur.className = 'dt-dur';
       dur.textContent = fmtDuration(opts.end - opts.start);
 
+      var age = document.createElement('span');
+      age.className = 'dt-age';
+      age.textContent = ageSpan(opts.start, opts.end);
+      age.title = 'Age during this period';
+
       row.appendChild(caret);
       row.appendChild(lvlTag);
       row.appendChild(title);
@@ -5313,7 +5329,13 @@
         row.appendChild(badge);
       }
       row.appendChild(dates);
-      row.appendChild(dur);
+      // Duration and age travel together: side by side in the Dashas tab,
+      // stacked in the narrow Periods panel.
+      var meta = document.createElement('span');
+      meta.className = 'dt-meta';
+      meta.appendChild(dur);
+      meta.appendChild(age);
+      row.appendChild(meta);
 
       var kids = document.createElement('div');
       kids.className = 'dt-children hidden';
