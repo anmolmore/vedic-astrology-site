@@ -1081,6 +1081,11 @@
   .tr-cell { fill: var(--bg2); stroke: var(--line); stroke-width: 1; }
   .tr-sign { font-size: 14px; fill: var(--muted); }
   .tr-transit { font-size: 16px; fill: var(--text); }
+  /* Gandanta: red junction lines where water gives way to fire, and a red
+     underline on any planet within 3°20′ of one. */
+  .gandanta-line { stroke: #d23b3b; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+  .gandanta-hit { stroke: transparent; stroke-width: 10; cursor: help; pointer-events: stroke; }
+  .planet-gandanta { text-decoration: underline; text-decoration-color: #d23b3b; text-decoration-thickness: 1.5px; }
   .tr-transit-sm { font-size: 13px; }
   .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
   .tr-center { font-size: 16px; fill: var(--muted); }

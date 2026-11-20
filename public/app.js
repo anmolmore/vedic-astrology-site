@@ -151,6 +151,66 @@
   }
 
   // ---- South Indian fixed sign->cell layout (4x4 grid, row,col) ----
+  // Gandanta: the three junctions where a water sign gives way to a fire
+  // sign. The span is the last 3°20′ (one nakshatra pada) of the water sign
+  // and the first 3°20′ of the fire sign.
+  var GANDANTA = [{ water: 11, fire: 0 }, { water: 3, fire: 4 }, { water: 7, fire: 8 }];
+  var GANDANTA_SPAN = 10 / 3;
+  function gandantaOf(signIdx, degree) {
+    if (degree == null) return null;
+    for (var i = 0; i < GANDANTA.length; i++) {
+      var g = GANDANTA[i];
+      if (signIdx === g.water && degree >= 30 - GANDANTA_SPAN) return g;
+      if (signIdx === g.fire && degree < GANDANTA_SPAN) return g;
+    }
+    return null;
+  }
+  function gandantaTitle(g, inside) {
+    var S = E.SIGNS;
+    return 'Gandanta: ' + S[g.water] + ' → ' + S[g.fire] + '. Water ends and fire begins: the last 3°20′ of ' + S[g.water] +
+      ' and the first 3°20′ of ' + S[g.fire] + '. ' + (inside.length ? 'In it: ' + inside.join(', ') + '.' : 'No planet in it.');
+  }
+  // One red junction line with a wider invisible hit line carrying its title.
+  function gandantaLine(parent, make, x1, y1, x2, y2, title) {
+    var g = make(parent, 'g', { class: 'gandanta' });
+    make(g, 'line', { x1: x1, y1: y1, x2: x2, y2: y2, class: 'gandanta-line' });
+    var hit = make(g, 'line', { x1: x1, y1: y1, x2: x2, y2: y2, class: 'gandanta-hit' });
+    var t = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+    t.textContent = title;
+    hit.appendChild(t);
+    return g;
+  }
+  // The natal chart: a red line on each junction's shared border, and a red
+  // underline on any planet (or note of the ascendant) inside a span.
+  function drawGandantaSouth(svg, result, cell) {
+    function make(parent, tag, attrs) { var el = svgEl(tag, attrs); parent.appendChild(el); return el; }
+    var layer = make(svg, 'g', { class: 'gandanta-layer' });
+    var inside = { 0: [], 1: [], 2: [] };
+    Object.keys(result.planets).forEach(function (n) {
+      var p = result.planets[n], g = gandantaOf(p.signIndex, p.degree);
+      if (!g) return;
+      inside[GANDANTA.indexOf(g)].push(n + ' ' + p.degreeFormatted + ' ' + p.sign);
+      [].forEach.call(svg.querySelectorAll('text[data-planet="' + n + '"]'), function (t) {
+        t.classList.add('planet-gandanta');
+        var tt = t.querySelector('title') || t.appendChild(svgEl('title', {}));
+        tt.textContent = (tt.textContent ? tt.textContent + '; ' : '') + 'Gandanta (' + E.SIGNS[g.water] + ' → ' + E.SIGNS[g.fire] + ')';
+      });
+    });
+    var a = result.ascendant, ag = gandantaOf(a.signIndex, a.degree);
+    if (ag) inside[GANDANTA.indexOf(ag)].push('Ascendant ' + a.degreeFormatted + ' ' + a.sign);
+    GANDANTA.forEach(function (g, i) {
+      var w = SOUTH_LAYOUT[g.water], f = SOUTH_LAYOUT[g.fire];
+      var title = gandantaTitle(g, inside[i]);
+      if (w[0] === f[0]) { // side by side: a vertical border
+        var x = Math.max(w[1], f[1]) * cell;
+        gandantaLine(layer, make, x, w[0] * cell + 3, x, (w[0] + 1) * cell - 3, title);
+      } else { // one above the other: a horizontal border
+        var y = Math.max(w[0], f[0]) * cell;
+        gandantaLine(layer, make, w[1] * cell + 3, y, (w[1] + 1) * cell - 3, y, title);
+      }
+    });
+  }
+
   var SOUTH_LAYOUT = {
     11: [0,0], 0: [0,1], 1: [0,2], 2: [0,3],
     10: [1,0],                    3: [1,3],
@@ -473,6 +533,7 @@
     // update) belong to the D1 chart only — the D9 chart stops here so
     // drawing it never clears or redraws D1's overlay state.
     if (varga) return;
+    drawGandantaSouth(svg, result, cell);
 
     var statusEl = document.getElementById('networkStatus');
     var centerOverlayEl = document.getElementById('chartCenterOverlay');
@@ -2940,7 +3001,7 @@
   function trPlanets(planets) {
     return Object.keys(TR_ABBR).filter(function (n) { return planets[n]; }).map(function (n) {
       var p = planets[n];
-      return { label: TR_ABBR[n], sign: p.signIndex, deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
+      return { name: n, label: TR_ABBR[n], sign: p.signIndex, exact: p.degree, deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
     });
   }
   function trDashaAt(result, when) {
@@ -3032,7 +3093,14 @@
       planets.forEach(function (p, i) {
         var col = Math.floor(i / lay.rows), row = i % lay.rows;
         var text = bare ? p.label + (p.retro ? 'R' : '') : narrow ? lbl(p).replace(/ /g, '') : lbl(p);
-        trSvgEl(outer, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step, class: narrow ? 'tr-transit tr-transit-sm' : 'tr-transit' }, text);
+        var gd = gandantaOf(p.sign, p.exact);
+        var tEl = trSvgEl(outer, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step,
+          class: (narrow ? 'tr-transit tr-transit-sm' : 'tr-transit') + (gd ? ' planet-gandanta' : '') }, text);
+        if (gd && tEl) {
+          var gt = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          gt.textContent = p.name + ' in Gandanta (' + SIGNS[gd.water] + ' → ' + SIGNS[gd.fire] + ')';
+          tEl.appendChild(gt);
+        }
       });
     }
     // Outer boxes line up with the natal boxes inside them: the two middle
@@ -3058,6 +3126,21 @@
         fill(sx, sy, ring, cell, s, here);
       }
     }
+    // Gandanta junctions on the outer ring, titled with the transit planets
+    // inside each span.
+    GANDANTA.forEach(function (g) {
+      var inG = transit.filter(function (p) { var q = gandantaOf(p.sign, p.exact); return q === g; })
+        .map(function (p) { return p.name + ' ' + Math.floor(p.exact) + '° ' + SIGNS[p.sign]; });
+      var title = gandantaTitle(g, inG);
+      var wp = TR_POS[g.water], fp = TR_POS[g.fire];
+      if (wp[0] === fp[0]) { // top or bottom row: a vertical border
+        var x = ring + Math.max(wp[1], fp[1]) * cell, top = wp[0] === 0;
+        gandantaLine(outer, trSvgEl, x, top ? 2 : W - ring + 2, x, top ? ring - 2 : W - 2, title);
+      } else { // a side column: a horizontal border
+        var y = ring + Math.max(wp[0], fp[0]) * cell, right = wp[1] === 3;
+        gandantaLine(outer, trSvgEl, right ? W - ring + 2 : 2, y, right ? W - 2 : ring - 2, y, title);
+      }
+    });
     var mid = W / 2;
     trSvgEl(centre, 'text', { x: mid, y: mid - 14, class: 'tr-center-title', 'text-anchor': 'middle' }, SIGNS[asc] + ' ascendant');
     var dasha = trDashaAt(result, tr.when);
