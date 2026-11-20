@@ -730,6 +730,7 @@
       var nat = ln.nature;
       if (nat === 'mixed' && DUSTHANA.indexOf(house) >= 0) nat = 'malefic';
       return { nature: nat, houses: [], flags: [], via: lord,
+        short: 'via ' + lord + ' (' + ln.nature + ')' + (nat !== ln.nature ? ', in H' + house : ''),
         rule: 'follows its dispositor ' + lord + ' (' + ln.nature + ')' + (nat !== ln.nature ? ', tipped by the ' + ord(house) + ' house' : '') };
     }
     var hs = owned(name).sort(function (a, b) { return a - b; });
@@ -740,24 +741,31 @@
     if (hs.indexOf(badhakaHouse) >= 0) flags.push('badhaka');
     var hasTri = any(hs, FN_TRIKONA), hasKendra = any(hs, FN_KENDRA);
     var hasBad = any(hs, FN_BAD) || hs.indexOf(12) >= 0;
-    var nature, rule;
-    if (hasTri && hasKendra) { nature = 'benefic'; rule = 'kendra and trikona lord (yogakaraka)'; flags.push('yogakaraka'); }
-    else if (hs.indexOf(1) >= 0) { nature = 'benefic'; rule = 'lagna lord'; }
+    var nature, rule, short;
+    if (hasTri && hasKendra) { nature = 'benefic'; rule = 'kendra and trikona lord (yogakaraka)'; short = 'kendra + trikona lord'; flags.push('yogakaraka'); }
+    else if (hs.indexOf(1) >= 0) { nature = 'benefic'; rule = 'lagna lord'; short = 'lagna lord'; }
     else if (hasTri && hasBad) {
       var mt = S && S.MOOLATRIKONA && S.MOOLATRIKONA[name];
       var mtHouse = mt ? ((mt.sign - asc + 12) % 12) + 1 : null;
-      if (mtHouse && FN_TRIKONA.indexOf(mtHouse) >= 0) { nature = 'benefic'; rule = 'trikona lord; moolatrikona in the ' + ord(mtHouse); }
-      else { nature = 'mixed'; rule = 'trikona and ' + (mtHouse ? ord(mtHouse) : 'malefic-house') + ' lord; moolatrikona in the ' + (mtHouse ? ord(mtHouse) : '?'); }
+      if (mtHouse && FN_TRIKONA.indexOf(mtHouse) >= 0) { nature = 'benefic'; rule = 'trikona lord; moolatrikona in the ' + ord(mtHouse); short = 'trikona lord, MT in H' + mtHouse; }
+      else { nature = 'mixed'; rule = 'trikona and ' + (mtHouse ? ord(mtHouse) : 'malefic-house') + ' lord; moolatrikona in the ' + (mtHouse ? ord(mtHouse) : '?'); short = 'trikona + hard-house lord, MT in H' + mtHouse; }
     }
-    else if (hasTri) { nature = 'benefic'; rule = 'trikona lord'; }
-    else if (hs.indexOf(8) >= 0 && (name === 'Sun' || name === 'Moon')) { nature = 'neutral'; rule = '8th lord, exempt as ' + name; }
-    else if (any(hs, FN_BAD)) { nature = 'malefic'; rule = 'lord of the ' + hs.filter(function (h) { return FN_BAD.indexOf(h) >= 0; }).map(ord).join(' and '); }
+    else if (hasTri) { nature = 'benefic'; rule = 'trikona lord'; short = 'trikona lord'; }
+    else if (hs.indexOf(8) >= 0 && (name === 'Sun' || name === 'Moon')) { nature = 'neutral'; rule = '8th lord, exempt as ' + name; short = '8th lord, exempt'; }
+    else if (any(hs, FN_BAD)) {
+      nature = 'malefic'; rule = 'lord of the ' + hs.filter(function (h) { return FN_BAD.indexOf(h) >= 0; }).map(ord).join(' and ');
+      var kinds = [];
+      if (any(hs, [3, 11])) kinds.push('trishadaya');
+      if (any(hs, [6, 8])) kinds.push('dusthana');
+      short = kinds.join(' + ') + ' lord';
+    }
     else if (hasKendra) {
       nature = FN_NATURAL_BENEFIC[name] ? 'malefic' : 'neutral';
       rule = FN_NATURAL_BENEFIC[name] ? 'natural benefic owning a kendra (kendradhipati dosha)' : 'natural malefic owning a kendra';
+      short = FN_NATURAL_BENEFIC[name] ? 'kendradhipati dosha' : 'kendra lord';
     }
-    else { nature = 'neutral'; rule = ord(hs[0]) + ' lord'; }
-    return { nature: nature, houses: hs, flags: flags, rule: rule };
+    else { nature = 'neutral'; rule = ord(hs[0]) + ' lord'; short = 'neutral by rule'; }
+    return { nature: nature, houses: hs, flags: flags, rule: rule, short: short };
   }
 
   // The reading actually used to drive yoga scanning and the FROM verdict:
@@ -3996,7 +4004,17 @@
         : name + ' has no Shadbala; its tone comes from its dispositor.', layerToneText(PL)];
       pGroups.forEach(function (g) { pHow = pHow.concat(g); });
       narr.push({ kind: 'narrative', subject: 'planet', heading: name + ': layered reading',
-        layer: { nature: PL.nature, tone: PL.tone, word: 'Functional ' + PL.nature, toneWord: PL.tone + ' tone' },
+        layer: { nature: PL.nature, tone: PL.tone, word: 'Functional ' + PL.nature, toneWord: PL.tone + ' tone',
+          why: PL.fn.short + (PL.fn.houses.length ? ' · H' + PL.fn.houses.join(', H') : ''),
+          natural: isNaturalBenefic(name, beneficMap) ? 'benefic' : 'malefic',
+          flags: PL.fn.flags.map(function (fl) {
+            if (fl === 'maraka') return { text: 'Maraka H' + PL.fn.houses.filter(function (h) { return h === 2 || h === 7; }).join(', H'), good: false };
+            if (fl === 'badhaka') {
+              var mod = result.ascendant.signIndex % 3;
+              return { text: 'Badhaka H' + (mod === 0 ? 11 : mod === 1 ? 9 : 7) + ' (' + ['movable', 'fixed', 'dual'][mod] + ' asc.)', good: false };
+            }
+            return { text: 'Yogakaraka', good: true };
+          }) },
         reading: PL.reading, ishta: PL.ik ? { text: 'Ishta ' + n1(PL.ik.ishta) + ' / Kashta ' + n1(PL.ik.kashta), tone: PL.tone } : null,
         total: r ? r.total : null, tree: r ? shadbalaTree(name, r) : null,
         sections: [

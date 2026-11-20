@@ -663,6 +663,22 @@
     // On hover a planet's pill names just its nature ("Malefic").
     var n = narrative.layer.nature;
     d.appendChild(bfLayerPills(narrative.layer, narrative.subject === 'planet' ? n.charAt(0).toUpperCase() + n.slice(1) : null));
+    // Then, compactly: its natural nature and why the pill reads as it does
+    // (coloured by the functional nature), and any flags on one line.
+    if (narrative.subject === 'planet' && narrative.layer.why) {
+      var why = ctStatLine('Natural ' + narrative.layer.natural + ' · ');
+      why.appendChild(spanText(narrative.layer.why, 'ct-fn ct-fn-' + n));
+      d.appendChild(why);
+      var flags = narrative.layer.flags || [];
+      if (flags.length) {
+        var fl = ctStatLine('');
+        flags.forEach(function (f, i) {
+          if (i) fl.appendChild(document.createTextNode(' · '));
+          fl.appendChild(spanText(f.text, 'ct-flag' + (f.good ? ' ct-flag-good' : '')));
+        });
+        d.appendChild(fl);
+      }
+    }
     return d;
   }
 
