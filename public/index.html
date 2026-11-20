@@ -1085,7 +1085,8 @@
      underline on any planet within 3°20′ of one. */
   .gandanta-line { stroke: #d23b3b; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
   .gandanta-hit { stroke: transparent; stroke-width: 10; cursor: help; pointer-events: stroke; }
-  .planet-gandanta { text-decoration: underline; text-decoration-color: #d23b3b; text-decoration-thickness: 1.5px; }
+  .gandanta-underline { stroke: #d23b3b; stroke-width: 1.5; pointer-events: none; }
+  .chart-card svg .planet-deg { fill: var(--muted); font-size: 0.85em; }
   .tr-transit-sm { font-size: 13px; }
   .tr-center-title { font-size: 19px; fill: var(--text); font-weight: 700; }
   .tr-center { font-size: 16px; fill: var(--muted); }
@@ -9305,6 +9306,19 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     hit.appendChild(t);
     return g;
   }
+  // A red line under a chart label. Its width comes from the rendered box
+  // when the chart is visible, else from the label's length.
+  function gandantaUnderline(parent, t, anchor) {
+    var size = Number(t.getAttribute('font-size')) || parseFloat(getComputedStyle(t).fontSize) || 11;
+    var w = 0;
+    try { w = t.getBBox().width; } catch (e) {}
+    if (!w) w = (t.firstChild ? t.textContent.replace(/Gandanta.*$/, '').length : 6) * size * 0.58;
+    var x = Number(t.getAttribute('x')), y = Number(t.getAttribute('y')) + Math.max(1.5, size * 0.18);
+    var x0 = anchor === 'middle' ? x - w / 2 : x;
+    var l = svgEl('line', { x1: x0, y1: y, x2: x0 + w, y2: y, class: 'gandanta-underline' });
+    parent.appendChild(l);
+    return l;
+  }
   // The natal chart: a red line on each junction's shared border, and a red
   // underline on any planet (or note of the ascendant) inside a span.
   function drawGandantaSouth(svg, result, cell) {
@@ -9317,6 +9331,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
       inside[GANDANTA.indexOf(g)].push(n + ' ' + p.degreeFormatted + ' ' + p.sign);
       [].forEach.call(svg.querySelectorAll('text[data-planet="' + n + '"]'), function (t) {
         t.classList.add('planet-gandanta');
+        gandantaUnderline(layer, t, 'middle');
         var tt = t.querySelector('title') || t.appendChild(svgEl('title', {}));
         tt.textContent = (tt.textContent ? tt.textContent + '; ' : '') + 'Gandanta (' + E.SIGNS[g.water] + ' → ' + E.SIGNS[g.fire] + ')';
       });
@@ -9413,14 +9428,18 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
     if (!names.length) return;
     var items = names.map(function (n) {
       var p = chartPlanet(result.planets[n], varga);
-      var chars = 5 + (p.retrograde ? 1 : 0);
+      var chars = 5 + (p.retrograde ? 1 : 0) + 4; // " 18°"
       var flags = dignityOf(n, p);
       if (flags.length) chars += 1 + flags.map(function (f) { return f.t; }).join('/').length;
       return { name: n, p: p, chars: chars };
     });
     if (items.length <= maxRows) {
+      // One per line; the font steps down (to 7 at the smallest) when the
+      // longest label would overrun the box.
+      var longest = Math.max.apply(null, items.map(function (it) { return it.chars; }));
+      var one = Math.max(7, Math.min(10, Math.floor(maxW / (longest * 0.58) * 2) / 2));
       items.forEach(function (it, i) {
-        g.appendChild(svgPlanetLabel(cx, firstY + i * 12, it.name, it.p, 'planet-label', 10));
+        g.appendChild(svgPlanetLabel(cx, firstY + i * (one + 2), it.name, it.p, 'planet-label', one));
       });
       return;
     }
@@ -9452,6 +9471,13 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
   function svgPlanetLabel(x, y, pname, p, cls, size) {
     var t = svgEl('text', { x: x, y: y, class: cls || '', 'font-size': size || 11, 'text-anchor': 'middle', 'data-planet': pname });
     t.appendChild(document.createTextNode(PLANET_SYMBOL[pname] + ' ' + pname.slice(0, 3)));
+    // Its degree in the sign shown (the varga sign's degree in a varga chart).
+    var deg = isFinite(p.degree) ? p.degree : p.vargaDegree;
+    if (isFinite(deg)) {
+      var dg = svgEl('tspan', { class: 'planet-deg', dx: 1.5 });
+      dg.textContent = Math.floor(deg) + '°';
+      t.appendChild(dg);
+    }
     // Retrograde: the same bold red "R" the Planets tab puts after the name.
     if (p.retrograde) {
       var r = svgEl('tspan', { class: 'planet-retro', dx: 1 });
@@ -9502,7 +9528,8 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
   function chartPlanet(p, varga) {
     if (!varga) return p;
     var s = vargaSign(p, varga);
-    return { signIndex: s, sign: E.SIGNS[s], degree: NaN, retrograde: p.retrograde };
+    return { signIndex: s, sign: E.SIGNS[s], degree: NaN, retrograde: p.retrograde,
+      vargaDegree: (p.degree * varga) % 30 };
   }
 
   function planetsBySign(result, varga) {
@@ -12222,6 +12249,7 @@ return new kd(this.curr.time,a,b)};$jscomp.global.Object.defineProperties(H.prot
         var tEl = trSvgEl(outer, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step,
           class: (narrow ? 'tr-transit tr-transit-sm' : 'tr-transit') + (gd ? ' planet-gandanta' : '') }, text);
         if (gd && tEl) {
+          gandantaUnderline(outer, tEl, 'start');
           var gt = document.createElementNS('http://www.w3.org/2000/svg', 'title');
           gt.textContent = p.name + ' in Gandanta (' + SIGNS[gd.water] + ' → ' + SIGNS[gd.fire] + ')';
           tEl.appendChild(gt);
