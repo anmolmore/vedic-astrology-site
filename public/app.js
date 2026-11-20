@@ -3027,7 +3027,7 @@
   function trPlanets(planets) {
     return Object.keys(TR_ABBR).filter(function (n) { return planets[n]; }).map(function (n) {
       var p = planets[n];
-      return { name: n, label: TR_ABBR[n], sign: p.signIndex, exact: p.degree, deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
+      return { name: n, label: TR_ABBR[n], sign: p.signIndex, exact: p.degree, dignity: dignityOf(n, p), deg: p.degree == null ? null : Math.floor(p.degree), retro: !!p.retrograde && n !== 'Rahu' && n !== 'Ketu' };
     });
   }
   function trDashaAt(result, when) {
@@ -3122,6 +3122,21 @@
         var gd = gandantaOf(p.sign, p.exact);
         var tEl = trSvgEl(outer, 'text', { x: x + 6 + col * lay.colW, y: y + lay.top + row * lay.step,
           class: (narrow ? 'tr-transit tr-transit-sm' : 'tr-transit') + (gd ? ' planet-gandanta' : '') }, text);
+        // Dignity flags (Ex / Deb / MT / Lord), as on the natal labels; the
+        // crowded layout that drops degrees drops these too.
+        if (!bare && p.dignity.length) {
+          tEl.appendChild(document.createTextNode(narrow ? '' : ' '));
+          p.dignity.forEach(function (f, k) {
+            if (k) tEl.appendChild(document.createTextNode('/'));
+            var ts = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+            ts.setAttribute('class', 'planet-dg-flag planet-dg-' + f.k);
+            ts.textContent = f.t;
+            tEl.appendChild(ts);
+          });
+          var dt = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          dt.textContent = p.name + ': ' + p.dignity.map(function (f) { return f.full; }).join('; ');
+          tEl.appendChild(dt);
+        }
         if (gd && tEl) {
           gandantaUnderline(outer, tEl, 'start');
           var gt = document.createElementNS('http://www.w3.org/2000/svg', 'title');
